@@ -466,9 +466,9 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
           const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
           if (saved) {
             const parsed = normalizeState(JSON.parse(saved) as AppState)
-            setDoc(firestoreDoc, parsed).then(() => {
-              localStorage.removeItem(LEGACY_STORAGE_KEY)
-            })
+            setDoc(firestoreDoc, parsed)
+              .then(() => localStorage.removeItem(LEGACY_STORAGE_KEY))
+              .catch((err) => console.error('[AppContext] 마이그레이션 저장 실패:', err?.code))
             isRemoteUpdate.current = true
             dispatch({ type: 'LOAD', payload: parsed })
           }
@@ -477,8 +477,9 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
         }
         setLoading(false)
       }
-    }, () => {
-      // Firestore 연결 실패 시 localStorage 폴백
+    }, (err) => {
+      // Firestore 연결 실패 — 보안 규칙 문제일 가능성이 높음
+      console.error('[AppContext] Firestore onSnapshot 실패:', err?.code, err?.message)
       try {
         const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
         if (saved) {
@@ -501,7 +502,8 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
       isRemoteUpdate.current = false
       return
     }
-    setDoc(firestoreDoc, state).catch(() => {
+    setDoc(firestoreDoc, state).catch((err) => {
+      console.error('[AppContext] Firestore 저장 실패:', err?.code, err?.message)
       localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(state))
     })
   }, [state, loading])
