@@ -433,7 +433,7 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(8)
   const isRemoteUpdate = useRef(false)
-  const firestoreDoc = doc(db, 'users', uid, 'data', 'main')
+  const firestoreDoc = doc(db, 'appData', uid)
 
   const currentYM = useMemo(() => {
     const today = new Date()
