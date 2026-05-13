@@ -261,6 +261,20 @@ export default function DashboardPage() {
               g.homeworkDone === '미제출' &&
               studentIds.has(g.studentId)
           )
+          const gradeRecords = state.grades.filter(
+            g => g.sessionNum === sNum && studentIds.has(g.studentId)
+          )
+          const vocabNames = retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId))
+          const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
+          const hwDescription = hw?.description ?? ''
+          const hwNoSubmitNames = noHw.map(g => getStudentName(g.studentId))
+
+          const hasGradeData =
+            !!scope ||
+            vocabNames.length > 0 ||
+            dailyNames.length > 0 ||
+            gradeRecords.length > 0
+          const hasHwData = hwDescription !== '' || hwNoSubmitNames.length > 0
 
           return {
             date,
@@ -270,10 +284,12 @@ export default function DashboardPage() {
             isCurrent: getWeekStartForSession(sNum) === weekStart,
             vocabRange: scope?.vocabRange ?? '',
             dailyRange: scope?.dailyRange ?? '',
-            vocabNames: retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId)),
-            dailyNames: retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId)),
-            hwDescription: hw?.description ?? '',
-            hwNoSubmitNames: noHw.map(g => getStudentName(g.studentId)),
+            vocabNames,
+            dailyNames,
+            hwDescription,
+            hwNoSubmitNames,
+            hasGradeData,
+            hasHwData,
           }
         })
         .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -289,6 +305,18 @@ export default function DashboardPage() {
       : buildRows(activeTab)
     return rows.filter(r => r.date <= todayStr)
   }, [activeTab, buildRows, state.classes, todayStr])
+
+  // 현황 테이블: 오늘 이전은 데이터 있는 행만
+  const gradeRows = useMemo(
+    () => displayRows.filter(r => r.date >= todayStr || r.hasGradeData),
+    [displayRows, todayStr]
+  )
+
+  // 숙제현황 테이블: 오늘 이전은 데이터 있는 행만
+  const hwRows = useMemo(
+    () => displayRows.filter(r => r.date >= todayStr || r.hasHwData),
+    [displayRows, todayStr]
+  )
 
   const isAllTab = activeTab === 'all'
 
@@ -399,13 +427,13 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {displayRows.length === 0 ? (
+              {gradeRows.length === 0 ? (
                 <tr>
                   <td colSpan={isAllTab ? 6 : 5} className="px-5 py-8 text-center text-sm text-slate-300">
                     해당 월 수업 일정이 없습니다
                   </td>
                 </tr>
-              ) : displayRows.map(row => (
+              ) : gradeRows.map(row => (
                 <tr
                   key={`${row.classId}-${row.date}`}
                   className={`group hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
@@ -468,13 +496,13 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {displayRows.length === 0 ? (
+              {hwRows.length === 0 ? (
                 <tr>
                   <td colSpan={isAllTab ? 4 : 3} className="px-5 py-8 text-center text-sm text-slate-300">
                     해당 월 수업 일정이 없습니다
                   </td>
                 </tr>
-              ) : displayRows.map(row => (
+              ) : hwRows.map(row => (
                 <tr
                   key={`hw-${row.classId}-${row.date}`}
                   className={`group hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
