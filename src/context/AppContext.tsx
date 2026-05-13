@@ -330,7 +330,6 @@ function reducer(state: AppState, action: Action): AppState {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const LEGACY_STORAGE_KEY = 'academy-dashboard-v3'
-const FIRESTORE_DOC = doc(db, 'academy-dashboard', 'main')
 
 const DEFAULT_STATE: AppState = {
   classes: INITIAL_CLASSES,
@@ -425,11 +424,12 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children, uid }: { children: ReactNode; uid: string }) {
   const [state, dispatch] = useReducer(reducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(8)
   const isRemoteUpdate = useRef(false)
+  const firestoreDoc = doc(db, 'users', uid, 'data', 'main')
 
   const currentYM = useMemo(() => {
     const today = new Date()
@@ -451,18 +451,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Firestore 실시간 구독 — 최초 1회 로컬 데이터 마이그레이션 포함
   useEffect(() => {
-    const unsubscribe = onSnapshot(FIRESTORE_DOC, (snap) => {
+    const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
       if (snap.exists()) {
         isRemoteUpdate.current = true
         dispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
         setLoading(false)
       } else {
-        // Firestore에 데이터 없으면 localStorage 마이그레이션 시도
+        // Firestore에 데이터 없으면 localStorage 마이그레이션 시도 (최초 1회)
         try {
           const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
           if (saved) {
             const parsed = normalizeState(JSON.parse(saved) as AppState)
-            setDoc(FIRESTORE_DOC, parsed).then(() => {
+            setDoc(firestoreDoc, parsed).then(() => {
               localStorage.removeItem(LEGACY_STORAGE_KEY)
             })
             isRemoteUpdate.current = true
@@ -487,7 +487,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
 
     return unsubscribe
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid])
 
   // 상태 변경 시 Firestore에 저장
   useEffect(() => {
@@ -496,8 +497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       isRemoteUpdate.current = false
       return
     }
-    setDoc(FIRESTORE_DOC, state).catch(() => {
-      // Firestore 저장 실패 시 localStorage 백업
+    setDoc(firestoreDoc, state).catch(() => {
       localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(state))
     })
   }, [state, loading])

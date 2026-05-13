@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, School, CalendarDays } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, School, CalendarDays, LogOut, Shield } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 interface SidebarProps {
   open: boolean
@@ -16,6 +17,8 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
+  const { user, isAdmin, signOut } = useAuth()
+
   return (
     <>
       {/* 모바일 오버레이 */}
@@ -51,7 +54,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         </div>
 
         {/* 메뉴 */}
-        <nav className="flex-1 py-4 px-3">
+        <nav className="flex-1 py-4 px-3 overflow-y-auto">
           {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
             <NavLink
               key={to}
@@ -70,11 +73,49 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               {label}
             </NavLink>
           ))}
+
+          {/* 관리자 모드 */}
+          {isAdmin && (
+            <>
+              <div className="my-3 border-t border-slate-700" />
+              <NavLink
+                to="/admin"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 text-sm font-medium transition-colors
+                  ${isActive
+                    ? 'bg-amber-600 text-white'
+                    : 'text-amber-300 hover:bg-slate-700 hover:text-amber-200'
+                  }`
+                }
+              >
+                <Shield size={18} />
+                관리자 모드
+              </NavLink>
+            </>
+          )}
         </nav>
 
-        {/* 푸터 */}
-        <div className="px-5 py-4 border-t border-slate-700">
-          <p className="text-xs text-slate-500">주2회 수업 관리 시스템</p>
+        {/* 사용자 정보 + 로그아웃 */}
+        <div className="px-4 py-4 border-t border-slate-700 space-y-3">
+          {user && (
+            <div className="flex items-center gap-2.5 px-1">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                {user.displayName[0]}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white truncate">{user.displayName}</p>
+                <p className="text-xs text-slate-400 truncate">{user.email}</p>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={signOut}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm"
+          >
+            <LogOut size={15} />
+            로그아웃
+          </button>
         </div>
       </aside>
     </>

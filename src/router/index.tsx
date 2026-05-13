@@ -6,6 +6,7 @@ import StudentPage from '../pages/StudentPage'
 import HomeworkPage from '../pages/HomeworkPage'
 import ExamPage from '../pages/ExamPage'
 import SchedulePage from '../pages/SchedulePage'
+import AdminPage from '../pages/AdminPage'
 
 function ErrorPage() {
   const error = useRouteError() as Error
@@ -39,6 +40,7 @@ export const router = createBrowserRouter([
       { path: 'homework', element: <HomeworkPage /> },
       { path: 'exam', element: <ExamPage /> },
       { path: 'schedule', element: <SchedulePage /> },
+      { path: 'admin', element: <AdminPage /> },
     ],
   },
 ])

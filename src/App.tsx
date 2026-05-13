@@ -1,6 +1,8 @@
 import { RouterProvider } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { AppProvider, useApp } from './context/AppContext'
 import { router } from './router'
+import LoginPage from './pages/LoginPage'
 
 function AppInner() {
   const { loading } = useApp()
@@ -19,10 +21,33 @@ function AppInner() {
   return <RouterProvider router={router} />
 }
 
-export default function App() {
+function AuthGate() {
+  const { registrationStatus, firebaseUser, viewingUid } = useAuth()
+
+  if (registrationStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!firebaseUser || registrationStatus !== 'approved') {
+    return <LoginPage />
+  }
+
+  const uid = viewingUid ?? firebaseUser.uid
   return (
-    <AppProvider>
+    <AppProvider key={uid} uid={uid}>
       <AppInner />
     </AppProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   )
 }
