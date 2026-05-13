@@ -497,19 +497,21 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
 
   // 상태 변경 시 Firestore에 저장
   useEffect(() => {
+    console.log('[Save] effect triggered — loading:', loading, 'isRemote:', isRemoteUpdate.current)
     if (loading) return
     if (isRemoteUpdate.current) {
       isRemoteUpdate.current = false
       return
     }
-    // undefined 값 제거 (Firestore는 undefined 거부)
+    console.log('[Save] calling setDoc →', firestoreDoc.path)
     const sanitized = JSON.parse(JSON.stringify(state))
     setDoc(firestoreDoc, sanitized)
-      .then(() => console.log('[AppContext] Firestore 저장 성공:', firestoreDoc.path))
+      .then(() => console.log('[Save] 성공:', firestoreDoc.path))
       .catch((err) => {
-        console.error('[AppContext] Firestore 저장 실패:', err?.code, err?.message)
+        console.error('[Save] 실패:', err?.code, err?.message)
         localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(state))
       })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, loading])
 
   // 월 변경 시 선택 회차 + 표시 개수 초기화
