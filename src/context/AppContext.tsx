@@ -455,13 +455,22 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
 
   // Firestore 실시간 구독 — 최초 1회 로컬 데이터 마이그레이션 포함
   useEffect(() => {
-    const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
+    let serverResponded = false
+
+    const unsubscribe = onSnapshot(firestoreDoc, { includeMetadataChanges: true }, (snap) => {
+      const fromCache = snap.metadata.fromCache
+
       if (snap.exists()) {
+        // 캐시 or 서버 데이터 — 둘 다 유효하게 로드
         isRemoteUpdate.current = true
         dispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
-        setLoading(false)
-      } else {
-        // Firestore에 데이터 없으면 localStorage 마이그레이션 시도 (최초 1회)
+        if (!serverResponded) {
+          serverResponded = true
+          setLoading(false)
+        }
+      } else if (!fromCache) {
+        // 서버가 "문서 없음"을 확인한 경우에만 초기화
+        serverResponded = true
         try {
           const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
           if (saved) {
@@ -477,8 +486,8 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
         }
         setLoading(false)
       }
+      // fromCache && !snap.exists() → 캐시 미스, 서버 응답 대기 (무시)
     }, (err) => {
-      // Firestore 연결 실패 — 보안 규칙 문제일 가능성이 높음
       console.error('[AppContext] Firestore onSnapshot 실패:', err?.code, err?.message)
       try {
         const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
