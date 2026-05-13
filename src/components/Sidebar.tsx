@@ -43,7 +43,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="flex items-center justify-between px-5 py-5 border-b border-slate-700">
           <div className="flex items-center gap-2">
             <GraduationCap size={22} className="text-blue-400" />
-            <span className="font-bold text-base leading-tight">학원 관리 대시보드</span>
+            <span className="font-bold text-base leading-tight">NODE</span>
           </div>
           <button
             onClick={onClose}

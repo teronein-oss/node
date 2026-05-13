@@ -45,7 +45,7 @@ export default function AppLayout() {
           >
             <Menu size={22} />
           </button>
-          <span className="font-bold text-slate-800">학원 관리 대시보드</span>
+          <span className="font-bold text-slate-800">NODE</span>
         </header>
 
         {/* 메인 콘텐츠 */}

@@ -65,7 +65,7 @@ export default function LoginPage() {
           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mb-4">
             <GraduationCap size={30} className="text-white" />
           </div>
-          <h1 className="text-xl font-bold text-slate-800">학원 관리 대시보드</h1>
+          <h1 className="text-xl font-bold text-slate-800">NODE</h1>
           <p className="text-sm text-slate-400 mt-1">로그인하여 시작하세요</p>
         </div>
 
