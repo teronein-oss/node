@@ -42,6 +42,7 @@ type Action =
   | { type: 'DELETE_SCORE_COLUMN'; payload: string }
   | { type: 'SET_THRESHOLD'; payload: { key: 'vocabThreshold' | 'dailyThreshold'; value: number } }
   | { type: 'SAVE_SCOPE'; payload: Omit<SessionScope, 'id' | 'createdAt'> }
+  | { type: 'DELETE_SCOPE'; payload: number }
   | { type: 'ADD_NOTICE'; payload: { message: string; deadline?: string } }
   | { type: 'TOGGLE_NOTICE'; payload: string }
   | { type: 'REMOVE_NOTICE'; payload: string }
@@ -248,6 +249,9 @@ function reducer(state: AppState, action: Action): AppState {
         ],
       }
     }
+
+    case 'DELETE_SCOPE':
+      return { ...state, scopes: state.scopes.filter(s => s.sessionNum !== action.payload) }
 
     case 'ADD_NOTICE':
       return { ...state, notices: [...state.notices, { id: genId(), message: action.payload.message, completed: false, deadline: action.payload.deadline }] }

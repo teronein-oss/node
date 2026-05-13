@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { ScheduleEvent } from '../types'
 import { getMonthSessions, getWeekStartForSession, formatDateKo, fmtDate, getClassDate } from '../utils/helpers'
@@ -292,6 +292,20 @@ export default function DashboardPage() {
 
   const isAllTab = activeTab === 'all'
 
+  const handleDeleteRow = (row: ReturnType<typeof buildRows>[number]) => {
+    if (!confirm(`${formatDateKo(row.date)} ${row.className} 현황 데이터를 삭제하시겠습니까?`)) return
+    const studentIds = state.students.filter(s => s.active && s.classId === row.classId).map(s => s.id)
+    dispatch({ type: 'CLEAR_SESSION_GRADES', payload: { sessionNum: row.sessionNum, studentIds } })
+    dispatch({ type: 'DELETE_SCOPE', payload: row.sessionNum })
+  }
+
+  const handleDeleteHw = (row: ReturnType<typeof buildRows>[number]) => {
+    const hw = state.homeworks.find(h => h.sessionNum === row.sessionNum && (h.classId === row.classId || h.classId === ''))
+    if (!hw) return
+    if (!confirm(`${formatDateKo(row.date)} ${row.className} 숙제를 삭제하시겠습니까?`)) return
+    dispatch({ type: 'DELETE_HOMEWORK', payload: hw.id })
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
 
@@ -381,6 +395,7 @@ export default function DashboardPage() {
                 <th className="text-left px-4 py-3 w-32">Daily</th>
                 <th className="text-left px-4 py-3 w-40">단어 재시험</th>
                 <th className="text-left px-4 py-3 w-40">Daily 재시험</th>
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -393,7 +408,7 @@ export default function DashboardPage() {
               ) : displayRows.map(row => (
                 <tr
                   key={`${row.classId}-${row.date}`}
-                  className={`hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
+                  className={`group hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
                 >
                   <td className="px-5 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -420,6 +435,14 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.vocabNames} color="purple" limit={3} /></td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.dailyNames} color="blue" limit={3} /></td>
+                  <td className="px-2 py-3 align-top">
+                    <button
+                      onClick={() => handleDeleteRow(row)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -441,6 +464,7 @@ export default function DashboardPage() {
                 {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
                 <th className="text-left px-4 py-3">숙제 내용</th>
                 <th className="text-left px-4 py-3 w-40">미제출</th>
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -453,7 +477,7 @@ export default function DashboardPage() {
               ) : displayRows.map(row => (
                 <tr
                   key={`hw-${row.classId}-${row.date}`}
-                  className={`hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
+                  className={`group hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
                 >
                   <td className="px-5 py-3 whitespace-nowrap align-top">
                     <div className="flex items-center gap-2">
@@ -474,6 +498,16 @@ export default function DashboardPage() {
                       : <span className="text-slate-300 text-xs">미입력</span>}
                   </td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.hwNoSubmitNames} color="red" limit={3} /></td>
+                  <td className="px-2 py-3 align-top">
+                    {row.hwDescription && (
+                      <button
+                        onClick={() => handleDeleteHw(row)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
