@@ -87,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setFirebaseUser(fbUser)
+      setRegistrationStatus('loading')
       const adminUser = fbUser.email === ADMIN_EMAIL
       setIsAdmin(adminUser)
 
