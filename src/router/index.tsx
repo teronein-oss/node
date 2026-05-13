@@ -1,12 +1,22 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter, useRouteError } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
-import DashboardPage from '../pages/DashboardPage'
-import GradePage from '../pages/GradePage'
-import StudentPage from '../pages/StudentPage'
-import HomeworkPage from '../pages/HomeworkPage'
-import ExamPage from '../pages/ExamPage'
-import SchedulePage from '../pages/SchedulePage'
-import AdminPage from '../pages/AdminPage'
+
+const DashboardPage = lazy(() => import('../pages/DashboardPage'))
+const GradePage = lazy(() => import('../pages/GradePage'))
+const StudentPage = lazy(() => import('../pages/StudentPage'))
+const HomeworkPage = lazy(() => import('../pages/HomeworkPage'))
+const ExamPage = lazy(() => import('../pages/ExamPage'))
+const SchedulePage = lazy(() => import('../pages/SchedulePage'))
+const AdminPage = lazy(() => import('../pages/AdminPage'))
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-7 h-7 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
 
 function ErrorPage() {
   const error = useRouteError() as Error
@@ -28,19 +38,23 @@ function ErrorPage() {
   )
 }
 
+function Lazy({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+}
+
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
     errorElement: <ErrorPage />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'grades', element: <GradePage /> },
-      { path: 'students', element: <StudentPage /> },
-      { path: 'homework', element: <HomeworkPage /> },
-      { path: 'exam', element: <ExamPage /> },
-      { path: 'schedule', element: <SchedulePage /> },
-      { path: 'admin', element: <AdminPage /> },
+      { index: true, element: <Lazy><DashboardPage /></Lazy> },
+      { path: 'grades', element: <Lazy><GradePage /></Lazy> },
+      { path: 'students', element: <Lazy><StudentPage /></Lazy> },
+      { path: 'homework', element: <Lazy><HomeworkPage /></Lazy> },
+      { path: 'exam', element: <Lazy><ExamPage /></Lazy> },
+      { path: 'schedule', element: <Lazy><SchedulePage /></Lazy> },
+      { path: 'admin', element: <Lazy><AdminPage /></Lazy> },
     ],
   },
 ])
