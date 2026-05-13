@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GraduationCap } from 'lucide-react'
+import { GraduationCap, LogIn, UserPlus } from 'lucide-react'
 import { useAuth, ROLES } from '../context/AuthContext'
 
 function GoogleIcon() {
@@ -13,15 +13,19 @@ function GoogleIcon() {
   )
 }
 
+type Mode = 'select' | 'register'
+
 export default function LoginPage() {
   const { firebaseUser, registrationStatus, signInWithGoogle, signOut, submitRegistration } = useAuth()
+  const [mode, setMode] = useState<Mode>('select')
   const [name, setName] = useState('')
   const [role, setRole] = useState<string>(ROLES[0])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (nextMode?: Mode) => {
     setError('')
+    if (nextMode) setMode(nextMode)
     try {
       await signInWithGoogle()
     } catch (e: unknown) {
@@ -33,7 +37,7 @@ export default function LoginPage() {
       } else if (code === 'auth/unauthorized-domain') {
         setError('인증되지 않은 도메인입니다. Firebase 콘솔에서 도메인을 등록해주세요.')
       } else {
-        setError(`로그인 오류: ${code || '알 수 없는 오류'}`)
+        setError(`오류: ${code || '알 수 없는 오류'}`)
       }
     }
   }
@@ -61,35 +65,61 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
+        {/* 로고 */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mb-4">
             <GraduationCap size={30} className="text-white" />
           </div>
           <h1 className="text-xl font-bold text-slate-800">NODE</h1>
-          <p className="text-sm text-slate-400 mt-1">로그인하여 시작하세요</p>
+          <p className="text-sm text-slate-400 mt-1">학원 관리 시스템</p>
         </div>
 
         {!firebaseUser ? (
-          /* Google 로그인 */
+          /* ── 로그인/회원가입 선택 ── */
           <div className="space-y-3">
-            {error && <p className="text-xs text-red-500 text-center mb-2">{error}</p>}
+            {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+
             <button
-              onClick={handleGoogleLogin}
+              onClick={() => handleGoogleLogin('select')}
               className="w-full flex items-center justify-center gap-3 py-3 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
             >
-              <GoogleIcon />
-              Google 계정으로 로그인
+              <LogIn size={16} className="text-slate-500" />
+              로그인
             </button>
-            <p className="text-xs text-slate-400 text-center">
-              로그인하면 개인 데이터가 안전하게 저장됩니다
+
+            <button
+              onClick={() => handleGoogleLogin('register')}
+              className="w-full flex items-center justify-center gap-3 py-3 bg-blue-600 rounded-xl text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              <UserPlus size={16} />
+              회원가입
+            </button>
+
+            <div className="flex items-center gap-2 my-1">
+              <div className="flex-1 h-px bg-slate-100" />
+              <span className="text-xs text-slate-300">Google 계정으로 진행</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+
+            <div className="flex justify-center">
+              <GoogleIcon />
+            </div>
+
+            <p className="text-xs text-slate-400 text-center pt-1">
+              개인 데이터는 안전하게 암호화됩니다
             </p>
           </div>
-        ) : registrationStatus === 'none' ? (
-          /* 가입신청 폼 */
+
+        ) : registrationStatus === 'none' || (registrationStatus === 'approved' && mode === 'register') ? (
+          /* ── 가입신청 폼 ── */
           <div className="space-y-4">
             <div className="text-center mb-2">
-              <p className="text-xs text-slate-500 truncate">{firebaseUser.email}</p>
-              <p className="text-sm text-slate-600 mt-1">가입 정보를 입력해주세요</p>
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <GoogleIcon />
+                <p className="text-xs text-slate-500 truncate">{firebaseUser.email}</p>
+              </div>
+              <p className="text-sm font-semibold text-slate-700">가입 정보를 입력해주세요</p>
+              <p className="text-xs text-slate-400 mt-0.5">관리자 승인 후 서비스를 이용할 수 있습니다</p>
             </div>
             <input
               type="text"
@@ -124,40 +154,33 @@ export default function LoginPage() {
               다른 계정으로 로그인
             </button>
           </div>
+
         ) : registrationStatus === 'pending' ? (
-          /* 승인 대기 */
+          /* ── 승인 대기 ── */
           <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto text-3xl">
-              ⏳
-            </div>
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto text-3xl">⏳</div>
             <div>
               <p className="font-semibold text-slate-800">승인 대기 중입니다</p>
-              <p className="text-sm text-slate-500 mt-1">관리자의 승인 후 서비스를 이용할 수 있습니다</p>
+              <p className="text-sm text-slate-500 mt-1">관리자의 승인 후 이용할 수 있습니다</p>
             </div>
-            <button
-              onClick={signOut}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-            >
+            <button onClick={signOut} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
               로그아웃
             </button>
           </div>
+
         ) : registrationStatus === 'rejected' ? (
-          /* 거절 */
+          /* ── 거절 ── */
           <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-3xl">
-              🚫
-            </div>
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-3xl">🚫</div>
             <div>
               <p className="font-semibold text-red-700">허락되지 않은 계정입니다</p>
               <p className="text-sm text-slate-500 mt-1">관리자에게 문의하세요</p>
             </div>
-            <button
-              onClick={signOut}
-              className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-            >
+            <button onClick={signOut} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
               로그아웃
             </button>
           </div>
+
         ) : null}
       </div>
     </div>

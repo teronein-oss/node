@@ -94,6 +94,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (adminUser) {
         setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: fbUser.displayName ?? '관리자', role: '관리자' })
         setRegistrationStatus('approved')
+        // 관리자 계정을 registrations에 자동 등록 (없을 경우에만)
+        const adminRef = doc(db, 'registrations', fbUser.uid)
+        getDocs(collection(db, 'registrations')).then(snap => {
+          if (!snap.docs.find(d => d.id === fbUser.uid)) {
+            setDoc(adminRef, {
+              uid: fbUser.uid,
+              email: fbUser.email ?? '',
+              displayName: fbUser.displayName ?? '관리자',
+              role: '관리자',
+              status: 'approved',
+              createdAt: new Date().toISOString(),
+            } satisfies RegistrationInfo)
+          }
+        })
         return
       }
 
@@ -158,6 +172,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const approveUser = async (uid: string) => {
     await updateDoc(doc(db, 'registrations', uid), { status: 'approved' })
+    // users 컬렉션에도 추가 (없을 경우에만)
+    const regSnap = await getDocs(collection(db, 'registrations'))
+    const reg = regSnap.docs.find(d => d.id === uid)?.data() as RegistrationInfo | undefined
+    if (reg) {
+      await setDoc(doc(db, 'users', uid), {
+        uid: reg.uid,
+        email: reg.email,
+        displayName: reg.displayName,
+        role: reg.role,
+        approvedAt: new Date().toISOString(),
+      }, { merge: true })
+    }
   }
 
   const rejectUser = async (uid: string) => {
