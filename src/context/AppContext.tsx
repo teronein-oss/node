@@ -42,7 +42,7 @@ type Action =
   | { type: 'DELETE_SCORE_COLUMN'; payload: string }
   | { type: 'SET_THRESHOLD'; payload: { key: 'vocabThreshold' | 'dailyThreshold'; value: number } }
   | { type: 'SAVE_SCOPE'; payload: Omit<SessionScope, 'id' | 'createdAt'> }
-  | { type: 'DELETE_SCOPE'; payload: number }
+  | { type: 'DELETE_SCOPE'; payload: { sessionNum: number; classId: string } }
   | { type: 'ADD_NOTICE'; payload: { message: string; deadline?: string } }
   | { type: 'TOGGLE_NOTICE'; payload: string }
   | { type: 'REMOVE_NOTICE'; payload: string }
@@ -240,7 +240,9 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, [action.payload.key]: action.payload.value }
 
     case 'SAVE_SCOPE': {
-      const filtered = state.scopes.filter(s => s.sessionNum !== action.payload.sessionNum)
+      const filtered = state.scopes.filter(
+        s => !(s.sessionNum === action.payload.sessionNum && s.classId === action.payload.classId)
+      )
       return {
         ...state,
         scopes: [
@@ -251,7 +253,12 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DELETE_SCOPE':
-      return { ...state, scopes: state.scopes.filter(s => s.sessionNum !== action.payload) }
+      return {
+        ...state,
+        scopes: state.scopes.filter(
+          s => !(s.sessionNum === action.payload.sessionNum && s.classId === action.payload.classId)
+        ),
+      }
 
     case 'ADD_NOTICE':
       return { ...state, notices: [...state.notices, { id: genId(), message: action.payload.message, completed: false, deadline: action.payload.deadline }] }
@@ -362,7 +369,10 @@ function normalizeState(parsed: AppState): AppState {
       classId: h.classId ?? '',
     })),
     scoreColumns: parsed.scoreColumns ?? [],
-    scopes: parsed.scopes ?? [],
+    scopes: (parsed.scopes ?? []).map((s: SessionScope & { classId?: string }) => ({
+      ...s,
+      classId: s.classId ?? '',
+    })),
     vocabThreshold: parsed.vocabThreshold ?? 80,
     dailyThreshold: parsed.dailyThreshold ?? 80,
     notices: parsed.notices ?? [{ id: '1', message: 'Test', completed: false }],
@@ -423,7 +433,7 @@ interface AppContextValue {
   getRetests: (studentId: string) => RetestRecord[]
   getPendingRetests: (classId?: string) => RetestRecord[]
   getCurrentSession: () => { sessionNum: number; weekStart: string }
-  getScope: (sessionNum: number) => SessionScope | undefined
+  getScope: (sessionNum: number, classId: string) => SessionScope | undefined
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -544,8 +554,8 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
     return { sessionNum: firstSession + 1, weekStart }
   }
 
-  const getScope = (sessionNum: number) =>
-    state.scopes.find(s => s.sessionNum === sessionNum)
+  const getScope = (sessionNum: number, classId: string) =>
+    state.scopes.find(s => s.sessionNum === sessionNum && s.classId === classId)
 
   return (
     <AppContext.Provider

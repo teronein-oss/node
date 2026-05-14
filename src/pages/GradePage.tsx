@@ -104,18 +104,18 @@ export default function GradePage() {
     if (!valid) setSelectedSession(classDates[classDates.length - 1].sessionNum)
   }, [classDates])
 
-  // 회차 변경 시 범위 불러오기
+  // 회차/반 변경 시 범위 불러오기
   useEffect(() => {
-    const scope = getScope(selectedSession)
+    const scope = getScope(selectedSession, selectedClass)
     setVocabRange(scope?.vocabRange ?? '')
     setDailyRange(scope?.dailyRange ?? '')
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSession])
+  }, [selectedSession, selectedClass])
 
   const saveScope = () => {
     dispatch({
       type: 'SAVE_SCOPE',
-      payload: { sessionNum: selectedSession, vocabRange: vocabRange.trim(), dailyRange: dailyRange.trim() },
+      payload: { classId: selectedClass, sessionNum: selectedSession, vocabRange: vocabRange.trim(), dailyRange: dailyRange.trim() },
     })
   }
 
@@ -786,7 +786,8 @@ export default function GradePage() {
                               {r.type === 'vocab' ? '단어' : 'Daily'}
                             </span>
                             {(() => {
-                              const scope = getScope(r.sessionNum)
+                              const studentClassId = state.students.find(s => s.id === r.studentId)?.classId ?? ''
+                              const scope = getScope(r.sessionNum, studentClassId)
                               const range = r.type === 'vocab' ? scope?.vocabRange : scope?.dailyRange
                               return range ? (
                                 <span className="text-xs text-slate-400 truncate">{range}</span>

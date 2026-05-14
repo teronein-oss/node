@@ -62,6 +62,7 @@ export type HomeworkStatus = '제출' | '미제출' | '미흡' | '재확인완�
 
 export interface SessionScope {
   id: string
+  classId: string
   sessionNum: number
   vocabRange: string
   dailyRange: string

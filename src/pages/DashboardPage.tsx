@@ -257,7 +257,7 @@ export default function DashboardPage() {
           const retests = state.retests.filter(
             r => r.sessionNum === sNum && r.passed === null && studentIds.has(r.studentId)
           )
-          const scope = state.scopes.find(s => s.sessionNum === sNum)
+          const scope = state.scopes.find(s => s.sessionNum === sNum && s.classId === classId)
           const hw = state.homeworks.find(
             h => h.sessionNum === sNum && (h.classId === classId || h.classId === '')
           )
@@ -329,7 +329,7 @@ export default function DashboardPage() {
     if (!confirm(`${formatDateKo(row.date)} ${row.className} 현황 데이터를 삭제하시겠습니까?`)) return
     const studentIds = state.students.filter(s => s.active && s.classId === row.classId).map(s => s.id)
     dispatch({ type: 'CLEAR_SESSION_GRADES', payload: { sessionNum: row.sessionNum, studentIds } })
-    dispatch({ type: 'DELETE_SCOPE', payload: row.sessionNum })
+    dispatch({ type: 'DELETE_SCOPE', payload: { sessionNum: row.sessionNum, classId: row.classId } })
   }
 
   const handleDeleteHw = (row: ReturnType<typeof buildRows>[number]) => {
