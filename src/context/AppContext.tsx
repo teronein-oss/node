@@ -56,7 +56,7 @@ type Action =
   | { type: 'COMPLETE_SCHEDULE_EVENT'; payload: string }
   | { type: 'TOGGLE_SCHEDULE_EVENT'; payload: string }
   | { type: 'DELETE_SCHEDULE_EVENT'; payload: string }
-  | { type: 'UPDATE_SCHEDULE_EVENT'; payload: { id: string; title: string; startDate: string; endDate: string; type: 'personal' | 'all' } }
+  | { type: 'UPDATE_SCHEDULE_EVENT'; payload: { id: string; title: string; startDate: string; endDate: string; time?: string; type: 'personal' | 'all' } }
   | { type: 'CLEAR_SESSION_GRADES'; payload: { sessionNum: number; studentIds: string[] } }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -318,7 +318,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         scheduleEvents: (state.scheduleEvents ?? []).map(e =>
           e.id === action.payload.id
-            ? { ...e, title: action.payload.title, startDate: action.payload.startDate, endDate: action.payload.endDate, type: action.payload.type }
+            ? { ...e, title: action.payload.title, startDate: action.payload.startDate, endDate: action.payload.endDate, time: action.payload.time, type: action.payload.type }
             : e
         ),
       }

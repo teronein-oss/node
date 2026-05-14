@@ -84,6 +84,7 @@ export interface ScheduleEvent {
   id: string
   startDate: string  // YYYY-MM-DD
   endDate: string    // YYYY-MM-DD
+  time?: string      // HH:MM (24h), optional
   title: string
   type: 'personal' | 'all'
   completed: boolean
