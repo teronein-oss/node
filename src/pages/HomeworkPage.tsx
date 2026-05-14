@@ -11,7 +11,12 @@ export default function HomeworkPage() {
   const currentMonth = today.getMonth() + 1
   const currentYM = `${currentYear}-${currentMonth}`
 
-  const [selectedClass, setSelectedClass] = useState(state.classes[0]?.id ?? '')
+  const [selectedClass, setSelectedClass] = useState(() => {
+    const dow = new Date().getDay()
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
+    return matched?.id ?? state.classes[0]?.id ?? ''
+  })
 
   const availableMonths = useMemo(() => {
     const ymSet = new Set<string>([currentYM])

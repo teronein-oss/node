@@ -9,7 +9,12 @@ export default function StudentPage() {
   const { state, dispatch, visibleCount, setVisibleCount, selectedYM, setSelectedYM } = useApp()
 
   const [search, setSearch] = useState('')
-  const [classFilter, setClassFilter] = useState('all')
+  const [classFilter, setClassFilter] = useState(() => {
+    const dow = new Date().getDay()
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
+    return matched?.id ?? 'all'
+  })
   const [statusFilter, setStatusFilter] = useState<FilterType>('all')
   const [selected, setSelected] = useState<Student | null>(null)
   const [showAdd, setShowAdd] = useState(false)
