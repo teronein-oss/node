@@ -7,7 +7,7 @@ import {
   type User,
 } from 'firebase/auth'
 import {
-  doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs,
+  doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, getDoc,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 
@@ -36,6 +36,7 @@ interface AuthContextValue {
   user: UserProfile | null
   registrationStatus: RegistrationStatus
   isAdmin: boolean
+  adminUid: string | null
   viewingUid: string | null
   viewingUserName: string | null
   setViewingUid: (uid: string | null, name?: string) => void
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [registrationStatus, setRegistrationStatus] = useState<RegistrationStatus>('loading')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminUid, setAdminUid] = useState<string | null>(null)
   const [viewingUid, setViewingUidState] = useState<string | null>(null)
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
 
@@ -80,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setFirebaseUser(null)
         setUser(null)
         setIsAdmin(false)
+        setAdminUid(null)
         setViewingUidState(null)
         setViewingUserName(null)
         setRegistrationStatus('none')
@@ -93,7 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (adminUser) {
         setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: fbUser.displayName ?? '관리자', role: '관리자' })
+        setAdminUid(fbUser.uid)
         setRegistrationStatus('approved')
+        // 조교가 admin UID를 읽을 수 있도록 config에 기록
+        setDoc(doc(db, 'config', 'sharedData'), { adminUid: fbUser.uid }, { merge: true })
         // 관리자 계정을 registrations에 자동 등록 (없을 경우에만)
         const adminRef = doc(db, 'registrations', fbUser.uid)
         getDocs(collection(db, 'registrations')).then(snap => {
@@ -123,6 +129,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (data.status === 'approved') {
             setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: data.displayName, role: data.role })
             setRegistrationStatus('approved')
+            if (data.role === '조교') {
+              getDoc(doc(db, 'config', 'sharedData')).then(snap => {
+                if (snap.exists()) setAdminUid(snap.data().adminUid as string)
+              })
+            }
           } else if (data.status === 'rejected') {
             setUser(null)
             setRegistrationStatus('rejected')
@@ -196,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      firebaseUser, user, registrationStatus, isAdmin, viewingUid, viewingUserName, setViewingUid,
+      firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, setViewingUid,
       signInWithGoogle, signOut, submitRegistration,
       approveUser, rejectUser, deleteRegistration,
     }}>

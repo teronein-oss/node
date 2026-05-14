@@ -22,7 +22,7 @@ function AppInner() {
 }
 
 function AuthGate() {
-  const { registrationStatus, firebaseUser, viewingUid } = useAuth()
+  const { registrationStatus, firebaseUser, viewingUid, user, adminUid } = useAuth()
 
   if (registrationStatus === 'loading') {
     return (
@@ -36,7 +36,18 @@ function AuthGate() {
     return <LoginPage />
   }
 
-  const uid = viewingUid ?? firebaseUser.uid
+  const isJogyo = user?.role === '조교'
+
+  // 조교는 admin의 데이터를 공유 — adminUid 로딩 대기
+  if (isJogyo && !adminUid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  const uid = viewingUid ?? (isJogyo ? adminUid! : firebaseUser.uid)
   return (
     <AppProvider key={uid} uid={uid}>
       <AppInner />
