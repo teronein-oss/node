@@ -259,10 +259,10 @@ export default function DashboardPage() {
           )
           const scope = state.scopes.find(s => s.sessionNum === sNum && s.classId === classId)
           const hw = state.homeworks.find(
-            h => h.sessionNum === sNum && (h.classId === classId || h.classId === '')
+            h => h.sessionNum === sNum - 1 && (h.classId === classId || h.classId === '')
           )
           const noHw = state.grades.filter(
-            g => g.sessionNum === sNum + 1 &&
+            g => g.sessionNum === sNum &&
               g.homeworkDone === '미제출' &&
               studentIds.has(g.studentId)
           )
@@ -331,7 +331,7 @@ export default function DashboardPage() {
   }
 
   const handleDeleteHw = (row: ReturnType<typeof buildRows>[number]) => {
-    const hw = state.homeworks.find(h => h.sessionNum === row.sessionNum && (h.classId === row.classId || h.classId === ''))
+    const hw = state.homeworks.find(h => h.sessionNum === row.sessionNum - 1 && (h.classId === row.classId || h.classId === ''))
     if (!hw) return
     if (!confirm(`${formatDateKo(row.date)} ${row.className} 숙제를 삭제하시겠습니까?`)) return
     dispatch({ type: 'DELETE_HOMEWORK', payload: hw.id })
@@ -481,10 +481,10 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* 숙제 현황 */}
+      {/* 숙제 제출현황 */}
       <section className="bg-white rounded-xl shadow-sm border border-slate-100">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">{selectedYear}년 {selectedMonth}월 숙제 현황</h2>
+          <h2 className="font-semibold text-slate-800">{selectedYear}년 {selectedMonth}월 숙제 제출현황</h2>
           <a href="/homework" className="text-xs text-blue-600 hover:underline">숙제관리 →</a>
         </div>
         <div className="overflow-x-auto">
