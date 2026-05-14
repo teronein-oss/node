@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, X, Clock } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { ChevronLeft, ChevronRight, Plus, X, Clock, Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { fmtDate } from '../utils/helpers'
 import type { ScheduleEvent } from '../types'
@@ -105,6 +105,7 @@ export default function SchedulePage() {
 
   const [displayYear, setDisplayYear] = useState(todayDate.getFullYear())
   const [displayMonth, setDisplayMonth] = useState(todayDate.getMonth() + 1)
+  const [selectedDate, setSelectedDate] = useState(todayStr)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add')
@@ -114,6 +115,8 @@ export default function SchedulePage() {
   const [modalStartDate, setModalStartDate] = useState(todayStr)
   const [modalEndDate, setModalEndDate] = useState(todayStr)
   const [modalTime, setModalTime] = useState('')
+
+  const dateGroupRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   const calDays = useMemo(
     () => buildCalDays(displayYear, displayMonth),
@@ -126,6 +129,38 @@ export default function SchedulePage() {
     return rows
   }, [calDays])
 
+  // Events for current month grouped by date (for list panel)
+  const monthEventGroups = useMemo(() => {
+    const ms = `${displayYear}-${String(displayMonth).padStart(2, '0')}-01`
+    const me = `${displayYear}-${String(displayMonth).padStart(2, '0')}-${String(new Date(displayYear, displayMonth, 0).getDate()).padStart(2, '0')}`
+
+    const relevant = (state.scheduleEvents ?? []).filter(
+      e => e.endDate >= ms && e.startDate <= me
+    )
+    const groups: Record<string, ScheduleEvent[]> = {}
+    for (const event of relevant) {
+      const listDate = event.startDate < ms ? ms : event.startDate
+      if (!groups[listDate]) groups[listDate] = []
+      groups[listDate].push(event)
+    }
+    for (const date of Object.keys(groups)) {
+      groups[date].sort((a, b) => {
+        if (a.time && b.time) return a.time.localeCompare(b.time)
+        if (a.time) return -1
+        if (b.time) return 1
+        return 0
+      })
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+  }, [state.scheduleEvents, displayYear, displayMonth])
+
+  const totalMonthEvents = monthEventGroups.reduce((acc, [, evs]) => acc + evs.length, 0)
+
+  // Scroll list to selected date
+  useEffect(() => {
+    dateGroupRefs.current[selectedDate]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [selectedDate])
+
   const prevMonth = () => {
     if (displayMonth === 1) { setDisplayYear(y => y - 1); setDisplayMonth(12) }
     else setDisplayMonth(m => m - 1)
@@ -133,6 +168,11 @@ export default function SchedulePage() {
   const nextMonth = () => {
     if (displayMonth === 12) { setDisplayYear(y => y + 1); setDisplayMonth(1) }
     else setDisplayMonth(m => m + 1)
+  }
+  const goToday = () => {
+    setDisplayYear(todayDate.getFullYear())
+    setDisplayMonth(todayDate.getMonth() + 1)
+    setSelectedDate(todayStr)
   }
 
   const openAddModal = (dateStr: string) => {
@@ -195,169 +235,294 @@ export default function SchedulePage() {
         <p className="text-sm text-slate-500 mt-1">날짜별 일정 관리</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex-1 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
+      <div className="flex-1 flex gap-4 overflow-hidden" style={{ minHeight: 0 }}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center gap-2">
-            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => { setDisplayYear(todayDate.getFullYear()); setDisplayMonth(todayDate.getMonth() + 1) }}
-              className="px-3 py-1 text-xs text-slate-600 hover:text-blue-600 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors font-medium"
-            >
-              오늘
-            </button>
-            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
-              <ChevronRight size={16} />
-            </button>
-            <h2 className="font-bold text-slate-800 text-base ml-1">
-              {displayYear}년 {displayMonth}월
-            </h2>
-          </div>
-          <div className="flex items-center gap-4">
+        {/* ── Calendar (2/3) ── */}
+        <div className="flex-[2] bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col overflow-hidden min-w-0">
+
+          {/* Calendar nav */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
+                <ChevronLeft size={15} />
+              </button>
+              <button
+                onClick={goToday}
+                className="px-2.5 py-1 text-xs text-slate-600 hover:text-blue-600 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors font-medium"
+              >
+                오늘
+              </button>
+              <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
+                <ChevronRight size={15} />
+              </button>
+              <h2 className="font-bold text-slate-800 text-sm ml-1">
+                {displayYear}년 {displayMonth}월
+              </h2>
+            </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" />개인
+                <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />개인
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-sm bg-red-500 inline-block" />전체
+                <span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block" />전체
               </span>
             </div>
-            <button
-              onClick={() => openAddModal(todayStr)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={13} />일정 추가
-            </button>
+          </div>
+
+          {/* DOW header */}
+          <div className="grid grid-cols-7 border-b border-slate-200 shrink-0 bg-slate-50/60">
+            {DOW_LABELS.map((d, i) => (
+              <div
+                key={d}
+                className={`text-center text-xs font-semibold py-2
+                  ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-500'}`}
+              >
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="flex-1 overflow-y-auto">
+            {weeks.map((week, wi) => {
+              const placements = computePlacements(week, state.scheduleEvents ?? [])
+              const maxLane = placements.length > 0 ? Math.max(...placements.map(p => p.lane)) : -1
+              const visibleLanes = Math.min(maxLane + 1, MAX_LANES)
+
+              const overflowByCol: number[] = Array(7).fill(0)
+              for (const p of placements) {
+                if (p.lane >= MAX_LANES) {
+                  for (let c = p.startCol; c <= p.endCol; c++) overflowByCol[c]++
+                }
+              }
+
+              return (
+                <div key={wi} className="border-b border-slate-100 last:border-b-0">
+                  {/* Date number row */}
+                  <div className="grid grid-cols-7">
+                    {week.map((date, di) => {
+                      const dateStr = date ? fmtDate(date) : null
+                      const isToday = dateStr === todayStr
+                      const isSelected = dateStr === selectedDate
+                      const holiday = dateStr ? ACADEMY_HOLIDAYS[dateStr] : undefined
+                      const dow = di
+
+                      return (
+                        <div
+                          key={di}
+                          className={`
+                            border-r border-slate-100 last:border-r-0 pt-2 pb-1 px-1
+                            transition-colors select-none
+                            ${!date
+                              ? 'bg-slate-50/40 cursor-default'
+                              : isSelected
+                                ? 'bg-blue-50/70 cursor-pointer'
+                                : 'hover:bg-slate-50 cursor-pointer'}
+                          `}
+                          onClick={() => {
+                            if (!date) return
+                            setSelectedDate(fmtDate(date))
+                            openAddModal(fmtDate(date))
+                          }}
+                        >
+                          <div className="flex justify-center">
+                            <span
+                              className={`
+                                w-6 h-6 flex items-center justify-center rounded-full
+                                text-[11px] font-semibold transition-colors
+                                ${isToday
+                                  ? 'bg-blue-600 text-white'
+                                  : !date
+                                    ? 'text-slate-300'
+                                    : holiday
+                                      ? 'text-red-500'
+                                      : dow === 0
+                                        ? 'text-red-400'
+                                        : dow === 6
+                                          ? 'text-blue-400'
+                                          : 'text-slate-700'
+                                }
+                              `}
+                            >
+                              {date?.getDate()}
+                            </span>
+                          </div>
+                          {holiday && (
+                            <p className="text-[9px] text-red-400 text-center truncate leading-tight mt-0.5">
+                              {holiday}
+                            </p>
+                          )}
+                          {overflowByCol[di] > 0 && (
+                            <p className="text-[10px] text-slate-400 text-center font-medium mt-0.5">
+                              +{overflowByCol[di]}개
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Event lanes */}
+                  {Array.from({ length: visibleLanes }, (_, lane) => (
+                    <div key={lane} className="grid grid-cols-7 h-[22px]">
+                      {placements
+                        .filter(p => p.lane === lane)
+                        .map(p => (
+                          <div
+                            key={p.event.id}
+                            style={{ gridColumn: `${p.startCol + 1} / ${p.endCol + 2}` }}
+                            className={`
+                              my-[1px] h-5 flex items-center px-1.5 text-[10px] font-medium
+                              text-white cursor-pointer overflow-hidden whitespace-nowrap
+                              transition-colors
+                              ${p.event.type === 'personal'
+                                ? 'bg-green-500 hover:bg-green-600'
+                                : 'bg-red-500 hover:bg-red-600'}
+                              ${p.continuesLeft ? 'ml-0 rounded-l-none' : 'ml-0.5 rounded-l'}
+                              ${p.continuesRight ? 'mr-0 rounded-r-none' : 'mr-0.5 rounded-r'}
+                            `}
+                            onClick={e => { e.stopPropagation(); openEditModal(p.event) }}
+                            title={`${fmtTime(p.event.time)}${p.event.time ? ' ' : ''}${p.event.title}`}
+                          >
+                            {p.event.time && (
+                              <span className="opacity-80 mr-0.5 shrink-0">{fmtTime(p.event.time)}</span>
+                            )}
+                            <span className="truncate">{p.event.title}</span>
+                          </div>
+                        ))}
+                    </div>
+                  ))}
+
+                  <div className="h-1.5" />
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        {/* Day-of-week header */}
-        <div className="grid grid-cols-7 border-b border-slate-200 shrink-0 bg-slate-50/60">
-          {DOW_LABELS.map((d, i) => (
-            <div
-              key={d}
-              className={`text-center text-xs font-semibold py-2
-                ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-500'}`}
-            >
-              {d}
+        {/* ── List panel (1/3) ── */}
+        <div className="flex-[1] bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col overflow-hidden min-w-0">
+
+          {/* List header */}
+          <div className="px-4 py-3 border-b border-slate-100 shrink-0">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-800">일정 목록</p>
+              <button
+                onClick={() => openAddModal(selectedDate)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={12} />추가
+              </button>
             </div>
-          ))}
-        </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {displayYear}년 {displayMonth}월 · {totalMonthEvents}개 일정
+            </p>
+          </div>
 
-        {/* Calendar body */}
-        <div className="flex-1 overflow-y-auto">
-          {weeks.map((week, wi) => {
-            const placements = computePlacements(week, state.scheduleEvents ?? [])
-            const maxLane = placements.length > 0 ? Math.max(...placements.map(p => p.lane)) : -1
-            const visibleLanes = Math.min(maxLane + 1, MAX_LANES)
+          {/* Event list */}
+          <div className="flex-1 overflow-y-auto">
+            {monthEventGroups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-2">
+                <p className="text-xs text-slate-300">이번 달 일정이 없습니다</p>
+              </div>
+            ) : (
+              <div>
+                {monthEventGroups.map(([dateStr, events]) => {
+                  const [, m, d] = dateStr.split('-').map(Number)
+                  const dowNum = new Date(dateStr + 'T00:00:00').getDay()
+                  const dow = DOW_LABELS[dowNum]
+                  const isSelected = dateStr === selectedDate
+                  const isToday = dateStr === todayStr
 
-            const overflowByCol: number[] = Array(7).fill(0)
-            for (const p of placements) {
-              if (p.lane >= MAX_LANES) {
-                for (let c = p.startCol; c <= p.endCol; c++) overflowByCol[c]++
-              }
-            }
-
-            return (
-              <div key={wi} className="border-b border-slate-100 last:border-b-0">
-                {/* Date number row */}
-                <div className="grid grid-cols-7">
-                  {week.map((date, di) => {
-                    const isToday = date ? fmtDate(date) === todayStr : false
-                    const holiday = date ? ACADEMY_HOLIDAYS[fmtDate(date)] : undefined
-                    const dow = di
-
-                    return (
+                  return (
+                    <div
+                      key={dateStr}
+                      ref={el => { dateGroupRefs.current[dateStr] = el }}
+                    >
+                      {/* Date group header */}
                       <div
-                        key={di}
                         className={`
-                          border-r border-slate-100 last:border-r-0
-                          pt-2 pb-1 px-1 cursor-pointer transition-colors select-none
-                          ${date ? 'hover:bg-slate-50' : 'bg-slate-50/40 cursor-default'}
+                          flex items-center justify-between px-4 py-2 sticky top-0 z-10 border-b border-slate-100
+                          ${isSelected ? 'bg-blue-50' : 'bg-white'}
                         `}
-                        onClick={() => date && openAddModal(fmtDate(date))}
                       >
-                        <div className="flex justify-center">
+                        <div className="flex items-center gap-2">
                           <span
                             className={`
-                              w-7 h-7 flex items-center justify-center rounded-full
-                              text-xs font-semibold transition-colors
+                              w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
                               ${isToday
                                 ? 'bg-blue-600 text-white'
-                                : !date
-                                  ? 'text-slate-300'
-                                  : holiday
-                                    ? 'text-red-500'
-                                    : dow === 0
-                                      ? 'text-red-400'
-                                      : dow === 6
-                                        ? 'text-blue-400'
-                                        : 'text-slate-700'
-                              }
+                                : isSelected
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : dowNum === 0
+                                    ? 'text-red-400'
+                                    : dowNum === 6
+                                      ? 'text-blue-400'
+                                      : 'text-slate-600'}
                             `}
                           >
-                            {date?.getDate()}
+                            {d}
+                          </span>
+                          <span
+                            className={`text-xs font-semibold ${
+                              isToday ? 'text-blue-600' :
+                              isSelected ? 'text-blue-500' :
+                              'text-slate-600'
+                            }`}
+                          >
+                            {m}월 {d}일 ({dow})
                           </span>
                         </div>
-                        {holiday && (
-                          <p className="text-[9px] text-red-400 text-center truncate leading-tight mt-0.5">
-                            {holiday}
-                          </p>
-                        )}
-                        {overflowByCol[di] > 0 && (
-                          <p className="text-[10px] text-slate-400 text-center font-medium mt-0.5">
-                            +{overflowByCol[di]}개
-                          </p>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Event lanes */}
-                {Array.from({ length: visibleLanes }, (_, lane) => (
-                  <div
-                    key={lane}
-                    className="grid grid-cols-7 h-[22px]"
-                  >
-                    {placements
-                      .filter(p => p.lane === lane)
-                      .map(p => (
-                        <div
-                          key={p.event.id}
-                          style={{ gridColumn: `${p.startCol + 1} / ${p.endCol + 2}` }}
-                          className={`
-                            my-[1px] h-5 flex items-center px-2 text-[11px] font-medium
-                            text-white cursor-pointer overflow-hidden whitespace-nowrap
-                            ${p.event.type === 'personal'
-                              ? 'bg-green-500 hover:bg-green-600'
-                              : 'bg-red-500 hover:bg-red-600'}
-                            ${p.continuesLeft ? 'ml-0 rounded-l-none' : 'ml-0.5 rounded-l'}
-                            ${p.continuesRight ? 'mr-0 rounded-r-none' : 'mr-0.5 rounded-r'}
-                            transition-colors
-                          `}
-                          onClick={e => { e.stopPropagation(); openEditModal(p.event) }}
-                          title={`${fmtTime(p.event.time)}${p.event.time ? ' ' : ''}${p.event.title}`}
+                        <button
+                          onClick={() => { setSelectedDate(dateStr); openAddModal(dateStr) }}
+                          className="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
                         >
-                          {p.event.time && (
-                            <span className="opacity-80 mr-1 shrink-0 text-[10px]">
-                              {fmtTime(p.event.time)}
-                            </span>
-                          )}
-                          <span className="truncate">{p.event.title}</span>
+                          <Plus size={11} />
+                        </button>
+                      </div>
+
+                      {/* Events */}
+                      {events.map(event => (
+                        <div
+                          key={event.id}
+                          className={`
+                            flex items-start gap-2.5 px-4 py-2 group hover:bg-slate-50
+                            cursor-pointer transition-colors
+                            ${isSelected ? 'bg-blue-50/30' : ''}
+                          `}
+                          onClick={() => openEditModal(event)}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-sm shrink-0 mt-1
+                              ${event.type === 'personal' ? 'bg-green-500' : 'bg-red-500'}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            {event.time && (
+                              <p className="text-[10px] text-slate-400 leading-none mb-0.5">
+                                {fmtTime(event.time)}
+                              </p>
+                            )}
+                            <p className="text-xs text-slate-700 leading-snug truncate">{event.title}</p>
+                            {event.startDate !== event.endDate && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                ~ {event.endDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, '$1/$2')}까지
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-blue-500 transition-all shrink-0 mt-0.5"
+                            onClick={e => { e.stopPropagation(); openEditModal(event) }}
+                          >
+                            <Pencil size={11} />
+                          </button>
                         </div>
                       ))}
-                  </div>
-                ))}
-
-                {/* Bottom padding */}
-                <div className="h-2" />
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            )}
+          </div>
         </div>
       </div>
 
