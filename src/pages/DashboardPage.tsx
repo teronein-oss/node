@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2, BookOpen } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { ScheduleEvent } from '../types'
 import { getMonthSessions, getWeekStartForSession, formatDateKo, fmtDate, getClassDate } from '../utils/helpers'
@@ -236,26 +236,6 @@ export default function DashboardPage() {
     [selectedYear, selectedMonth]
   )
 
-  // 각 반의 다음 수업 시험범위 계산
-  const upcomingScopes = useMemo(() => {
-    const nextMonthYear = todayMonth === 12 ? todayYear + 1 : todayYear
-    const nextMonth = todayMonth === 12 ? 1 : todayMonth + 1
-    const allSessions = [
-      ...getMonthSessions(todayYear, todayMonth, 12),
-      ...getMonthSessions(nextMonthYear, nextMonth, 12),
-    ]
-    return state.classes.flatMap(cls => {
-      const next = allSessions
-        .map(sNum => ({ sNum, date: getClassDate(sNum, cls.days) }))
-        .filter(({ date }) => date >= todayStr)
-        .sort((a, b) => a.date.localeCompare(b.date))[0]
-      if (!next) return []
-      const scope = state.scopes.find(s => s.sessionNum === next.sNum)
-      if (!scope?.vocabRange && !scope?.dailyRange) return []
-      return [{ classId: cls.id, className: cls.name, date: next.date, vocabRange: scope.vocabRange ?? '', dailyRange: scope.dailyRange ?? '' }]
-    })
-  }, [state.classes, state.scopes, todayStr, todayYear, todayMonth])
-
   // 날짜 기반 행 생성 (반 하나에 대해)
   const buildRows = useMemo(() => {
     return (classId: string) => {
@@ -427,40 +407,6 @@ export default function DashboardPage() {
           </button>
         ))}
       </div>
-
-      {/* 다음 수업 시험범위 */}
-      {upcomingScopes.length > 0 && (
-        <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
-            <BookOpen size={14} className="text-blue-500" />
-            <h2 className="font-semibold text-slate-800 text-sm">다음 수업 시험범위</h2>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {upcomingScopes.map(s => (
-              <div key={s.classId} className="flex items-center gap-6 px-5 py-3">
-                <div className="w-24 shrink-0">
-                  <p className="text-xs font-semibold text-slate-700">{s.className}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{formatDateKo(s.date)}</p>
-                </div>
-                <div className="flex flex-wrap gap-4">
-                  {s.vocabRange && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-purple-600 shrink-0">단어</span>
-                      <span className="text-xs text-slate-700">{s.vocabRange}</span>
-                    </div>
-                  )}
-                  {s.dailyRange && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-blue-600 shrink-0">Daily</span>
-                      <span className="text-xs text-slate-700">{s.dailyRange}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* 월별 현황 테이블 */}
       <section className="bg-white rounded-xl shadow-sm border border-slate-100">
