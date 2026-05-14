@@ -423,8 +423,8 @@ export default function DashboardPage() {
                 <th className="text-left px-5 py-3 w-36">날짜</th>
                 {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
                 <th className="text-left px-4 py-3 w-32">단어</th>
-                <th className="text-left px-4 py-3 w-32">Daily</th>
                 <th className="text-left px-4 py-3 w-40">단어 재시험</th>
+                <th className="text-left px-4 py-3 w-32">Daily</th>
                 <th className="text-left px-4 py-3 w-40">Daily 재시험</th>
                 <th className="w-10" />
               </tr>
@@ -459,12 +459,12 @@ export default function DashboardPage() {
                       ? <span className="text-slate-700 break-words">{row.vocabRange}</span>
                       : <span className="text-slate-300 text-xs">미입력</span>}
                   </td>
+                  <td className="px-4 py-3 align-top"><NameTags names={row.vocabNames} color="purple" limit={3} /></td>
                   <td className="px-4 py-3 text-sm align-top">
                     {row.dailyRange
                       ? <span className="text-slate-700 break-words">{row.dailyRange}</span>
                       : <span className="text-slate-300 text-xs">미입력</span>}
                   </td>
-                  <td className="px-4 py-3 align-top"><NameTags names={row.vocabNames} color="purple" limit={3} /></td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.dailyNames} color="blue" limit={3} /></td>
                   <td className="px-2 py-3 align-top">
                     <button
