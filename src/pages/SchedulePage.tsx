@@ -312,7 +312,7 @@ export default function SchedulePage() {
                           key={di}
                           className={`
                             border-r border-slate-100 last:border-r-0 pt-2 pb-1 px-1
-                            transition-colors select-none
+                            transition-colors select-none min-h-[80px]
                             ${!date
                               ? 'bg-slate-50/40 cursor-default'
                               : isSelected
