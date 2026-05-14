@@ -1,6 +1,13 @@
 import { lazy, Suspense } from 'react'
-import { createBrowserRouter, useRouteError } from 'react-router-dom'
+import { createBrowserRouter, Navigate, useRouteError } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
+import { useAuth } from '../context/AuthContext'
+
+function ScheduleGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  if (user?.role === '조교') return <Navigate to="/" replace />
+  return <>{children}</>
+}
 
 const DashboardPage = lazy(() => import('../pages/DashboardPage'))
 const GradePage = lazy(() => import('../pages/GradePage'))
@@ -53,7 +60,7 @@ export const router = createBrowserRouter([
       { path: 'students', element: <Lazy><StudentPage /></Lazy> },
       { path: 'homework', element: <Lazy><HomeworkPage /></Lazy> },
       { path: 'exam', element: <Lazy><ExamPage /></Lazy> },
-      { path: 'schedule', element: <Lazy><SchedulePage /></Lazy> },
+      { path: 'schedule', element: <ScheduleGuard><Lazy><SchedulePage /></Lazy></ScheduleGuard> },
       { path: 'admin', element: <Lazy><AdminPage /></Lazy> },
     ],
   },

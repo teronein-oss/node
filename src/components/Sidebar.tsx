@@ -18,6 +18,8 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const { user, isAdmin, signOut } = useAuth()
+  const isJogyo = user?.role === '조교'
+  const visibleNavItems = NAV_ITEMS.filter(item => !(isJogyo && item.to === '/schedule'))
 
   return (
     <>
@@ -55,7 +57,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
         {/* 메뉴 */}
         <nav className="flex-1 py-4 px-3 overflow-y-auto">
-          {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
+          {visibleNavItems.map(({ to, icon: Icon, label, end }) => (
             <NavLink
               key={to}
               to={to}
