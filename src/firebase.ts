@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
+import { initializeFirestore, persistentLocalCache } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 
 const firebaseConfig = {
@@ -12,5 +12,8 @@ const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
-export const db = getFirestore(app)
+// IndexedDB 퍼시스턴스: 새로고침 전에 쓰기가 완료되지 않아도 데이터 유실 방지
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache(),
+})
 export const auth = getAuth(app)
