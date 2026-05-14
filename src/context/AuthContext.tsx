@@ -4,6 +4,8 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  setPersistence,
+  browserSessionPersistence,
   type User,
 } from 'firebase/auth'
 import {
@@ -159,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider()
+    await setPersistence(auth, browserSessionPersistence)
     await signInWithPopup(auth, provider)
   }
 
