@@ -25,9 +25,12 @@ export default function ExamPage() {
   })
   const [semesterSaved, setSemesterSaved] = useState(false)
 
-  const [selectedClassId, setSelectedClassId] = useState<string>(
-    () => state.classes[0]?.id ?? ''
-  )
+  const [selectedClassId, setSelectedClassId] = useState<string>(() => {
+    const dow = new Date().getDay()
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
+    return matched?.id ?? state.classes[0]?.id ?? ''
+  })
 
   // 시험 정보 수정 폼
   const [editingInfo, setEditingInfo] = useState(false)

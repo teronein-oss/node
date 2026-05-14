@@ -61,7 +61,12 @@ export default function GradePage() {
     return getMonthSessions(selectedMonthInfo.year, selectedMonthInfo.month, 12)
   }, [selectedMonthInfo])
 
-  const [selectedClass, setSelectedClass] = useState(state.classes[0]?.id ?? '')
+  const [selectedClass, setSelectedClass] = useState(() => {
+    const dow = new Date().getDay()
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
+    return matched?.id ?? state.classes[0]?.id ?? ''
+  })
 
   // 선택된 반의 수업 날짜 목록 (월/금 또는 화/목)
   const selectedCls = state.classes.find(c => c.id === selectedClass)
