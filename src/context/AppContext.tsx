@@ -438,6 +438,7 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
   const loadingRef = useRef(true)
   loadingRef.current = loading
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingWriteCount = useRef(0)
 
   // dispatch: LOAD 액션은 Firestore 저장 건너뜀, 나머지는 300ms 디바운스 저장
   const dispatch = useCallback((action: Action) => {
@@ -445,10 +446,15 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
     if (action.type === 'LOAD' || loadingRef.current) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
+      saveTimer.current = null
+      pendingWriteCount.current++
       const sanitized = JSON.parse(JSON.stringify(stateRef.current))
       setDoc(firestoreDoc, sanitized)
         .then(() => console.log('✅ Firestore 저장:', firestoreDoc.path))
-        .catch((err) => console.error('❌ Firestore 저장 실패:', err?.code, err?.message))
+        .catch((err) => {
+          pendingWriteCount.current--
+          console.error('❌ Firestore 저장 실패:', err?.code, err?.message)
+        })
     }, 300)
   }, [firestoreDoc])
 
@@ -474,7 +480,12 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
   useEffect(() => {
     const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
       if (snap.exists()) {
-        baseDispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
+        if (pendingWriteCount.current > 0) {
+          // 우리가 직접 저장한 onSnapshot 반응 — in-memory 상태를 덮어쓰지 않음
+          pendingWriteCount.current--
+        } else {
+          baseDispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
+        }
       } else {
         try {
           const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
