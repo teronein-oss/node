@@ -326,9 +326,7 @@ export default function DashboardPage() {
   const isAllTab = activeTab === 'all'
 
   const handleDeleteRow = (row: ReturnType<typeof buildRows>[number]) => {
-    if (!confirm(`${formatDateKo(row.date)} ${row.className} 현황 데이터를 삭제하시겠습니까?`)) return
-    const studentIds = state.students.filter(s => s.active && s.classId === row.classId).map(s => s.id)
-    dispatch({ type: 'CLEAR_SESSION_GRADES', payload: { sessionNum: row.sessionNum, studentIds } })
+    if (!confirm(`${formatDateKo(row.date)} ${row.className} 범위를 대시보드에서 삭제하시겠습니까?`)) return
     dispatch({ type: 'DELETE_SCOPE', payload: { sessionNum: row.sessionNum, classId: row.classId } })
   }
 
