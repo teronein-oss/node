@@ -455,22 +455,12 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
 
   // Firestore 실시간 구독 — 최초 1회 로컬 데이터 마이그레이션 포함
   useEffect(() => {
-    let serverResponded = false
-
-    const unsubscribe = onSnapshot(firestoreDoc, { includeMetadataChanges: true }, (snap) => {
-      const fromCache = snap.metadata.fromCache
-
+    const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
       if (snap.exists()) {
-        // 캐시 or 서버 데이터 — 둘 다 유효하게 로드
         isRemoteUpdate.current = true
         dispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
-        if (!serverResponded) {
-          serverResponded = true
-          setLoading(false)
-        }
-      } else if (!fromCache) {
-        // 서버가 "문서 없음"을 확인한 경우에만 초기화
-        serverResponded = true
+      } else {
+        // 문서 없음 — localStorage 마이그레이션 시도
         try {
           const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
           if (saved) {
@@ -480,13 +470,16 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
               .catch((err) => console.error('[AppContext] 마이그레이션 저장 실패:', err?.code))
             isRemoteUpdate.current = true
             dispatch({ type: 'LOAD', payload: parsed })
+          } else {
+            // 데이터 없음 — DEFAULT_STATE를 즉시 Firestore에 쓰지 않도록 플래그 설정
+            // 사용자가 첫 변경을 하면 그때 저장됨
+            isRemoteUpdate.current = true
           }
         } catch {
-          // ignore
+          isRemoteUpdate.current = true
         }
-        setLoading(false)
       }
-      // fromCache && !snap.exists() → 캐시 미스, 서버 응답 대기 (무시)
+      setLoading(false)
     }, (err) => {
       console.error('[AppContext] Firestore onSnapshot 실패:', err?.code, err?.message)
       try {
