@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
@@ -429,11 +429,28 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children, uid }: { children: ReactNode; uid: string }) {
-  const [state, dispatch] = useReducer(reducer, DEFAULT_STATE)
+  const [state, baseDispatch] = useReducer(reducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(8)
-  const isRemoteUpdate = useRef(false)
-  const firestoreDoc = doc(db, 'appData', uid)
+  const firestoreDoc = useMemo(() => doc(db, 'appData', uid), [uid])
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const loadingRef = useRef(true)
+  loadingRef.current = loading
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // dispatch: LOAD 액션은 Firestore 저장 건너뜀, 나머지는 300ms 디바운스 저장
+  const dispatch = useCallback((action: Action) => {
+    baseDispatch(action)
+    if (action.type === 'LOAD' || loadingRef.current) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const sanitized = JSON.parse(JSON.stringify(stateRef.current))
+      setDoc(firestoreDoc, sanitized)
+        .then(() => console.log('✅ Firestore 저장:', firestoreDoc.path))
+        .catch((err) => console.error('❌ Firestore 저장 실패:', err?.code, err?.message))
+    }, 300)
+  }, [firestoreDoc])
 
   const currentYM = useMemo(() => {
     const today = new Date()
@@ -453,65 +470,30 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
     return sessions.includes(cur) ? cur : (sessions[0] ?? 1)
   })
 
-  // Firestore 실시간 구독 — 최초 1회 로컬 데이터 마이그레이션 포함
+  // Firestore 실시간 구독 (읽기 전용 — 저장은 dispatch 래퍼가 담당)
   useEffect(() => {
     const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
       if (snap.exists()) {
-        isRemoteUpdate.current = true
-        dispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
+        baseDispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
       } else {
-        // 문서 없음 — localStorage 마이그레이션 시도
         try {
           const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
           if (saved) {
             const parsed = normalizeState(JSON.parse(saved) as AppState)
-            setDoc(firestoreDoc, parsed)
+            setDoc(firestoreDoc, JSON.parse(JSON.stringify(parsed)))
               .then(() => localStorage.removeItem(LEGACY_STORAGE_KEY))
-              .catch((err) => console.error('[AppContext] 마이그레이션 저장 실패:', err?.code))
-            isRemoteUpdate.current = true
-            dispatch({ type: 'LOAD', payload: parsed })
-          } else {
-            // 데이터 없음 — DEFAULT_STATE를 즉시 Firestore에 쓰지 않도록 플래그 설정
-            // 사용자가 첫 변경을 하면 그때 저장됨
-            isRemoteUpdate.current = true
+              .catch((err) => console.error('마이그레이션 실패:', err?.code))
+            baseDispatch({ type: 'LOAD', payload: parsed })
           }
-        } catch {
-          isRemoteUpdate.current = true
-        }
+        } catch { /* ignore */ }
       }
       setLoading(false)
     }, (err) => {
-      console.error('[AppContext] Firestore onSnapshot 실패:', err?.code, err?.message)
-      try {
-        const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
-        if (saved) {
-          dispatch({ type: 'LOAD', payload: normalizeState(JSON.parse(saved) as AppState) })
-        }
-      } catch {
-        // ignore
-      }
+      console.error('Firestore 오류:', err?.code, err?.message)
       setLoading(false)
     })
-
     return unsubscribe
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid])
-
-  // 상태 변경 시 Firestore에 저장
-  useEffect(() => {
-    if (loading) return
-    if (isRemoteUpdate.current) {
-      isRemoteUpdate.current = false
-      return
-    }
-    const sanitized = JSON.parse(JSON.stringify(state))
-    setDoc(firestoreDoc, sanitized)
-      .catch((err) => {
-        console.error('[AppContext] Firestore 저장 실패:', err?.code, err?.message)
-        localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(state))
-      })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, loading])
+  }, [firestoreDoc])
 
   // 월 변경 시 선택 회차 + 표시 개수 초기화
   useEffect(() => {
