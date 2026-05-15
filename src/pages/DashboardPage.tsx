@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2 } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2, UserX } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { ScheduleEvent } from '../types'
@@ -292,6 +292,9 @@ export default function DashboardPage() {
           const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
           const hwDescription = hw?.description ?? ''
           const hwNoSubmitNames = noHw.map(g => getStudentName(g.studentId))
+          const absentNames = gradeRecords
+            .filter(g => g.attendance === '결석')
+            .map(g => getStudentName(g.studentId))
 
           const hasGradeData =
             !!scope ||
@@ -299,6 +302,7 @@ export default function DashboardPage() {
             dailyNames.length > 0 ||
             gradeRecords.length > 0
           const hasHwData = hwDescription !== '' || hwNoSubmitNames.length > 0
+          const hasAbsentData = absentNames.length > 0
 
           return {
             date,
@@ -312,8 +316,10 @@ export default function DashboardPage() {
             dailyNames,
             hwDescription,
             hwNoSubmitNames,
+            absentNames,
             hasGradeData,
             hasHwData,
+            hasAbsentData,
           }
         })
         .filter((r): r is NonNullable<typeof r> => r !== null)
@@ -340,6 +346,12 @@ export default function DashboardPage() {
   const hwRows = useMemo(
     () => displayRows.filter(r => r.date >= todayStr || r.hasHwData),
     [displayRows, todayStr]
+  )
+
+  // 결석생 현황: 결석 데이터 있는 행만
+  const absentRows = useMemo(
+    () => displayRows.filter(r => r.hasAbsentData),
+    [displayRows]
   )
 
   const isAllTab = activeTab === 'all'
@@ -561,6 +573,69 @@ export default function DashboardPage() {
                         <Trash2 size={14} />
                       </button>
                     )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* 결석생 현황 */}
+      <section className="bg-white rounded-xl shadow-sm border border-slate-100">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <UserX size={15} className="text-rose-500" />
+          <h2 className="font-semibold text-slate-800">{selectedYear}년 {selectedMonth}월 결석생 현황</h2>
+          <span className="ml-auto text-xs text-slate-400">결석 처리된 수업 기준</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-slate-500 bg-slate-50">
+                <th className="text-left px-5 py-3 w-36">날짜</th>
+                {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
+                <th className="text-left px-4 py-3 w-44">결석 학생</th>
+                <th className="text-left px-4 py-3 w-36">단어시험 범위</th>
+                <th className="text-left px-4 py-3 w-36">Daily 범위</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {absentRows.length === 0 ? (
+                <tr>
+                  <td colSpan={isAllTab ? 5 : 4} className="px-5 py-8 text-center text-sm text-slate-300">
+                    결석 학생이 없습니다
+                  </td>
+                </tr>
+              ) : absentRows.map(row => (
+                <tr
+                  key={`absent-${row.classId}-${row.date}`}
+                  className={`hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
+                >
+                  <td className="px-5 py-3 whitespace-nowrap align-top">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-700">{formatDateKo(row.date)}</span>
+                      {row.date === todayStr && (
+                        <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
+                      )}
+                    </div>
+                  </td>
+                  {isAllTab && (
+                    <td className="px-4 py-3 whitespace-nowrap align-top">
+                      <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 font-medium">{row.className}</span>
+                    </td>
+                  )}
+                  <td className="px-4 py-3 align-top">
+                    <NameTags names={row.absentNames} color="orange" limit={3} />
+                  </td>
+                  <td className="px-4 py-3 text-sm align-top">
+                    {row.vocabRange
+                      ? <span className="text-slate-700">{row.vocabRange}</span>
+                      : <span className="text-slate-300 text-xs">미입력</span>}
+                  </td>
+                  <td className="px-4 py-3 text-sm align-top">
+                    {row.dailyRange
+                      ? <span className="text-slate-700">{row.dailyRange}</span>
+                      : <span className="text-slate-300 text-xs">미입력</span>}
                   </td>
                 </tr>
               ))}
