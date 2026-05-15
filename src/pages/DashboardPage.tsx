@@ -187,7 +187,7 @@ function MiniCalendar({ year, month, scheduleEvents }: {
 // ─── 메인 대시보드 ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { state, dispatch, getCurrentSession, selectedYM, setSelectedYM, globalScheduleEvents } = useApp()
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, viewingUid } = useAuth()
   const isJogyo = user?.role === '조교'
   const { weekStart } = getCurrentSession()
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -211,12 +211,14 @@ export default function DashboardPage() {
     () => ownEvents.filter(e => e.type === 'personal').sort((a, b) => a.startDate.localeCompare(b.startDate)),
     [ownEvents]
   )
+  // 관리자 본인 대시보드: 자신의 'all' 이벤트 사용 (globalScheduleEvents는 비어 있음)
+  // 관리자가 다른 사람 뷰잉 중이거나 비관리자: globalScheduleEvents 사용
   const allEvents = useMemo(
-    () => (isAdmin
+    () => (isAdmin && !viewingUid
       ? ownEvents.filter(e => e.type === 'all')
       : globalScheduleEvents
     ).sort((a: { startDate: string }, b: { startDate: string }) => a.startDate.localeCompare(b.startDate)),
-    [isAdmin, ownEvents, globalScheduleEvents]
+    [isAdmin, viewingUid, ownEvents, globalScheduleEvents]
   )
   const scheduleEvents = useMemo(() => [...personalEvents, ...allEvents], [personalEvents, allEvents])
 

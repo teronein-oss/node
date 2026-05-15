@@ -505,6 +505,16 @@ export function AppProvider({ children, uid, isAdmin = false }: { children: Reac
     })
   }, [isAdmin])
 
+  // 관리자 데이터 로드 완료 시 전체 공지 일정을 config/sharedData에 즉시 1회 동기화
+  useEffect(() => {
+    if (!isAdmin || loading) return
+    const globalEvents = (state.scheduleEvents ?? []).filter(e => e.type === 'all')
+    setDoc(doc(db, 'config', 'sharedData'), { globalScheduleEvents: JSON.parse(JSON.stringify(globalEvents)) }, { merge: true })
+      .catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
+  // loading이 false로 바뀌는 시점(최초 1회)에만 실행
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, loading])
+
   // dispatch: LOAD 액션은 Firestore 저장 건너뜀, 나머지는 300ms 디바운스 저장
   const dispatch = useCallback((action: Action) => {
     baseDispatch(action)
