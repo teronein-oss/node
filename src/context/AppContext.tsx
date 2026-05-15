@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
@@ -447,6 +447,7 @@ interface AppContextValue {
   state: AppState
   dispatch: React.Dispatch<Action>
   loading: boolean
+  adminAllEvents: ScheduleEvent[]
   visibleCount: number
   setVisibleCount: React.Dispatch<React.SetStateAction<number>>
   selectedYM: string
@@ -467,6 +468,7 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
   const [state, baseDispatch] = useReducer(reducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
   const [visibleCount, setVisibleCount] = useState(8)
+  const [adminAllEvents, setAdminAllEvents] = useState<ScheduleEvent[]>([])
   const firestoreDoc = useMemo(() => doc(db, 'appData', uid), [uid])
   const stateRef = useRef(state)
   stateRef.current = state
@@ -474,6 +476,7 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
   loadingRef.current = loading
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingWriteCount = useRef(0)
+  const adminEventUnsubRef = useRef<(() => void) | null>(null)
 
   // dispatch: LOAD 액션은 Firestore 저장 건너뜀, 나머지는 300ms 디바운스 저장
   const dispatch = useCallback((action: Action) => {
@@ -541,6 +544,32 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
     return unsubscribe
   }, [firestoreDoc])
 
+  // 관리자의 전체 공지 이벤트 구독 (관리자가 아닌 경우에만)
+  useEffect(() => {
+    let cancelled = false
+    adminEventUnsubRef.current?.()
+    adminEventUnsubRef.current = null
+    setAdminAllEvents([])
+
+    getDoc(doc(db, 'config', 'sharedData')).then(snap => {
+      if (cancelled) return
+      const adminUid = snap.data()?.adminUid as string | undefined
+      if (!adminUid || adminUid === uid) return
+      const unsub = onSnapshot(doc(db, 'appData', adminUid), (adminSnap) => {
+        if (!adminSnap.exists()) { setAdminAllEvents([]); return }
+        const data = adminSnap.data() as AppState
+        setAdminAllEvents((data.scheduleEvents ?? []).filter(e => e.type === 'all'))
+      })
+      adminEventUnsubRef.current = unsub
+    })
+
+    return () => {
+      cancelled = true
+      adminEventUnsubRef.current?.()
+      adminEventUnsubRef.current = null
+    }
+  }, [uid])
+
   // 월 변경 시 선택 회차 + 표시 개수 초기화
   useEffect(() => {
     const [year, month] = selectedYM.split('-').map(Number)
@@ -584,7 +613,7 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
 
   return (
     <AppContext.Provider
-      value={{ state, dispatch, loading, visibleCount, setVisibleCount, selectedYM, setSelectedYM, selectedSession, setSelectedSession, getStudentsByClass, getGrade, getRetests, getPendingRetests, getCurrentSession, getScope }}
+      value={{ state, dispatch, loading, adminAllEvents, visibleCount, setVisibleCount, selectedYM, setSelectedYM, selectedSession, setSelectedSession, getStudentsByClass, getGrade, getRetests, getPendingRetests, getCurrentSession, getScope }}
     >
       {children}
     </AppContext.Provider>

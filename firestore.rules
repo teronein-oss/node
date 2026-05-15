@@ -35,6 +35,9 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.role == '조교'
         && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.status == 'approved'
         && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.assignedTeacherUid == userId;
+      // Any authenticated user can read admin's appData (for shared schedule announcements)
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
     }
   }
 }

@@ -100,9 +100,18 @@ function computePlacements(week: (Date | null)[], events: ScheduleEvent[]): Even
 const MAX_LANES = 3
 
 export default function SchedulePage() {
-  const { state, dispatch } = useApp()
+  const { state, dispatch, adminAllEvents } = useApp()
   const { isAdmin } = useAuth()
   const todayStr = fmtDate(new Date())
+
+  // 개인 이벤트(본인) + 관리자 전체 공지 합치기
+  const scheduleEvents = useMemo(
+    () => [
+      ...(state.scheduleEvents ?? []).filter(e => e.type === 'personal'),
+      ...(isAdmin ? (state.scheduleEvents ?? []).filter(e => e.type === 'all') : adminAllEvents),
+    ],
+    [state.scheduleEvents, isAdmin, adminAllEvents]
+  )
   const todayDate = new Date()
 
   const [displayYear, setDisplayYear] = useState(todayDate.getFullYear())
@@ -136,7 +145,7 @@ export default function SchedulePage() {
     const ms = `${displayYear}-${String(displayMonth).padStart(2, '0')}-01`
     const me = `${displayYear}-${String(displayMonth).padStart(2, '0')}-${String(new Date(displayYear, displayMonth, 0).getDate()).padStart(2, '0')}`
 
-    const relevant = (state.scheduleEvents ?? []).filter(
+    const relevant = scheduleEvents.filter(
       e => e.endDate >= ms && e.startDate <= me
     )
     const groups: Record<string, ScheduleEvent[]> = {}
@@ -154,7 +163,7 @@ export default function SchedulePage() {
       })
     }
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-  }, [state.scheduleEvents, displayYear, displayMonth])
+  }, [scheduleEvents, displayYear, displayMonth])
 
   const totalMonthEvents = monthEventGroups.reduce((acc, [, evs]) => acc + evs.length, 0)
 
@@ -189,6 +198,7 @@ export default function SchedulePage() {
   }
 
   const openEditModal = (e: ScheduleEvent) => {
+    if (!isAdmin && e.type === 'all') return  // 비관리자는 전체 공지 편집 불가
     setModalMode('edit')
     setModalId(e.id)
     setModalTitle(e.title)
@@ -287,7 +297,7 @@ export default function SchedulePage() {
           {/* Calendar grid */}
           <div className="flex-1 overflow-y-auto">
             {weeks.map((week, wi) => {
-              const placements = computePlacements(week, state.scheduleEvents ?? [])
+              const placements = computePlacements(week, scheduleEvents)
               const maxLane = placements.length > 0 ? Math.max(...placements.map(p => p.lane)) : -1
               const visibleLanes = Math.min(maxLane + 1, MAX_LANES)
 

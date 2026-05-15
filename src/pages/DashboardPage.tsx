@@ -186,8 +186,8 @@ function MiniCalendar({ year, month, scheduleEvents }: {
 
 // ─── 메인 대시보드 ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { state, dispatch, getCurrentSession, selectedYM, setSelectedYM } = useApp()
-  const { user } = useAuth()
+  const { state, dispatch, getCurrentSession, selectedYM, setSelectedYM, adminAllEvents } = useApp()
+  const { user, isAdmin } = useAuth()
   const isJogyo = user?.role === '조교'
   const { weekStart } = getCurrentSession()
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -206,15 +206,19 @@ export default function DashboardPage() {
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
   const currentYM = `${todayYear}-${todayMonth}`
 
-  const scheduleEvents = state.scheduleEvents ?? []
+  const ownEvents = state.scheduleEvents ?? []
   const personalEvents = useMemo(
-    () => scheduleEvents.filter(e => e.type === 'personal').sort((a, b) => a.startDate.localeCompare(b.startDate)),
-    [scheduleEvents]
+    () => ownEvents.filter(e => e.type === 'personal').sort((a, b) => a.startDate.localeCompare(b.startDate)),
+    [ownEvents]
   )
   const allEvents = useMemo(
-    () => scheduleEvents.filter(e => e.type === 'all').sort((a, b) => a.startDate.localeCompare(b.startDate)),
-    [scheduleEvents]
+    () => (isAdmin
+      ? ownEvents.filter(e => e.type === 'all')
+      : adminAllEvents
+    ).sort((a, b) => a.startDate.localeCompare(b.startDate)),
+    [isAdmin, ownEvents, adminAllEvents]
   )
+  const scheduleEvents = useMemo(() => [...personalEvents, ...allEvents], [personalEvents, allEvents])
 
   // 월 목록
   const availableMonths = useMemo(() => {
