@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import type { ScheduleEvent } from '../types'
 import { getMonthSessions, getWeekStartForSession, formatDateKo, fmtDate, getClassDate } from '../utils/helpers'
 
@@ -39,7 +40,7 @@ const ACADEMY_HOLIDAYS: Record<string, string> = {
 
 // ─── 일정 패널 ────────────────────────────────────────────────────────────────
 function SchedulePanel({
-  title, icon: Icon, iconColor, events, onToggle, onRemove,
+  title, icon: Icon, iconColor, events, onToggle, onRemove, readOnly,
 }: {
   title: string
   icon: React.ElementType
@@ -47,6 +48,7 @@ function SchedulePanel({
   events: ScheduleEvent[]
   onToggle: (id: string) => void
   onRemove: (id: string) => void
+  readOnly?: boolean
 }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -70,23 +72,32 @@ function SchedulePanel({
                   {span > 0 ? `${e.startDate} ~ ${e.endDate} (${span + 1}일)` : e.startDate}
                 </p>
               </div>
-              <button
-                onClick={() => onToggle(e.id)}
-                className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0
-                  ${e.completed
-                    ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
-                    : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
-                  }`}
-              >
-                <CheckCircle size={11} />
-                {e.completed ? '완료됨' : '완료'}
-              </button>
-              <button
-                onClick={() => onRemove(e.id)}
-                className="text-slate-300 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100 pt-0.5"
-              >
-                <X size={13} />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => onToggle(e.id)}
+                  className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0
+                    ${e.completed
+                      ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                    }`}
+                >
+                  <CheckCircle size={11} />
+                  {e.completed ? '완료됨' : '완료'}
+                </button>
+              )}
+              {readOnly && e.completed && (
+                <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border bg-green-50 text-green-600 border-green-200 shrink-0">
+                  <CheckCircle size={11} />완료됨
+                </span>
+              )}
+              {!readOnly && (
+                <button
+                  onClick={() => onRemove(e.id)}
+                  className="text-slate-300 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100 pt-0.5"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </li>
           )
         })}
@@ -176,6 +187,8 @@ function MiniCalendar({ year, month, scheduleEvents }: {
 // ─── 메인 대시보드 ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { state, dispatch, getCurrentSession, selectedYM, setSelectedYM } = useApp()
+  const { user } = useAuth()
+  const isJogyo = user?.role === '조교'
   const { weekStart } = getCurrentSession()
   const [activeTab, setActiveTab] = useState<string>(() => {
     const dow = new Date().getDay() // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
@@ -350,6 +363,7 @@ export default function DashboardPage() {
             events={allEvents}
             onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
             onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
+            readOnly={isJogyo}
           />
           <SchedulePanel
             title="To Do List"
@@ -358,6 +372,7 @@ export default function DashboardPage() {
             events={personalEvents}
             onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
             onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
+            readOnly={isJogyo}
           />
         </div>
         <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
@@ -467,12 +482,14 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.dailyNames} color="blue" limit={3} /></td>
                   <td className="px-2 py-3 align-top">
-                    <button
-                      onClick={() => handleDeleteRow(row)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!isJogyo && (
+                      <button
+                        onClick={() => handleDeleteRow(row)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -530,7 +547,7 @@ export default function DashboardPage() {
                   </td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.hwNoSubmitNames} color="red" limit={3} /></td>
                   <td className="px-2 py-3 align-top">
-                    {row.hwDescription && (
+                    {!isJogyo && row.hwDescription && (
                       <button
                         onClick={() => handleDeleteHw(row)}
                         className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
