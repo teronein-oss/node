@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Plus, X, Clock, Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { fmtDate } from '../utils/helpers'
 import type { ScheduleEvent } from '../types'
 
@@ -100,6 +101,7 @@ const MAX_LANES = 3
 
 export default function SchedulePage() {
   const { state, dispatch } = useApp()
+  const { isAdmin } = useAuth()
   const todayStr = fmtDate(new Date())
   const todayDate = new Date()
 
@@ -190,7 +192,7 @@ export default function SchedulePage() {
     setModalMode('edit')
     setModalId(e.id)
     setModalTitle(e.title)
-    setModalType(e.type)
+    setModalType(isAdmin ? e.type : 'personal')
     setModalStartDate(e.startDate)
     setModalEndDate(e.endDate)
     setModalTime(e.time ?? '')
@@ -601,16 +603,23 @@ export default function SchedulePage() {
                 )}
               </div>
 
-              <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
-                <button
-                  onClick={() => setModalType('personal')}
-                  className={`flex-1 py-2 transition-colors ${modalType === 'personal' ? 'bg-green-500 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
-                >개인</button>
-                <button
-                  onClick={() => setModalType('all')}
-                  className={`flex-1 py-2 border-l border-slate-200 transition-colors ${modalType === 'all' ? 'bg-red-500 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
-                >전체</button>
-              </div>
+              {isAdmin ? (
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+                  <button
+                    onClick={() => setModalType('personal')}
+                    className={`flex-1 py-2 transition-colors ${modalType === 'personal' ? 'bg-green-500 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                  >개인</button>
+                  <button
+                    onClick={() => setModalType('all')}
+                    className={`flex-1 py-2 border-l border-slate-200 transition-colors ${modalType === 'all' ? 'bg-red-500 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                  >전체 공지</button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+                  <span className="w-2 h-2 rounded-sm bg-green-500 shrink-0" />
+                  <span className="text-xs text-green-700 font-medium">개인 일정</span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between mt-5">
