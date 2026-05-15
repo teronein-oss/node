@@ -22,7 +22,7 @@ function AppInner() {
 }
 
 function AuthGate() {
-  const { registrationStatus, firebaseUser, viewingUid, user, adminUid } = useAuth()
+  const { registrationStatus, firebaseUser, viewingUid, user, adminUid, signOut } = useAuth()
 
   if (registrationStatus === 'loading') {
     return (
@@ -38,11 +38,19 @@ function AuthGate() {
 
   const isJogyo = user?.role === '조교'
 
-  // 조교는 admin의 데이터를 공유 — adminUid 로딩 대기
+  // 조교에게 담당 선생님이 배정되지 않은 경우
   if (isJogyo && !adminUid) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="text-center space-y-4">
+          <p className="text-slate-600 text-sm">담당 선생님이 배정되지 않았습니다</p>
+          <button
+            onClick={() => signOut()}
+            className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm hover:bg-slate-300 transition-colors"
+          >
+            로그아웃
+          </button>
+        </div>
       </div>
     )
   }

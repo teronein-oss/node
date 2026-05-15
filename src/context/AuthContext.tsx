@@ -9,7 +9,7 @@ import {
   type User,
 } from 'firebase/auth'
 import {
-  doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, getDoc,
+  doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 
@@ -22,6 +22,7 @@ export interface RegistrationInfo {
   role: string
   status: 'pending' | 'approved' | 'rejected'
   createdAt: string
+  assignedTeacherUid?: string | null
 }
 
 export interface UserProfile {
@@ -49,6 +50,7 @@ interface AuthContextValue {
   approveUser: (uid: string) => Promise<void>
   rejectUser: (uid: string) => Promise<void>
   deleteRegistration: (uid: string) => Promise<void>
+  assignTeacher: (jogyoUid: string, teacherUid: string | null) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -132,9 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: data.displayName, role: data.role })
             setRegistrationStatus('approved')
             if (data.role === '조교') {
-              getDoc(doc(db, 'config', 'sharedData')).then(snap => {
-                if (snap.exists()) setAdminUid(snap.data().adminUid as string)
-              })
+              setAdminUid(data.assignedTeacherUid ?? null)
             }
           } else if (data.status === 'rejected') {
             setUser(null)
@@ -209,11 +209,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await deleteDoc(doc(db, 'registrations', uid))
   }
 
+  const assignTeacher = async (jogyoUid: string, teacherUid: string | null) => {
+    await updateDoc(doc(db, 'registrations', jogyoUid), { assignedTeacherUid: teacherUid })
+  }
+
   return (
     <AuthContext.Provider value={{
       firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, setViewingUid,
       signInWithGoogle, signOut, submitRegistration,
-      approveUser, rejectUser, deleteRegistration,
+      approveUser, rejectUser, deleteRegistration, assignTeacher,
     }}>
       {children}
     </AuthContext.Provider>

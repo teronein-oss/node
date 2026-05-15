@@ -30,11 +30,11 @@ service cloud.firestore {
       // Admin can read/write any user's data (for viewing mode)
       allow read, write: if request.auth != null
         && request.auth.token.email == 'teronein@gmail.com';
-      // 조교 can read/write admin's data (shared workspace)
+      // 조교 can read/write assigned teacher's data
       allow read, write: if request.auth != null
         && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.role == '조교'
         && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.status == 'approved'
-        && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
+        && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.assignedTeacherUid == userId;
     }
   }
 }

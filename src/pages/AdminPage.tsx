@@ -4,7 +4,7 @@ import { CheckCircle, XCircle, Trash2, Eye, Clock } from 'lucide-react'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
 
 export default function AdminPage() {
-  const { approveUser, rejectUser, deleteRegistration, setViewingUid } = useAuth()
+  const { approveUser, rejectUser, deleteRegistration, setViewingUid, assignTeacher } = useAuth()
   const [registrations, setRegistrations] = useState<RegistrationInfo[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -110,33 +110,54 @@ export default function AdminPage() {
           <p className="text-sm text-slate-400">승인된 사용자가 없습니다</p>
         ) : (
           <div className="space-y-2">
-            {approved.map(reg => (
-              <div key={reg.uid} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">
-                    {reg.displayName}
-                    <span className="ml-2 text-xs text-slate-400">({reg.role})</span>
-                  </p>
-                  <p className="text-xs text-slate-500">{reg.email}</p>
+            {approved.map(reg => {
+              const teachers = approved.filter(r => r.role === '선생님' || r.role === '관리자')
+              return (
+                <div key={reg.uid} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">
+                      {reg.displayName}
+                      <span className="ml-2 text-xs text-slate-400">({reg.role})</span>
+                    </p>
+                    <p className="text-xs text-slate-500">{reg.email}</p>
+                    {reg.role === '조교' && (
+                      <select
+                        className="mt-1 border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                        value={reg.assignedTeacherUid ?? ''}
+                        onChange={async (e) => {
+                          const teacherUid = e.target.value || null
+                          await assignTeacher(reg.uid, teacherUid)
+                          setRegistrations(prev => prev.map(r =>
+                            r.uid === reg.uid ? { ...r, assignedTeacherUid: teacherUid } : r
+                          ))
+                        }}
+                      >
+                        <option value="">미배정</option>
+                        {teachers.map(t => (
+                          <option key={t.uid} value={t.uid}>{t.displayName}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleView(reg)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                    >
+                      <Eye size={13} />
+                      대시보드 보기
+                    </button>
+                    <button
+                      onClick={() => handleDelete(reg.uid)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium hover:bg-red-100 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={13} />
+                      삭제
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handleView(reg)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
-                  >
-                    <Eye size={13} />
-                    대시보드 보기
-                  </button>
-                  <button
-                    onClick={() => handleDelete(reg.uid)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium hover:bg-red-100 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 size={13} />
-                    삭제
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>
