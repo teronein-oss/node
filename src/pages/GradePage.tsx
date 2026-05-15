@@ -63,7 +63,7 @@ export default function GradePage() {
 
   const [selectedClass, setSelectedClass] = useState(() => {
     const dow = new Date().getDay()
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
     const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
     return matched?.id ?? state.classes[0]?.id ?? ''
   })
@@ -261,7 +261,7 @@ export default function GradePage() {
     const cid = state.students.find(s => s.id === studentId)?.classId
     return state.classes.find(c => c.id === cid)?.name ?? ''
   }
-  const getStudentClassDays = (studentId: string): 'mon-fri' | 'tue-thu' | 'wed-sat' => {
+  const getStudentClassDays = (studentId: string): 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri' => {
     const cid = state.students.find(s => s.id === studentId)?.classId
     return state.classes.find(c => c.id === cid)?.days ?? 'mon-fri'
   }

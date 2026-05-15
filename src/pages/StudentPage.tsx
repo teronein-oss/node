@@ -9,6 +9,7 @@ const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
   { value: 'mon-fri', label: '월·금' },
   { value: 'tue-thu', label: '화·목' },
   { value: 'wed-sat', label: '수·토' },
+  { value: 'mon-wed-fri', label: '월·수·금' },
 ]
 
 export default function StudentPage() {
@@ -17,7 +18,7 @@ export default function StudentPage() {
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState(() => {
     const dow = new Date().getDay()
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
     const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
     return matched?.id ?? 'all'
   })

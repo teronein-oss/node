@@ -120,12 +120,13 @@ export function formatDateKo(iso: string): string {
  * - odd sessionNum = 주의 첫 수업 (월 or 화 or 수)
  * - even sessionNum = 주의 둘째 수업 (금 or 목 or 토)
  */
-export function getClassDate(sessionNum: number, days: 'mon-fri' | 'tue-thu' | 'wed-sat'): string {
+export function getClassDate(sessionNum: number, days: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'): string {
   const weekStart = getWeekStartForSession(sessionNum)
   const mon = new Date(weekStart + 'T00:00:00')
   const isFirst = sessionNum % 2 === 1
-  const offset = days === 'mon-fri' ? (isFirst ? 0 : 4)
-               : days === 'tue-thu' ? (isFirst ? 1 : 3)
+  const offset = days === 'mon-fri'     ? (isFirst ? 0 : 4)
+               : days === 'tue-thu'     ? (isFirst ? 1 : 3)
+               : days === 'mon-wed-fri' ? (isFirst ? 0 : 2)
                : (isFirst ? 2 : 5)
   mon.setDate(mon.getDate() + offset)
   return fmtDate(mon)

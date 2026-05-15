@@ -353,7 +353,7 @@ function WeeklyProgressSection({
   currentSessionNum,
 }: {
   classId: string
-  classDays: 'mon-fri' | 'tue-thu' | 'wed-sat'
+  classDays: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
   currentSessionNum: number
 }) {
   const { state } = useApp()

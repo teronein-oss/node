@@ -1,7 +1,7 @@
 export interface Class {
   id: string
   name: string
-  days: 'mon-fri' | 'tue-thu' | 'wed-sat'
+  days: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
 }
 
 export interface NoticeItem {

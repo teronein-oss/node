@@ -192,7 +192,7 @@ export default function DashboardPage() {
   const { weekStart } = getCurrentSession()
   const [activeTab, setActiveTab] = useState<string>(() => {
     const dow = new Date().getDay() // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : null
+    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
     const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
     return matched?.id ?? state.classes[0]?.id ?? 'all'
   })
