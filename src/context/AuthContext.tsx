@@ -42,7 +42,8 @@ interface AuthContextValue {
   adminUid: string | null
   viewingUid: string | null
   viewingUserName: string | null
-  setViewingUid: (uid: string | null, name?: string) => void
+  viewingUserRole: string | null
+  setViewingUid: (uid: string | null, name?: string, role?: string) => void
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   submitRegistration: (name: string, role: string) => Promise<void>
@@ -67,10 +68,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [adminUid, setAdminUid] = useState<string | null>(null)
   const [viewingUid, setViewingUidState] = useState<string | null>(null)
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
+  const [viewingUserRole, setViewingUserRole] = useState<string | null>(null)
 
-  const setViewingUid = (uid: string | null, name?: string) => {
+  const setViewingUid = (uid: string | null, name?: string, role?: string) => {
     setViewingUidState(uid)
     setViewingUserName(uid ? (name ?? null) : null)
+    setViewingUserRole(uid ? (role ?? null) : null)
   }
   const regUnsubRef = useRef<(() => void) | null>(null)
 
@@ -89,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAdminUid(null)
         setViewingUidState(null)
         setViewingUserName(null)
+        setViewingUserRole(null)
         setRegistrationStatus('none')
         return
       }
@@ -215,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, setViewingUid,
+      firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, setViewingUid,
       signInWithGoogle, signOut, submitRegistration,
       approveUser, rejectUser, deleteRegistration, assignTeacher,
     }}>

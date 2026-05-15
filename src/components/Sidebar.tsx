@@ -17,8 +17,10 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, isAdmin, signOut } = useAuth()
-  const isJogyo = user?.role === '조교'
+  const { user, isAdmin, viewingUid, viewingUserRole, signOut } = useAuth()
+  // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
+  const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
+  const isJogyo = effectiveRole === '조교'
   const visibleNavItems = NAV_ITEMS.filter(item => !(isJogyo && item.to === '/schedule'))
 
   return (

@@ -51,9 +51,10 @@ export default function AdminPage() {
   // 조교: 담당 선생님 uid로 대시보드 보기 (조교 본인 데이터 없음)
   const handleView = (reg: RegistrationInfo) => {
     if (reg.role === '조교' && reg.assignedTeacherUid) {
-      setViewingUid(reg.assignedTeacherUid, `${reg.displayName} 조교 뷰`)
+      // 조교는 담당 선생님 데이터를 사용하지만, 메뉴는 조교 기준으로 필터링
+      setViewingUid(reg.assignedTeacherUid, `${reg.displayName} 조교 뷰`, '조교')
     } else {
-      setViewingUid(reg.uid, reg.displayName)
+      setViewingUid(reg.uid, reg.displayName, reg.role)
     }
     navigate('/')
   }

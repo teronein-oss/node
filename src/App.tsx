@@ -22,7 +22,7 @@ function AppInner() {
 }
 
 function AuthGate() {
-  const { registrationStatus, firebaseUser, viewingUid, user, adminUid, signOut } = useAuth()
+  const { registrationStatus, firebaseUser, viewingUid, user, adminUid, signOut, isAdmin } = useAuth()
 
   if (registrationStatus === 'loading') {
     return (
@@ -56,8 +56,9 @@ function AuthGate() {
   }
 
   const uid = viewingUid ?? (isJogyo ? adminUid! : firebaseUser.uid)
+  // 다른 사용자 대시보드 조회 중에는 isAdmin=false — globalScheduleEvents 구독 활성화 + 불필요한 sync 방지
   return (
-    <AppProvider key={uid} uid={uid}>
+    <AppProvider key={uid} uid={uid} isAdmin={isAdmin && !viewingUid}>
       <AppInner />
     </AppProvider>
   )

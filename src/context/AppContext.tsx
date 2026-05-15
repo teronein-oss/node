@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
-import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
@@ -443,11 +443,16 @@ function normalizeState(parsed: AppState): AppState {
 
 // ─── Context ────────────────────────────────────────────────────────────────
 
+const SCHEDULE_ACTION_TYPES = new Set<Action['type']>([
+  'ADD_SCHEDULE_EVENT', 'UPDATE_SCHEDULE_EVENT', 'DELETE_SCHEDULE_EVENT',
+  'COMPLETE_SCHEDULE_EVENT', 'TOGGLE_SCHEDULE_EVENT',
+])
+
 interface AppContextValue {
   state: AppState
   dispatch: React.Dispatch<Action>
   loading: boolean
-  adminAllEvents: ScheduleEvent[]
+  globalScheduleEvents: ScheduleEvent[]
   visibleCount: number
   setVisibleCount: React.Dispatch<React.SetStateAction<number>>
   selectedYM: string
@@ -464,11 +469,11 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 
-export function AppProvider({ children, uid }: { children: ReactNode; uid: string }) {
+export function AppProvider({ children, uid, isAdmin = false }: { children: ReactNode; uid: string; isAdmin?: boolean }) {
   const [state, baseDispatch] = useReducer(reducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
+  const [globalScheduleEvents, setGlobalScheduleEvents] = useState<ScheduleEvent[]>([])
   const [visibleCount, setVisibleCount] = useState(8)
-  const [adminAllEvents, setAdminAllEvents] = useState<ScheduleEvent[]>([])
   const firestoreDoc = useMemo(() => doc(db, 'appData', uid), [uid])
   const stateRef = useRef(state)
   stateRef.current = state
@@ -476,7 +481,29 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
   loadingRef.current = loading
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingWriteCount = useRef(0)
-  const adminEventUnsubRef = useRef<(() => void) | null>(null)
+
+  // 비관리자: config/sharedData 구독해서 전체 공지 일정 수신
+  useEffect(() => {
+    if (isAdmin) return
+    const sharedRef = doc(db, 'config', 'sharedData')
+    return onSnapshot(sharedRef, (snap) => {
+      if (snap.exists()) {
+        const raw = ((snap.data().globalScheduleEvents ?? []) as Record<string, unknown>[])
+        setGlobalScheduleEvents(raw.map(ev => ({
+          id: ev['id'] as string,
+          startDate: ev['startDate'] as string,
+          endDate: ev['endDate'] as string,
+          title: ev['title'] as string,
+          type: 'all' as const,
+          time: ev['time'] as string | undefined,
+          completed: (ev['completed'] as boolean | undefined) ?? false,
+          createdAt: ev['createdAt'] as string,
+        })))
+      } else {
+        setGlobalScheduleEvents([])
+      }
+    })
+  }, [isAdmin])
 
   // dispatch: LOAD 액션은 Firestore 저장 건너뜀, 나머지는 300ms 디바운스 저장
   const dispatch = useCallback((action: Action) => {
@@ -488,13 +515,22 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
       pendingWriteCount.current++
       const sanitized = JSON.parse(JSON.stringify(stateRef.current))
       setDoc(firestoreDoc, sanitized)
-        .then(() => console.log('✅ Firestore 저장:', firestoreDoc.path))
+        .then(() => {
+          console.log('✅ Firestore 저장:', firestoreDoc.path)
+          // 관리자가 일정을 변경한 경우 전체 공지 일정을 config/sharedData에 동기화
+          if (isAdmin && SCHEDULE_ACTION_TYPES.has(action.type)) {
+            const globalEvents = (stateRef.current.scheduleEvents ?? []).filter(e => e.type === 'all')
+            setDoc(doc(db, 'config', 'sharedData'), { globalScheduleEvents: JSON.parse(JSON.stringify(globalEvents)) }, { merge: true })
+              .then(() => console.log('✅ 전체 일정 동기화 완료'))
+              .catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
+          }
+        })
         .catch((err) => {
           pendingWriteCount.current--
           console.error('❌ Firestore 저장 실패:', err?.code, err?.message)
         })
     }, 300)
-  }, [firestoreDoc])
+  }, [firestoreDoc, isAdmin])
 
   const currentYM = useMemo(() => {
     const today = new Date()
@@ -522,7 +558,15 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
           // 우리가 직접 저장한 onSnapshot 반응 — in-memory 상태를 덮어쓰지 않음
           pendingWriteCount.current--
         } else {
-          baseDispatch({ type: 'LOAD', payload: normalizeState(snap.data() as AppState) })
+          const normalized = normalizeState(snap.data() as AppState)
+          baseDispatch({ type: 'LOAD', payload: normalized })
+          // 관리자 계정 로드 시 기존 전체 공지 일정도 즉시 동기화
+          if (isAdmin) {
+            const globalEvents = (normalized.scheduleEvents ?? []).filter(e => e.type === 'all')
+            setDoc(doc(db, 'config', 'sharedData'), { globalScheduleEvents: JSON.parse(JSON.stringify(globalEvents)) }, { merge: true })
+              .then(() => console.log('✅ 기존 전체 일정 동기화 완료'))
+              .catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
+          }
         }
       } else {
         try {
@@ -542,33 +586,8 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
       setLoading(false)
     })
     return unsubscribe
-  }, [firestoreDoc])
+  }, [firestoreDoc, isAdmin])
 
-  // 관리자의 전체 공지 이벤트 구독 (관리자가 아닌 경우에만)
-  useEffect(() => {
-    let cancelled = false
-    adminEventUnsubRef.current?.()
-    adminEventUnsubRef.current = null
-    setAdminAllEvents([])
-
-    getDoc(doc(db, 'config', 'sharedData')).then(snap => {
-      if (cancelled) return
-      const adminUid = snap.data()?.adminUid as string | undefined
-      if (!adminUid || adminUid === uid) return
-      const unsub = onSnapshot(doc(db, 'appData', adminUid), (adminSnap) => {
-        if (!adminSnap.exists()) { setAdminAllEvents([]); return }
-        const data = adminSnap.data() as AppState
-        setAdminAllEvents((data.scheduleEvents ?? []).filter(e => e.type === 'all'))
-      })
-      adminEventUnsubRef.current = unsub
-    })
-
-    return () => {
-      cancelled = true
-      adminEventUnsubRef.current?.()
-      adminEventUnsubRef.current = null
-    }
-  }, [uid])
 
   // 월 변경 시 선택 회차 + 표시 개수 초기화
   useEffect(() => {
@@ -613,7 +632,7 @@ export function AppProvider({ children, uid }: { children: ReactNode; uid: strin
 
   return (
     <AppContext.Provider
-      value={{ state, dispatch, loading, adminAllEvents, visibleCount, setVisibleCount, selectedYM, setSelectedYM, selectedSession, setSelectedSession, getStudentsByClass, getGrade, getRetests, getPendingRetests, getCurrentSession, getScope }}
+      value={{ state, dispatch, loading, globalScheduleEvents, visibleCount, setVisibleCount, selectedYM, setSelectedYM, selectedSession, setSelectedSession, getStudentsByClass, getGrade, getRetests, getPendingRetests, getCurrentSession, getScope }}
     >
       {children}
     </AppContext.Provider>

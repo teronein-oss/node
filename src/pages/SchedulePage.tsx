@@ -100,18 +100,9 @@ function computePlacements(week: (Date | null)[], events: ScheduleEvent[]): Even
 const MAX_LANES = 3
 
 export default function SchedulePage() {
-  const { state, dispatch, adminAllEvents } = useApp()
+  const { state, dispatch, globalScheduleEvents } = useApp()
   const { isAdmin } = useAuth()
   const todayStr = fmtDate(new Date())
-
-  // 개인 이벤트(본인) + 관리자 전체 공지 합치기
-  const scheduleEvents = useMemo(
-    () => [
-      ...(state.scheduleEvents ?? []).filter(e => e.type === 'personal'),
-      ...(isAdmin ? (state.scheduleEvents ?? []).filter(e => e.type === 'all') : adminAllEvents),
-    ],
-    [state.scheduleEvents, isAdmin, adminAllEvents]
-  )
   const todayDate = new Date()
 
   const [displayYear, setDisplayYear] = useState(todayDate.getFullYear())
@@ -129,6 +120,16 @@ export default function SchedulePage() {
 
   const dateGroupRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
+  // 로컬 일정 + 관리자 전체 공지 일정 병합 (중복 방지)
+  const allScheduleEvents = useMemo(() => {
+    const local = state.scheduleEvents ?? []
+    if (globalScheduleEvents.length === 0) return local
+    const globalIds = new Set(globalScheduleEvents.map(e => e.id))
+    return [...local.filter(e => !globalIds.has(e.id)), ...globalScheduleEvents]
+  }, [state.scheduleEvents, globalScheduleEvents])
+
+  const globalIds = useMemo(() => new Set(globalScheduleEvents.map(e => e.id)), [globalScheduleEvents])
+
   const calDays = useMemo(
     () => buildCalDays(displayYear, displayMonth),
     [displayYear, displayMonth]
@@ -145,7 +146,7 @@ export default function SchedulePage() {
     const ms = `${displayYear}-${String(displayMonth).padStart(2, '0')}-01`
     const me = `${displayYear}-${String(displayMonth).padStart(2, '0')}-${String(new Date(displayYear, displayMonth, 0).getDate()).padStart(2, '0')}`
 
-    const relevant = scheduleEvents.filter(
+    const relevant = allScheduleEvents.filter(
       e => e.endDate >= ms && e.startDate <= me
     )
     const groups: Record<string, ScheduleEvent[]> = {}
@@ -163,7 +164,7 @@ export default function SchedulePage() {
       })
     }
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-  }, [scheduleEvents, displayYear, displayMonth])
+  }, [allScheduleEvents, displayYear, displayMonth])
 
   const totalMonthEvents = monthEventGroups.reduce((acc, [, evs]) => acc + evs.length, 0)
 
@@ -297,7 +298,7 @@ export default function SchedulePage() {
           {/* Calendar grid */}
           <div className="flex-1 overflow-y-auto">
             {weeks.map((week, wi) => {
-              const placements = computePlacements(week, scheduleEvents)
+              const placements = computePlacements(week, allScheduleEvents)
               const maxLane = placements.length > 0 ? Math.max(...placements.map(p => p.lane)) : -1
               const visibleLanes = Math.min(maxLane + 1, MAX_LANES)
 
@@ -393,8 +394,8 @@ export default function SchedulePage() {
                               ${p.continuesLeft ? 'ml-0 rounded-l-none' : 'ml-0.5 rounded-l'}
                               ${p.continuesRight ? 'mr-0 rounded-r-none' : 'mr-0.5 rounded-r'}
                             `}
-                            onClick={e => { e.stopPropagation(); openEditModal(p.event) }}
-                            title={`${fmtTime(p.event.time)}${p.event.time ? ' ' : ''}${p.event.title}`}
+                            onClick={e => { e.stopPropagation(); if (!globalIds.has(p.event.id)) openEditModal(p.event) }}
+                            title={`${fmtTime(p.event.time)}${p.event.time ? ' ' : ''}${p.event.title}${globalIds.has(p.event.id) ? ' (전체공지)' : ''}`}
                           >
                             {p.event.time && (
                               <span className="opacity-80 mr-0.5 shrink-0">{fmtTime(p.event.time)}</span>
@@ -499,10 +500,11 @@ export default function SchedulePage() {
                           key={event.id}
                           className={`
                             flex items-start gap-2.5 px-4 py-2 group hover:bg-slate-50
-                            cursor-pointer transition-colors
+                            transition-colors
                             ${isSelected ? 'bg-blue-50/30' : ''}
+                            ${globalIds.has(event.id) ? 'cursor-default' : 'cursor-pointer'}
                           `}
-                          onClick={() => openEditModal(event)}
+                          onClick={() => { if (!globalIds.has(event.id)) openEditModal(event) }}
                         >
                           <span
                             className={`w-2 h-2 rounded-sm shrink-0 mt-1
@@ -521,12 +523,16 @@ export default function SchedulePage() {
                               </p>
                             )}
                           </div>
-                          <button
-                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-blue-500 transition-all shrink-0 mt-0.5"
-                            onClick={e => { e.stopPropagation(); openEditModal(event) }}
-                          >
-                            <Pencil size={11} />
-                          </button>
+                          {globalIds.has(event.id) ? (
+                            <span className="text-[9px] text-red-400 font-medium shrink-0 mt-1">전체공지</span>
+                          ) : (
+                            <button
+                              className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-blue-500 transition-all shrink-0 mt-0.5"
+                              onClick={e => { e.stopPropagation(); openEditModal(event) }}
+                            >
+                              <Pencil size={11} />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
