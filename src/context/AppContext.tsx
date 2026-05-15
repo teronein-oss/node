@@ -111,6 +111,8 @@ function reducer(state: AppState, action: Action): AppState {
       const filtered = state.grades.filter(g => !existingIds.has(`${g.studentId}-${g.sessionNum}`))
 
       const newRetests: RetestRecord[] = []
+      const retestIdsToRemove = new Set<string>()
+
       for (const g of newGrades) {
         for (const type of ['vocab', 'daily'] as const) {
           const score = type === 'vocab' ? g.vocabScore : g.dailyTestScore
@@ -132,6 +134,12 @@ function reducer(state: AppState, action: Action): AppState {
                 createdAt: now,
               })
             }
+          } else {
+            // 점수가 기준 이상으로 수정됐으면 미처리 재시험 레코드 제거
+            const pending = state.retests.find(
+              r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === type && r.passed === null
+            )
+            if (pending) retestIdsToRemove.add(pending.id)
           }
         }
       }
@@ -139,7 +147,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         grades: [...filtered, ...newGrades],
-        retests: [...state.retests, ...newRetests],
+        retests: [...state.retests.filter(r => !retestIdsToRemove.has(r.id)), ...newRetests],
       }
     }
 
