@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useEffect, useState, useMemo, us
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
-import { INITIAL_CLASSES, INITIAL_STUDENTS, CLASS_NAME_MIGRATION } from '../data/initialData'
+import { CLASS_NAME_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions } from '../utils/helpers'
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -28,6 +28,8 @@ interface AppState {
 
 type Action =
   | { type: 'LOAD'; payload: AppState }
+  | { type: 'ADD_CLASS'; payload: Omit<Class, 'id'> }
+  | { type: 'DELETE_CLASS'; payload: string }
   | { type: 'ADD_STUDENT'; payload: Omit<Student, 'id'> }
   | { type: 'UPDATE_STUDENT'; payload: Student }
   | { type: 'DEACTIVATE_STUDENT'; payload: string }
@@ -63,6 +65,21 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'LOAD':
       return action.payload
+
+    case 'ADD_CLASS':
+      return {
+        ...state,
+        classes: [...state.classes, { ...action.payload, id: genId() }],
+      }
+
+    case 'DELETE_CLASS':
+      return {
+        ...state,
+        classes: state.classes.filter(c => c.id !== action.payload),
+        students: state.students.map(s =>
+          s.classId === action.payload ? { ...s, active: false } : s
+        ),
+      }
 
     case 'ADD_STUDENT':
       return {
@@ -343,8 +360,8 @@ function reducer(state: AppState, action: Action): AppState {
 const LEGACY_STORAGE_KEY = 'academy-dashboard-v3'
 
 const DEFAULT_STATE: AppState = {
-  classes: INITIAL_CLASSES,
-  students: INITIAL_STUDENTS,
+  classes: [],
+  students: [],
   grades: [],
   retests: [],
   homeworks: [],
@@ -352,7 +369,7 @@ const DEFAULT_STATE: AppState = {
   scopes: [],
   vocabThreshold: 80,
   dailyThreshold: 80,
-  notices: [{ id: '1', message: 'Test', completed: false }],
+  notices: [],
   todos: [],
   examInfo: [],
   weeklyProgress: [],
@@ -362,7 +379,7 @@ const DEFAULT_STATE: AppState = {
 function normalizeState(parsed: AppState): AppState {
   return {
     ...parsed,
-    students: parsed.students ?? INITIAL_STUDENTS,
+    students: parsed.students ?? [],
     retests: parsed.retests ?? [],
     homeworks: (parsed.homeworks ?? []).map((h: HomeworkAssignment & { classId?: string }) => ({
       ...h,
@@ -398,7 +415,7 @@ function normalizeState(parsed: AppState): AppState {
       ...p,
       classId: p.classId ?? p.schoolId ?? '',
     })),
-    classes: (parsed.classes ?? INITIAL_CLASSES).map(c => ({
+    classes: (parsed.classes ?? []).map(c => ({
       ...c,
       name: CLASS_NAME_MIGRATION[c.name] ?? c.name,
     })),

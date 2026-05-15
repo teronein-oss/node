@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle, XCircle, Trash2, Eye, Clock } from 'lucide-react'
+import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw } from 'lucide-react'
+import { doc, deleteDoc } from 'firebase/firestore'
+import { db } from '../firebase'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
 
 export default function AdminPage() {
@@ -44,6 +46,11 @@ export default function AdminPage() {
   const handleView = (reg: RegistrationInfo) => {
     setViewingUid(reg.uid, reg.displayName)
     navigate('/')
+  }
+
+  const handleResetData = async (uid: string, name: string) => {
+    if (!confirm(`"${name}" 계정의 모든 데이터(반, 학생, 성적 등)를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return
+    await deleteDoc(doc(db, 'appData', uid))
   }
 
   if (loading) {
@@ -146,6 +153,14 @@ export default function AdminPage() {
                     >
                       <Eye size={13} />
                       대시보드 보기
+                    </button>
+                    <button
+                      onClick={() => handleResetData(reg.uid, reg.displayName)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200 transition-colors"
+                      title="반·학생·성적 데이터 초기화"
+                    >
+                      <RotateCcw size={13} />
+                      초기화
                     </button>
                     <button
                       onClick={() => handleDelete(reg.uid)}

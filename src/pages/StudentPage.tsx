@@ -1,9 +1,15 @@
 import { useState, useMemo } from 'react'
-import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus } from 'lucide-react'
+import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import type { Student, FilterType } from '../types'
+import type { Student, FilterType, Class } from '../types'
 import { getMonthSessions, getWeekStartForSession } from '../utils/helpers'
 import StudentDetail from './StudentDetail'
+
+const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
+  { value: 'mon-fri', label: '월·금' },
+  { value: 'tue-thu', label: '화·목' },
+  { value: 'wed-sat', label: '수·토' },
+]
 
 export default function StudentPage() {
   const { state, dispatch, visibleCount, setVisibleCount, selectedYM, setSelectedYM } = useApp()
@@ -22,6 +28,11 @@ export default function StudentPage() {
   // 새 학생 추가 폼
   const [newName, setNewName] = useState('')
   const [newClass, setNewClass] = useState(state.classes[0]?.id ?? '')
+
+  // 반관리
+  const [showAddClass, setShowAddClass] = useState(false)
+  const [newClassName, setNewClassName] = useState('')
+  const [newClassDays, setNewClassDays] = useState<Class['days']>('mon-fri')
 
   // 현재 월 계산 (목요일 기준)
   const curDate = new Date()
@@ -91,6 +102,23 @@ export default function StudentPage() {
     })
     setNewName('')
     setShowAdd(false)
+  }
+
+  const handleAddClass = () => {
+    if (!newClassName.trim()) return
+    dispatch({ type: 'ADD_CLASS', payload: { name: newClassName.trim(), days: newClassDays } })
+    setNewClassName('')
+    setNewClassDays('mon-fri')
+    setShowAddClass(false)
+  }
+
+  const handleDeleteClass = (classId: string, className: string) => {
+    const count = state.students.filter(s => s.classId === classId && s.active).length
+    const msg = count > 0
+      ? `"${className}" 반을 삭제하면 소속 학생 ${count}명이 비활성화됩니다. 삭제하시겠습니까?`
+      : `"${className}" 반을 삭제하시겠습니까?`
+    if (!confirm(msg)) return
+    dispatch({ type: 'DELETE_CLASS', payload: classId })
   }
 
   const getClassName = (classId: string) =>
@@ -309,6 +337,109 @@ export default function StudentPage() {
             <Plus size={13} />
             회차 추가
           </button>
+        </div>
+      </div>
+
+      {/* 반관리 */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BookOpenCheck size={18} className="text-slate-600" />
+            <h2 className="text-lg font-bold text-slate-800">반관리</h2>
+          </div>
+          <button
+            onClick={() => setShowAddClass(v => !v)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+          >
+            <Plus size={15} />
+            반 생성하기
+          </button>
+        </div>
+
+        {/* 반 생성 폼 */}
+        {showAddClass && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">새 반 만들기</h3>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">반 이름</label>
+                <input
+                  type="text"
+                  value={newClassName}
+                  onChange={e => setNewClassName(e.target.value)}
+                  placeholder="예: 고3 S반"
+                  className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-300 w-40"
+                  onKeyDown={e => e.key === 'Enter' && handleAddClass()}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">수업 요일</label>
+                <div className="flex gap-1.5">
+                  {DAYS_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setNewClassDays(opt.value)}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors border
+                        ${newClassDays === opt.value
+                          ? 'bg-slate-700 text-white border-slate-700'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                        }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleAddClass}
+                  disabled={!newClassName.trim()}
+                  className="px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
+                >
+                  만들기
+                </button>
+                <button
+                  onClick={() => { setShowAddClass(false); setNewClassName('') }}
+                  className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 반 목록 */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          {state.classes.length === 0 ? (
+            <p className="text-center py-10 text-slate-400 text-sm">등록된 반이 없습니다. 반을 생성해 주세요.</p>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {state.classes.map(cls => {
+                const studentCount = state.students.filter(s => s.classId === cls.id && s.active).length
+                const daysLabel = DAYS_OPTIONS.find(o => o.value === cls.days)?.label ?? cls.days
+                return (
+                  <div key={cls.id} className="flex items-center gap-4 px-5 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-800">{cls.name}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{daysLabel}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">학생 {studentCount}명</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteClass(cls.id, cls.name)}
+                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
