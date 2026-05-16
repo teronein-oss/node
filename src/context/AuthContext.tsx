@@ -124,6 +124,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               createdAt: new Date().toISOString(),
             } satisfies RegistrationInfo)
           }
+          // 기존 승인된 선생님들을 approvedTeachers에 자동 동기화
+          const teacherMap: Record<string, string> = {}
+          snap.docs.forEach(d => {
+            const reg = d.data() as RegistrationInfo
+            if (reg.role === '선생님' && reg.status === 'approved') {
+              teacherMap[reg.uid] = reg.displayName
+            }
+          })
+          if (Object.keys(teacherMap).length > 0) {
+            setDoc(doc(db, 'config', 'sharedData'), { approvedTeachers: teacherMap }, { merge: true })
+          }
         })
         return
       }
