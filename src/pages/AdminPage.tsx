@@ -1,9 +1,31 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users } from 'lucide-react'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users, Settings } from 'lucide-react'
 import { doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../firebase'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
+
+function AdminTabs() {
+  const { pathname } = useLocation()
+  return (
+    <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+      <Link
+        to="/admin"
+        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+          ${pathname === '/admin' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+      >
+        <Clock size={14} />가입 관리
+      </Link>
+      <Link
+        to="/admin/manage"
+        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+          ${pathname === '/admin/manage' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+      >
+        <Settings size={14} />계정 관리
+      </Link>
+    </div>
+  )
+}
 
 export default function AdminPage() {
   const { approveUser, rejectUser, deleteRegistration, setViewingUid, assignTeacher } = useAuth()
@@ -74,7 +96,10 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
-      <h1 className="text-xl font-bold text-slate-800">관리자 패널</h1>
+      <div className="space-y-4">
+        <h1 className="text-xl font-bold text-slate-800">관리자 패널</h1>
+        <AdminTabs />
+      </div>
 
       {/* 승인 대기 */}
       <section>

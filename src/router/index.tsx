@@ -16,6 +16,7 @@ const HomeworkPage = lazy(() => import('../pages/HomeworkPage'))
 const ExamPage = lazy(() => import('../pages/ExamPage'))
 const SchedulePage = lazy(() => import('../pages/SchedulePage'))
 const AdminPage = lazy(() => import('../pages/AdminPage'))
+const AdminManagePage = lazy(() => import('../pages/AdminManagePage'))
 
 function PageLoader() {
   return (
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       { path: 'exam', element: <Lazy><ExamPage /></Lazy> },
       { path: 'schedule', element: <ScheduleGuard><Lazy><SchedulePage /></Lazy></ScheduleGuard> },
       { path: 'admin', element: <Lazy><AdminPage /></Lazy> },
+      { path: 'admin/manage', element: <Lazy><AdminManagePage /></Lazy> },
     ],
   },
 ])
