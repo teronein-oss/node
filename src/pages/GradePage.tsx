@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, ClipboardList, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo } from '../utils/helpers'
+import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession } from '../utils/helpers'
 import type { HomeworkStatus } from '../types'
 import { Pencil, Trash2, X } from 'lucide-react'
 
@@ -43,8 +43,7 @@ export default function GradePage() {
       ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
     }
     for (const g of state.grades) {
-      const ws = getWeekStartForSession(g.sessionNum)
-      const d = new Date(ws + 'T00:00:00')
+      const d = new Date(g.weekStart + 'T00:00:00')
       const thu = new Date(d); thu.setDate(d.getDate() + 3)
       ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
     }
@@ -68,10 +67,15 @@ export default function GradePage() {
     return matched?.id ?? state.classes[0]?.id ?? ''
   })
 
-  // 선택된 반의 수업 날짜 목록 (월/금 또는 화/목)
+  // 선택된 반의 수업 날짜 목록
   const selectedCls = state.classes.find(c => c.id === selectedClass)
   const classDates = useMemo(() => {
     if (!selectedCls || !selectedMonthInfo) return []
+    if (selectedCls.days === 'mon-wed-fri') {
+      return getMonthMWFSessions(selectedMonthInfo.year, selectedMonthInfo.month)
+        .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    }
     return monthSessions
       .map(sNum => ({ date: getClassDate(sNum, selectedCls.days), sessionNum: sNum }))
       .filter(({ date }) => {
@@ -157,7 +161,9 @@ export default function GradePage() {
   }, [selectedClass, selectedSession, state.students, state.scoreColumns])
 
   const buildPayload = (currentRows: GradeRow[], sessionNum: number) => {
-    const weekStart = getWeekStartForSession(sessionNum)
+    const weekStart = selectedCls?.days === 'mon-wed-fri'
+      ? getWeekStartForMWFSession(sessionNum)
+      : getWeekStartForSession(sessionNum)
     return currentRows.map(r => ({
       studentId: r.studentId,
       sessionNum,

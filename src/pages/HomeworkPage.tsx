@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Save, CheckCircle, ClipboardList, Calendar, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo } from '../utils/helpers'
+import { getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession } from '../utils/helpers'
 
 export default function HomeworkPage() {
   const { state, dispatch, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
@@ -25,8 +25,7 @@ export default function HomeworkPage() {
       ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
     }
     for (const hw of state.homeworks) {
-      const ws = getWeekStartForSession(hw.sessionNum)
-      const d = new Date(ws + 'T00:00:00')
+      const d = new Date(hw.weekStart + 'T00:00:00')
       const thu = new Date(d); thu.setDate(d.getDate() + 3)
       ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
     }
@@ -43,10 +42,15 @@ export default function HomeworkPage() {
     return getMonthSessions(selectedMonthInfo.year, selectedMonthInfo.month, 12)
   }, [selectedMonthInfo])
 
-  // 선택된 반의 수업 날짜 목록 (월/금 또는 화/목)
+  // 선택된 반의 수업 날짜 목록
   const selectedCls = state.classes.find(c => c.id === selectedClass)
   const classDates = useMemo(() => {
     if (!selectedCls || !selectedMonthInfo) return []
+    if (selectedCls.days === 'mon-wed-fri') {
+      return getMonthMWFSessions(selectedMonthInfo.year, selectedMonthInfo.month)
+        .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    }
     return monthSessions
       .map(sNum => ({ date: getClassDate(sNum, selectedCls.days), sessionNum: sNum }))
       .filter(({ date }) => {
@@ -86,7 +90,9 @@ export default function HomeworkPage() {
       payload: {
         classId: selectedClass,
         sessionNum: selectedSession,
-        weekStart: getWeekStartForSession(selectedSession),
+        weekStart: selectedCls?.days === 'mon-wed-fri'
+          ? getWeekStartForMWFSession(selectedSession)
+          : getWeekStartForSession(selectedSession),
         description: description.trim(),
       },
     })

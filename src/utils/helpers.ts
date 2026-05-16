@@ -115,19 +115,60 @@ export function formatDateKo(iso: string): string {
   return `${m}월 ${day}일 (${dow})`
 }
 
+// ─── 월수금반 전용 (주 3회차) ─────────────────────────────────────────────────
+
+/**
+ * mon-wed-fri 반의 sessionNum에 해당하는 주 시작일(월요일) 반환
+ * 주당 3회차: slot 0=월, 1=수, 2=금
+ */
+export function getWeekStartForMWFSession(sessionNum: number): string {
+  const weekIndex = Math.floor((sessionNum - 1) / 3)
+  const base = new Date(2025, 0, 6)
+  const d = new Date(base.getTime() + weekIndex * 7 * 24 * 60 * 60 * 1000)
+  return fmtDate(d)
+}
+
+/** mon-wed-fri sessionNum → 실제 수업 날짜 (월/수/금) */
+export function getMWFClassDate(sessionNum: number): string {
+  const weekStart = getWeekStartForMWFSession(sessionNum)
+  const mon = new Date(weekStart + 'T00:00:00')
+  const slot = (sessionNum - 1) % 3  // 0=월, 1=수, 2=금
+  const offset = slot === 0 ? 0 : slot === 1 ? 2 : 4
+  mon.setDate(mon.getDate() + offset)
+  return fmtDate(mon)
+}
+
+/**
+ * 해당 월의 mon-wed-fri 회차 번호 목록 반환 (목요일 기준 월 소속, 주당 3회차)
+ */
+export function getMonthMWFSessions(year: number, month: number): number[] {
+  const base = new Date(BASE_WEEK).getTime()
+  const weekStarts = getMonthWeekStarts(year, month)
+  const sessions: number[] = []
+  for (const ws of weekStarts) {
+    const weekDiff = Math.round((new Date(ws + 'T00:00:00').getTime() - base) / (7 * 24 * 60 * 60 * 1000))
+    sessions.push(weekDiff * 3 + 1)  // 월요일
+    sessions.push(weekDiff * 3 + 2)  // 수요일
+    sessions.push(weekDiff * 3 + 3)  // 금요일
+  }
+  return sessions
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * sessionNum과 반 수업 요일에서 실제 수업 날짜(YYYY-MM-DD) 반환
- * - odd sessionNum = 주의 첫 수업 (월 or 화 or 수)
- * - even sessionNum = 주의 둘째 수업 (금 or 목 or 토)
+ * - mon-wed-fri: 주 3회차 전용 스킴 (getMWFClassDate 사용)
+ * - 나머지: 주 2회차 (odd=첫수업, even=둘째수업)
  */
 export function getClassDate(sessionNum: number, days: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'): string {
+  if (days === 'mon-wed-fri') return getMWFClassDate(sessionNum)
   const weekStart = getWeekStartForSession(sessionNum)
   const mon = new Date(weekStart + 'T00:00:00')
   const isFirst = sessionNum % 2 === 1
-  const offset = days === 'mon-fri'     ? (isFirst ? 0 : 4)
-               : days === 'tue-thu'     ? (isFirst ? 1 : 3)
-               : days === 'mon-wed-fri' ? (isFirst ? 0 : 2)
-               : (isFirst ? 2 : 5)
+  const offset = days === 'mon-fri' ? (isFirst ? 0 : 4)
+               : days === 'tue-thu' ? (isFirst ? 1 : 3)
+               : (isFirst ? 2 : 5)  // wed-sat
   mon.setDate(mon.getDate() + offset)
   return fmtDate(mon)
 }

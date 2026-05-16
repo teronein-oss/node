@@ -4,7 +4,7 @@ import {
   Calendar, CheckCircle,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { getMonthSessions, getWeekStartForSession, getClassDate, formatDateKo } from '../utils/helpers'
+import { getMonthSessions, getWeekStartForSession, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate } from '../utils/helpers'
 
 const SEMESTERS = ['1학기 중간', '1학기 기말', '2학기 중간', '2학기 기말'] as const
 type Semester = typeof SEMESTERS[number]
@@ -72,6 +72,12 @@ export default function ExamPage() {
 
   const classDates = useMemo(() => {
     if (!selectedClass) return []
+    if (selectedClass.days === 'mon-wed-fri') {
+      return getMonthMWFSessions(year, month)
+        .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
+        .filter(({ date }) => date <= todayStr)
+        .sort((a, b) => a.date.localeCompare(b.date))
+    }
     return sessionNums
       .map(sNum => ({ date: getClassDate(sNum, selectedClass.days), sessionNum: sNum }))
       .filter(({ date }) => {

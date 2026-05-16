@@ -3,7 +3,7 @@ import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calenda
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { ScheduleEvent } from '../types'
-import { getMonthSessions, getWeekStartForSession, formatDateKo, fmtDate, getClassDate } from '../utils/helpers'
+import { getMonthSessions, getWeekStartForSession, formatDateKo, fmtDate, getClassDate, getMonthMWFSessions } from '../utils/helpers'
 
 // ─── 달력 헬퍼 ────────────────────────────────────────────────────────────────
 function buildCalDays(year: number, month: number): (Date | null)[] {
@@ -267,7 +267,11 @@ export default function DashboardPage() {
       if (!cls) return []
       const studentIds = new Set(state.students.filter(s => s.active && s.classId === classId).map(s => s.id))
 
-      return monthSessions
+      const sessions = cls.days === 'mon-wed-fri'
+        ? getMonthMWFSessions(selectedYear, selectedMonth)
+        : monthSessions
+
+      return sessions
         .map(sNum => {
           const date = getClassDate(sNum, cls.days)
           const [y, m] = date.split('-').map(Number)
