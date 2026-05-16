@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GraduationCap, LogIn, UserPlus } from 'lucide-react'
 import { useAuth, ROLES } from '../context/AuthContext'
 
@@ -16,12 +16,20 @@ function GoogleIcon() {
 type Mode = 'select' | 'register'
 
 export default function LoginPage() {
-  const { firebaseUser, registrationStatus, signInWithGoogle, signOut, submitRegistration } = useAuth()
+  const { firebaseUser, registrationStatus, signInWithGoogle, signOut, submitRegistration, approvedTeachers } = useAuth()
   const [mode, setMode] = useState<Mode>('select')
   const [name, setName] = useState('')
   const [role, setRole] = useState<string>(ROLES[0])
+  const [selectedTeacherUid, setSelectedTeacherUid] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (role === '조교' && approvedTeachers.length > 0 && !selectedTeacherUid) {
+      setSelectedTeacherUid(approvedTeachers[0].uid)
+    }
+    if (role !== '조교') setSelectedTeacherUid('')
+  }, [role, approvedTeachers])
 
   const handleGoogleLogin = async (nextMode?: Mode) => {
     setError('')
@@ -44,10 +52,11 @@ export default function LoginPage() {
 
   const handleSubmit = async () => {
     if (!name.trim()) return
+    if (role === '조교' && !selectedTeacherUid) return
     setSubmitting(true)
     setError('')
     try {
-      await submitRegistration(name.trim(), role)
+      await submitRegistration(name.trim(), role, role === '조교' ? selectedTeacherUid : undefined)
     } catch {
       setError('가입신청 중 오류가 발생했습니다.')
       setSubmitting(false)
@@ -139,10 +148,25 @@ export default function LoginPage() {
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
+            {role === '조교' && (
+              <select
+                value={selectedTeacherUid}
+                onChange={e => setSelectedTeacherUid(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
+              >
+                {approvedTeachers.length === 0 ? (
+                  <option value="">등록된 선생님 없음</option>
+                ) : (
+                  approvedTeachers.map(t => (
+                    <option key={t.uid} value={t.uid}>{t.displayName} 선생님</option>
+                  ))
+                )}
+              </select>
+            )}
             {error && <p className="text-xs text-red-500 text-center">{error}</p>}
             <button
               onClick={handleSubmit}
-              disabled={!name.trim() || submitting}
+              disabled={!name.trim() || submitting || (role === '조교' && approvedTeachers.length > 0 && !selectedTeacherUid)}
               className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 transition-colors"
             >
               {submitting ? '신청 중...' : '가입신청'}

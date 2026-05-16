@@ -9,7 +9,7 @@ import {
   type User,
 } from 'firebase/auth'
 import {
-  doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs,
+  doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, getDoc, deleteField,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
 
@@ -46,7 +46,8 @@ interface AuthContextValue {
   setViewingUid: (uid: string | null, name?: string, role?: string) => void
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
-  submitRegistration: (name: string, role: string) => Promise<void>
+  approvedTeachers: Array<{ uid: string; displayName: string }>
+  submitRegistration: (name: string, role: string, assignedTeacherUid?: string | null) => Promise<void>
   // Admin
   approveUser: (uid: string) => Promise<void>
   rejectUser: (uid: string) => Promise<void>
@@ -69,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewingUid, setViewingUidState] = useState<string | null>(null)
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
   const [viewingUserRole, setViewingUserRole] = useState<string | null>(null)
+  const [approvedTeachers, setApprovedTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
+
 
   const setViewingUid = (uid: string | null, name?: string, role?: string) => {
     setViewingUidState(uid)
@@ -163,6 +166,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    if (!firebaseUser) {
+      setApprovedTeachers([])
+      return
+    }
+    const unsub = onSnapshot(doc(db, 'config', 'sharedData'), (snap) => {
+      if (snap.exists()) {
+        const teachersMap = (snap.data().approvedTeachers ?? {}) as Record<string, string>
+        setApprovedTeachers(
+          Object.entries(teachersMap).map(([uid, displayName]) => ({ uid, displayName }))
+        )
+      } else {
+        setApprovedTeachers([])
+      }
+    })
+    return unsub
+  }, [firebaseUser])
+
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider()
     provider.setCustomParameters({ prompt: 'select_account' })
@@ -175,25 +196,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await firebaseSignOut(auth)
   }
 
-  const submitRegistration = async (name: string, role: string) => {
+  const submitRegistration = async (name: string, role: string, assignedTeacherUid?: string | null) => {
     if (!firebaseUser) return
     const regRef = doc(db, 'registrations', firebaseUser.uid)
-    await setDoc(regRef, {
+    const regData: RegistrationInfo = {
       uid: firebaseUser.uid,
       email: firebaseUser.email ?? '',
       displayName: name.trim(),
       role,
       status: 'pending',
       createdAt: new Date().toISOString(),
-    } satisfies RegistrationInfo)
+    }
+    if (assignedTeacherUid) regData.assignedTeacherUid = assignedTeacherUid
+    await setDoc(regRef, regData)
     setRegistrationStatus('pending')
   }
 
   const approveUser = async (uid: string) => {
-    await updateDoc(doc(db, 'registrations', uid), { status: 'approved' })
-    // users 컬렉션에도 추가 (없을 경우에만)
-    const regSnap = await getDocs(collection(db, 'registrations'))
-    const reg = regSnap.docs.find(d => d.id === uid)?.data() as RegistrationInfo | undefined
+    const regRef = doc(db, 'registrations', uid)
+    await updateDoc(regRef, { status: 'approved' })
+    const regSnap = await getDoc(regRef)
+    const reg = regSnap.exists() ? regSnap.data() as RegistrationInfo : null
     if (reg) {
       await setDoc(doc(db, 'users', uid), {
         uid: reg.uid,
@@ -202,6 +225,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: reg.role,
         approvedAt: new Date().toISOString(),
       }, { merge: true })
+      if (reg.role === '선생님') {
+        await setDoc(doc(db, 'config', 'sharedData'), {
+          approvedTeachers: { [uid]: reg.displayName }
+        }, { merge: true })
+      }
     }
   }
 
@@ -210,7 +238,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const deleteRegistration = async (uid: string) => {
-    await deleteDoc(doc(db, 'registrations', uid))
+    const regRef = doc(db, 'registrations', uid)
+    const regSnap = await getDoc(regRef)
+    const reg = regSnap.exists() ? regSnap.data() as RegistrationInfo : null
+    await deleteDoc(regRef)
+    if (reg?.role === '선생님') {
+      await updateDoc(doc(db, 'config', 'sharedData'), {
+        [`approvedTeachers.${uid}`]: deleteField()
+      })
+    }
   }
 
   const assignTeacher = async (jogyoUid: string, teacherUid: string | null) => {
@@ -220,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, setViewingUid,
+      approvedTeachers,
       signInWithGoogle, signOut, submitRegistration,
       approveUser, rejectUser, deleteRegistration, assignTeacher,
     }}>
