@@ -29,6 +29,7 @@ interface AppState {
 type Action =
   | { type: 'LOAD'; payload: AppState }
   | { type: 'ADD_CLASS'; payload: Omit<Class, 'id'> }
+  | { type: 'RENAME_CLASS'; payload: { id: string; name: string } }
   | { type: 'DELETE_CLASS'; payload: string }
   | { type: 'ADD_STUDENT'; payload: Omit<Student, 'id'> }
   | { type: 'UPDATE_STUDENT'; payload: Student }
@@ -70,6 +71,14 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         classes: [...state.classes, { ...action.payload, id: genId() }],
+      }
+
+    case 'RENAME_CLASS':
+      return {
+        ...state,
+        classes: state.classes.map(c =>
+          c.id === action.payload.id ? { ...c, name: action.payload.name } : c
+        ),
       }
 
     case 'DELETE_CLASS':

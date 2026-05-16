@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck } from 'lucide-react'
+import { useState, useMemo, useRef } from 'react'
+import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck, Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { Student, FilterType, Class } from '../types'
 import { getMonthSessions, getWeekStartForSession } from '../utils/helpers'
@@ -34,6 +34,9 @@ export default function StudentPage() {
   const [showAddClass, setShowAddClass] = useState(false)
   const [newClassName, setNewClassName] = useState('')
   const [newClassDays, setNewClassDays] = useState<Class['days']>('mon-fri')
+  const [editingClassId, setEditingClassId] = useState<string | null>(null)
+  const [editingClassName, setEditingClassName] = useState('')
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   // 현재 월 계산 (목요일 기준)
   const curDate = new Date()
@@ -111,6 +114,19 @@ export default function StudentPage() {
     setNewClassName('')
     setNewClassDays('mon-fri')
     setShowAddClass(false)
+  }
+
+  const startEditClass = (cls: { id: string; name: string }) => {
+    setEditingClassId(cls.id)
+    setEditingClassName(cls.name)
+    setTimeout(() => editInputRef.current?.select(), 0)
+  }
+
+  const commitEditClass = () => {
+    if (!editingClassId) return
+    const trimmed = editingClassName.trim()
+    if (trimmed) dispatch({ type: 'RENAME_CLASS', payload: { id: editingClassId, name: trimmed } })
+    setEditingClassId(null)
   }
 
   const handleDeleteClass = (classId: string, className: string) => {
@@ -421,21 +437,44 @@ export default function StudentPage() {
               {state.classes.map(cls => {
                 const studentCount = state.students.filter(s => s.classId === cls.id && s.active).length
                 const daysLabel = DAYS_OPTIONS.find(o => o.value === cls.days)?.label ?? cls.days
+                const isEditing = editingClassId === cls.id
                 return (
-                  <div key={cls.id} className="flex items-center gap-4 px-5 py-3">
+                  <div key={cls.id} className="flex items-center gap-4 px-5 py-3 group">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-800">{cls.name}</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{daysLabel}</span>
-                      </div>
+                      {isEditing ? (
+                        <input
+                          ref={editInputRef}
+                          value={editingClassName}
+                          onChange={e => setEditingClassName(e.target.value)}
+                          onBlur={commitEditClass}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') commitEditClass()
+                            if (e.key === 'Escape') setEditingClassId(null)
+                          }}
+                          className="border border-blue-300 rounded-lg px-2 py-1 text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-blue-200 w-48"
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-800">{cls.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{daysLabel}</span>
+                          <button
+                            onClick={() => startEditClass(cls)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-blue-500 rounded transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </div>
+                      )}
                       <p className="text-xs text-slate-400 mt-0.5">학생 {studentCount}명</p>
                     </div>
-                    <button
-                      onClick={() => handleDeleteClass(cls.id, cls.name)}
-                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {!isEditing && (
+                      <button
+                        onClick={() => handleDeleteClass(cls.id, cls.name)}
+                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                 )
               })}
