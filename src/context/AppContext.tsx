@@ -475,10 +475,22 @@ function normalizeState(parsed: AppState): AppState {
     ...parsed,
     students: parsed.students ?? [],
     retests: parsed.retests ?? [],
-    homeworks: (parsed.homeworks ?? []).map((h: HomeworkAssignment & { classId?: string }) => ({
-      ...h,
-      classId: h.classId ?? '',
-    })),
+    homeworks: (parsed.homeworks ?? []).map((h: HomeworkAssignment & { classId?: string }) => {
+      const existingItems: HomeworkItem[] = Array.isArray(h.items) ? h.items : []
+      let items = existingItems
+      let description = h.description ?? ''
+      // 기존 description 텍스트를 items로 마이그레이션 (items가 비어있을 때만)
+      if (items.length === 0 && description.trim()) {
+        items = [{ id: h.id + '_desc', text: description, done: false }]
+        description = ''
+      }
+      return {
+        ...h,
+        classId: h.classId ?? '',
+        items,
+        description,
+      }
+    }),
     scoreColumns: parsed.scoreColumns ?? [],
     scopes: (parsed.scopes ?? []).map((s: SessionScope & { classId?: string }) => ({
       ...s,
