@@ -79,6 +79,14 @@ export interface SessionScope {
 
 export type FilterType = 'all' | 'retest' | 'no-homework'
 
+export interface ClinicSchedule {
+  id: string
+  studentId: string
+  date: string        // YYYY-MM-DD
+  time: string        // HH:MM
+  createdAt: string
+}
+
 export interface ExamInfo {
   classId: string
   semester: string   // '1학기 중간' | '1학기 기말' | '2학기 중간' | '2학기 기말'

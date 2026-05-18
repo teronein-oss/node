@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
+import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions } from '../utils/helpers'
 
@@ -22,6 +22,7 @@ interface AppState {
   examInfo: ExamInfo[]
   weeklyProgress: WeeklyProgress[]
   scheduleEvents: ScheduleEvent[]
+  clinicSchedules: ClinicSchedule[]
 }
 
 // ─── Actions ────────────────────────────────────────────────────────────────
@@ -63,6 +64,8 @@ type Action =
   | { type: 'DELETE_SCHEDULE_EVENT'; payload: string }
   | { type: 'UPDATE_SCHEDULE_EVENT'; payload: { id: string; title: string; startDate: string; endDate: string; time?: string; type: 'personal' | 'all' } }
   | { type: 'CLEAR_SESSION_GRADES'; payload: { sessionNum: number; studentIds: string[] } }
+  | { type: 'ADD_CLINIC_SCHEDULE'; payload: Omit<ClinicSchedule, 'id' | 'createdAt'> }
+  | { type: 'DELETE_CLINIC_SCHEDULE'; payload: string }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -440,6 +443,18 @@ function reducer(state: AppState, action: Action): AppState {
       }
     }
 
+    case 'ADD_CLINIC_SCHEDULE':
+      return {
+        ...state,
+        clinicSchedules: [
+          ...(state.clinicSchedules ?? []),
+          { ...action.payload, id: genId(), createdAt: new Date().toISOString() },
+        ],
+      }
+
+    case 'DELETE_CLINIC_SCHEDULE':
+      return { ...state, clinicSchedules: (state.clinicSchedules ?? []).filter(c => c.id !== action.payload) }
+
     default:
       return state
   }
@@ -464,6 +479,7 @@ const DEFAULT_STATE: AppState = {
   examInfo: [],
   weeklyProgress: [],
   scheduleEvents: [],
+  clinicSchedules: [],
 }
 
 function normalizeState(parsed: AppState): AppState {
@@ -513,6 +529,7 @@ function normalizeState(parsed: AppState): AppState {
         createdAt: ev['createdAt'] as string,
       }
     }),
+    clinicSchedules: parsed.clinicSchedules ?? [],
     weeklyProgress: (parsed.weeklyProgress ?? []).map((p: WeeklyProgress & { schoolId?: string }) => ({
       ...p,
       classId: p.classId ?? p.schoolId ?? '',
