@@ -1,7 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Save, CheckCircle, ClipboardList, Calendar, Pencil, Trash2, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ClipboardList, Calendar, Trash2, RotateCcw, Plus } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
+import { genId, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
+import type { HomeworkItem, HomeworkStatus } from '../types'
+
+const HW_STATUS_OPTIONS: { value: HomeworkStatus; label: string; activeColor: string }[] = [
+  { value: '제출',      label: '제출',      activeColor: 'text-green-700 bg-green-50 border-green-200' },
+  { value: '미흡',      label: '미흡',      activeColor: 'text-orange-600 bg-orange-50 border-orange-200' },
+  { value: '재확인완료', label: '재확인완료', activeColor: 'text-blue-600 bg-blue-50 border-blue-200' },
+]
 
 export default function HomeworkPage() {
   const { state, dispatch, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
@@ -63,11 +70,19 @@ export default function HomeworkPage() {
       .sort((a, b) => a.date.localeCompare(b.date))
   }, [selectedCls, monthSessions, selectedMonthInfo, todayStr])
 
-  const [description, setDescription] = useState('')
-  const [saved, setSaved] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [newItemText, setNewItemText] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
   const gotoFirstRef = useRef(false)
+  const newItemRef = useRef<HTMLInputElement>(null)
+
+  const currentHw = state.homeworks.find(h => h.sessionNum === selectedSession && h.classId === selectedClass)
+
+  const classStudents = useMemo(
+    () => state.students
+      .filter(s => s.classId === selectedClass && s.active)
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko')),
+    [state.students, selectedClass]
+  )
 
   // 반/월 변경 시 선택 날짜를 해당 반의 마지막 수업일로 동기화
   useEffect(() => {
@@ -80,14 +95,13 @@ export default function HomeworkPage() {
   }, [classDates])
 
   useEffect(() => {
-    const hw = state.homeworks.find(h => h.sessionNum === selectedSession && h.classId === selectedClass)
-    setDescription(hw?.description ?? '')
-    setSaved(false)
     setConfirmClear(false)
-  }, [selectedSession, selectedClass, state.homeworks])
+    setNewItemText('')
+  }, [selectedSession, selectedClass])
 
-  const handleSave = () => {
-    if (!description.trim()) return
+  const handleAddItem = () => {
+    if (!newItemText.trim()) return
+    const newItem: HomeworkItem = { id: genId(), text: newItemText.trim(), done: false }
     dispatch({
       type: 'SAVE_HOMEWORK',
       payload: {
@@ -96,26 +110,34 @@ export default function HomeworkPage() {
         weekStart: selectedCls?.days === 'mon-wed-fri'
           ? getWeekStartForMWFSession(selectedSession)
           : getWeekStartForSession(selectedSession),
-        description: description.trim(),
+        description: currentHw?.description ?? '',
+        items: [...(currentHw?.items ?? []), newItem],
       },
     })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setNewItemText('')
+  }
+
+  const handleRemoveItem = (itemId: string) => {
+    if (!currentHw) return
+    const updatedItems = (currentHw.items ?? []).filter(i => i.id !== itemId)
+    if (updatedItems.length === 0 && !currentHw.description) {
+      dispatch({ type: 'DELETE_HOMEWORK', payload: currentHw.id })
+    } else {
+      dispatch({
+        type: 'SAVE_HOMEWORK',
+        payload: {
+          classId: currentHw.classId,
+          sessionNum: currentHw.sessionNum,
+          weekStart: currentHw.weekStart,
+          description: currentHw.description,
+          items: updatedItems,
+        },
+      })
+    }
   }
 
   const getClassName = (classId: string) =>
     state.classes.find(c => c.id === classId)?.name ?? classId
-
-  const getClassDays = (classId: string) =>
-    state.classes.find(c => c.id === classId)?.days ?? 'mon-fri'
-
-  // 숙제 목록: 날짜 내림차순 정렬
-  const allHomeworks = [...state.homeworks]
-    .sort((a, b) => {
-      const dateA = getClassDate(a.sessionNum, getClassDays(a.classId))
-      const dateB = getClassDate(b.sessionNum, getClassDays(b.classId))
-      return dateB.localeCompare(dateA) || a.classId.localeCompare(b.classId)
-    })
 
   const dateIdx = classDates.findIndex(d => d.sessionNum === selectedSession)
   const currentEntry = classDates[dateIdx]
@@ -196,192 +218,320 @@ export default function HomeworkPage() {
                 }`}
             >
               {cls.name}
-              {state.homeworks.some(h => h.sessionNum === selectedSession && h.classId === cls.id && h.description) && (
+              {state.homeworks.some(h => h.sessionNum === selectedSession && h.classId === cls.id && (h.description || (h.items && h.items.length > 0))) && (
                 <span className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${selectedClass === cls.id ? 'bg-white/70' : 'bg-blue-400'}`} />
               )}
             </button>
           ))}
         </div>
 
-        {/* 숙제 입력 */}
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={description}
-            onChange={e => { setDescription(e.target.value); setSaved(false) }}
-            onKeyDown={e => e.key === 'Enter' && handleSave()}
-            placeholder={`${getClassName(selectedClass)} 숙제 내용을 입력하세요...`}
-            className="flex-1 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-          />
-          {confirmClear ? (
-            <>
-              <span className="self-center text-xs text-slate-500 shrink-0">삭제할까요?</span>
+        {/* 숙제 항목 */}
+        <div className="space-y-1.5">
+          {/* Legacy description (기존 텍스트 표시) */}
+          {currentHw?.description && !(currentHw.items && currentHw.items.length > 0) && (
+            <div className="text-sm text-slate-500 italic px-1 pb-1">{currentHw.description}</div>
+          )}
+
+          {/* 항목 목록 */}
+          {(currentHw?.items ?? []).map(item => (
+            <div key={item.id} className="flex items-center gap-2 group py-0.5 px-1">
+              <input
+                type="checkbox"
+                checked={item.done}
+                onChange={() => dispatch({ type: 'TOGGLE_HOMEWORK_ITEM', payload: { assignmentId: currentHw!.id, itemId: item.id } })}
+                className="w-4 h-4 rounded accent-blue-500 cursor-pointer shrink-0"
+              />
+              <span className={`flex-1 text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                {item.text}
+              </span>
               <button
-                onClick={() => {
-                  const hw = state.homeworks.find(h => h.sessionNum === selectedSession && h.classId === selectedClass)
-                  if (hw) dispatch({ type: 'DELETE_HOMEWORK', payload: hw.id })
-                  setDescription('')
-                  setConfirmClear(false)
-                }}
-                className="px-3 py-2.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors shrink-0"
+                onClick={() => handleRemoveItem(item.id)}
+                className="p-1 text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
               >
-                확인
+                <Trash2 size={13} />
               </button>
-              <button
-                onClick={() => setConfirmClear(false)}
-                className="px-3 py-2.5 bg-slate-100 text-slate-600 rounded-lg text-sm hover:bg-slate-200 transition-colors shrink-0"
-              >
-                취소
-              </button>
-            </>
-          ) : (
-            <>
-              {state.homeworks.some(h => h.sessionNum === selectedSession && h.classId === selectedClass) && (
+            </div>
+          ))}
+
+          {/* 항목 추가 입력 */}
+          <div className="flex gap-2 pt-1">
+            <input
+              ref={newItemRef}
+              type="text"
+              value={newItemText}
+              onChange={e => setNewItemText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddItem()}
+              placeholder={`${getClassName(selectedClass)} 숙제 항목을 입력하세요...`}
+              className="flex-1 border border-slate-200 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              onClick={handleAddItem}
+              disabled={!newItemText.trim()}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0"
+            >
+              <Plus size={15} />
+              추가
+            </button>
+          </div>
+
+          {/* 전체 삭제 */}
+          {currentHw && (
+            <div className="flex justify-end pt-1">
+              {confirmClear ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">삭제할까요?</span>
+                  <button
+                    onClick={() => { dispatch({ type: 'DELETE_HOMEWORK', payload: currentHw.id }); setConfirmClear(false) }}
+                    className="text-xs px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+                  >
+                    확인
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors"
+                  >
+                    취소
+                  </button>
+                </div>
+              ) : (
                 <button
                   onClick={() => setConfirmClear(true)}
-                  className="flex items-center gap-1.5 px-3 py-2.5 text-slate-400 border border-slate-200 rounded-lg text-sm hover:text-red-500 hover:border-red-200 transition-colors shrink-0"
-                  title="이 날짜 숙제 초기화"
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-400 transition-colors"
                 >
-                  <RotateCcw size={14} />
-                  초기화
+                  <RotateCcw size={12} />
+                  전체 삭제
                 </button>
               )}
-              <button
-                onClick={handleSave}
-                disabled={!description.trim()}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0"
-              >
-                {saved ? <CheckCircle size={15} /> : <Save size={15} />}
-                {saved ? '저장됨' : '저장'}
-              </button>
-            </>
+            </div>
           )}
         </div>
       </div>
 
-      {/* 숙제 목록 */}
+      {/* 학생별 제출현황 */}
+      {classStudents.length > 0 && (
+        <section className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <h2 className="font-semibold text-slate-700 text-sm mb-3">학생별 제출현황</h2>
+          {currentHw?.items && currentHw.items.length > 0 ? (
+            // 항목별 체크 모드
+            <div className="space-y-4">
+              {classStudents.map(student => {
+                const grade = state.grades.find(g => g.studentId === student.id && g.sessionNum === selectedSession)
+                const overallStatus = grade?.homeworkDone ?? null
+                const isAbsent = overallStatus === '결석'
+                return (
+                  <div key={student.id}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-sm font-semibold text-slate-700">{student.name}</span>
+                      {overallStatus && !isAbsent && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                          ${overallStatus === '제출' ? 'bg-green-50 text-green-700'
+                          : overallStatus === '미흡' ? 'bg-orange-50 text-orange-600'
+                          : 'bg-blue-50 text-blue-600'}`}>
+                          {overallStatus}
+                        </span>
+                      )}
+                      {!isAbsent && overallStatus !== '재확인완료' && (
+                        <button
+                          onClick={() => dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: student.id, sessionNum: selectedSession, status: '재확인완료' } })}
+                          className="ml-auto text-xs text-blue-400 hover:text-blue-600 border border-blue-200 px-2 py-0.5 rounded-lg transition-colors"
+                        >
+                          재확인완료
+                        </button>
+                      )}
+                      {!isAbsent && overallStatus === '재확인완료' && (
+                        <button
+                          onClick={() => dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: student.id, sessionNum: selectedSession, status: null } })}
+                          className="ml-auto text-xs text-slate-300 hover:text-slate-500 transition-colors"
+                        >
+                          초기화
+                        </button>
+                      )}
+                    </div>
+                    {isAbsent ? (
+                      <span className="text-xs px-2.5 py-1 rounded-lg border bg-slate-50 text-slate-400 border-slate-200">결석</span>
+                    ) : (
+                      <div className="space-y-1 pl-3 border-l-2 border-slate-100">
+                        {currentHw.items!.map(item => {
+                          const itemStatus = (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status ?? null
+                          return (
+                            <div key={item.id} className="flex items-center gap-2">
+                              <span className="flex-1 text-sm text-slate-600 truncate">{item.text}</span>
+                              <button
+                                onClick={() => dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: currentHw!.id, itemId: item.id, studentId: student.id, status: itemStatus === '제출' ? null : '제출' } })}
+                                className={`text-xs px-2.5 py-0.5 rounded-lg border font-medium transition-colors shrink-0
+                                  ${itemStatus === '제출' ? 'text-green-700 bg-green-50 border-green-200' : 'text-slate-400 bg-white border-slate-200 hover:bg-slate-50'}`}
+                              >
+                                제출
+                              </button>
+                              <button
+                                onClick={() => dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: currentHw!.id, itemId: item.id, studentId: student.id, status: itemStatus === '미흡' ? null : '미흡' } })}
+                                className={`text-xs px-2.5 py-0.5 rounded-lg border font-medium transition-colors shrink-0
+                                  ${itemStatus === '미흡' ? 'text-orange-600 bg-orange-50 border-orange-200' : 'text-slate-400 bg-white border-slate-200 hover:bg-slate-50'}`}
+                              >
+                                미흡
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            // 전체 상태 모드 (항목 없음)
+            <div className="space-y-2">
+              {classStudents.map(student => {
+                const grade = state.grades.find(g => g.studentId === student.id && g.sessionNum === selectedSession)
+                const status = grade?.homeworkDone ?? null
+                const isAbsent = status === '결석'
+                return (
+                  <div key={student.id} className="flex items-center gap-3 min-h-[32px]">
+                    <span className="w-20 text-sm font-medium text-slate-700 shrink-0">{student.name}</span>
+                    {isAbsent ? (
+                      <span className="text-xs px-2.5 py-1 rounded-lg border bg-slate-50 text-slate-400 border-slate-200">결석</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {HW_STATUS_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value as string}
+                            onClick={() => dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: student.id, sessionNum: selectedSession, status: opt.value } })}
+                            className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors
+                              ${status === opt.value ? opt.activeColor : 'text-slate-400 bg-white border-slate-200 hover:bg-slate-50'}`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                        {status !== null && (
+                          <button
+                            onClick={() => dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: student.id, sessionNum: selectedSession, status: null } })}
+                            className="text-xs px-2 py-1 text-slate-300 hover:text-slate-500 transition-colors"
+                          >
+                            초기화
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 날짜별 숙제 현황 */}
       <section className="bg-white rounded-xl shadow-sm border border-slate-100">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
           <ClipboardList size={16} className="text-slate-400" />
-          <h2 className="font-semibold text-slate-800">숙제 목록</h2>
-          <span className="ml-auto text-xs text-slate-400">{allHomeworks.length}건</span>
+          <h2 className="font-semibold text-slate-800">날짜별 숙제</h2>
+          <span className="text-xs text-slate-400 ml-0.5">— {getClassName(selectedClass)}</span>
         </div>
-        {allHomeworks.length === 0 ? (
-          <p className="text-center py-12 text-slate-400 text-sm">등록된 숙제가 없습니다</p>
+        {classDates.length === 0 ? (
+          <p className="text-center py-12 text-slate-400 text-sm">이 달 수업 일정이 없습니다</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-slate-500 bg-slate-50">
-                <th className="text-left px-5 py-3 w-36">날짜</th>
-                <th className="text-left px-4 py-3 w-32">반</th>
-                <th className="text-left px-4 py-3">숙제 내용</th>
-                <th className="px-4 py-3 w-24" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {allHomeworks.map(hw => {
-                const isSelected = hw.sessionNum === selectedSession && hw.classId === selectedClass
-                const isDeleting = deletingId === hw.id
-                const hwDate = getClassDate(hw.sessionNum, getClassDays(hw.classId))
-                return (
-                  <tr
-                    key={hw.id}
-                    className={`group ${isSelected ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}
-                  >
-                    <td className="px-5 py-3 whitespace-nowrap font-medium text-slate-700">
-                      {formatDateKo(hwDate)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
-                        {hw.classId ? getClassName(hw.classId) : '전체'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-slate-700">{hw.description}</span>
-                      {(() => {
-                        if (!hw.classId) return null
-                        const nextGrades = state.grades.filter(g =>
-                          g.sessionNum === hw.sessionNum + 1 &&
-                          state.students.find(s => s.id === g.studentId)?.classId === hw.classId
-                        )
-                        const missing = nextGrades
-                          .filter(g => g.homeworkDone === '미제출')
-                          .map(g => state.students.find(s => s.id === g.studentId)?.name)
-                          .filter(Boolean)
-                        const notGood = nextGrades
-                          .filter(g => g.homeworkDone === '미흡')
-                          .map(g => state.students.find(s => s.id === g.studentId)?.name)
-                          .filter(Boolean)
-                        if (missing.length === 0 && notGood.length === 0) return null
-                        return (
-                          <div className="space-y-1 mt-1.5">
-                            {missing.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-xs text-red-400 shrink-0">미제출</span>
-                                {missing.map(name => (
-                                  <span key={name} className="text-xs bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full">{name}</span>
-                                ))}
+          <div className="divide-y divide-slate-100">
+            {[...classDates].reverse().map(({ date, sessionNum }) => {
+              const hw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)
+              const isSelected = sessionNum === selectedSession
+              const notGoodNames = hw ? state.grades
+                .filter(g => g.sessionNum === sessionNum && g.homeworkDone === '미흡' &&
+                  state.students.find(s => s.id === g.studentId)?.classId === selectedClass)
+                .map(g => state.students.find(s => s.id === g.studentId)?.name)
+                .filter(Boolean) : []
+              return (
+                <div
+                  key={sessionNum}
+                  className={`flex items-start gap-4 px-5 py-3 group transition-colors
+                    ${isSelected ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}
+                >
+                  {/* 날짜 */}
+                  <div className="w-28 shrink-0 pt-0.5">
+                    <span className={`text-sm font-medium ${isSelected ? 'text-blue-600' : 'text-slate-700'}`}>
+                      {formatDateKo(date)}
+                    </span>
+                  </div>
+
+                  {/* 숙제 내용 */}
+                  <div className="flex-1 min-w-0">
+                    {hw ? (
+                      <>
+                        {hw.items && hw.items.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {hw.items.map(item => (
+                              <div key={item.id} className="flex items-center gap-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={item.done}
+                                  onChange={() => dispatch({ type: 'TOGGLE_HOMEWORK_ITEM', payload: { assignmentId: hw.id, itemId: item.id } })}
+                                  className="w-3.5 h-3.5 accent-blue-500 cursor-pointer shrink-0"
+                                />
+                                <span className={`text-sm ${item.done ? 'line-through text-slate-400' : 'text-slate-600'}`}>
+                                  {item.text}
+                                </span>
                               </div>
-                            )}
-                            {notGood.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-xs text-orange-400 shrink-0">미흡</span>
-                                {notGood.map(name => (
-                                  <span key={name} className="text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full">{name}</span>
-                                ))}
-                              </div>
-                            )}
+                            ))}
                           </div>
-                        )
-                      })()}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {isDeleting ? (
-                        <div className="flex items-center gap-1.5 flex-nowrap">
-                          <button
-                            onClick={() => {
-                              dispatch({ type: 'DELETE_HOMEWORK', payload: hw.id })
-                              setDeletingId(null)
-                              if (isSelected) setDescription('')
-                            }}
-                            className="text-xs px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                          >
-                            삭제
-                          </button>
-                          <button
-                            onClick={() => setDeletingId(null)}
-                            className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 justify-end">
-                          <button
-                            onClick={() => {
-                              setSelectedSession(hw.sessionNum)
-                              if (hw.classId) setSelectedClass(hw.classId)
-                            }}
-                            title="수정"
-                            className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => setDeletingId(hw.id)}
-                            title="삭제"
-                            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                        ) : hw.description ? (
+                          <span className="text-sm text-slate-600">{hw.description}</span>
+                        ) : null}
+                        {notGoodNames.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap mt-1">
+                            <span className="text-xs text-orange-400 shrink-0">미흡</span>
+                            {notGoodNames.map(name => (
+                              <span key={name} className="text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full">{name}</span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-300">숙제 없음</span>
+                    )}
+                  </div>
+
+                  {/* 액션 버튼 */}
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {hw ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedSession(sessionNum)
+                            setTimeout(() => newItemRef.current?.focus(), 50)
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-xs px-2.5 py-1 text-blue-500 border border-blue-200 rounded-lg hover:bg-blue-50 transition-all"
+                        >
+                          수정
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!confirm('이 날짜 숙제를 삭제할까요?')) return
+                            dispatch({ type: 'DELETE_HOMEWORK', payload: hw.id })
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-400 transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSelectedSession(sessionNum)
+                          setTimeout(() => newItemRef.current?.focus(), 50)
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1 text-blue-500 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                      >
+                        <Plus size={12} />
+                        추가
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </section>
     </div>

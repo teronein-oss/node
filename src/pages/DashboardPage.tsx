@@ -288,9 +288,7 @@ export default function DashboardPage() {
           const vocabNames = retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId))
           const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
           const hwDescription = hw?.description ?? ''
-          const hwNoSubmitNames = gradeRecords
-            .filter(g => g.homeworkDone === '미제출')
-            .map(g => getStudentName(g.studentId))
+          const hwItems = hw?.items ?? []
           const hwNotGoodNames = gradeRecords
             .filter(g => g.homeworkDone === '미흡')
             .map(g => getStudentName(g.studentId))
@@ -303,7 +301,7 @@ export default function DashboardPage() {
             vocabNames.length > 0 ||
             dailyNames.length > 0 ||
             gradeRecords.length > 0
-          const hasHwData = hwDescription !== '' || hwNoSubmitNames.length > 0 || hwNotGoodNames.length > 0
+          const hasHwData = hwItems.length > 0 || hwDescription !== '' || hwNotGoodNames.length > 0
           const hasAbsentData = absentNames.length > 0
 
           return {
@@ -317,7 +315,7 @@ export default function DashboardPage() {
             vocabNames,
             dailyNames,
             hwDescription,
-            hwNoSubmitNames,
+            hwItems,
             hwNotGoodNames,
             absentNames,
             hasGradeData,
@@ -532,7 +530,6 @@ export default function DashboardPage() {
                 <th className="text-left px-5 py-3 w-36">날짜</th>
                 {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
                 <th className="text-left px-4 py-3">숙제 내용</th>
-                <th className="text-left px-4 py-3 w-40">미제출</th>
                 <th className="text-left px-4 py-3 w-40">미흡</th>
                 <th className="w-10" />
               </tr>
@@ -540,7 +537,7 @@ export default function DashboardPage() {
             <tbody className="divide-y divide-slate-100">
               {hwRows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAllTab ? 5 : 4} className="px-5 py-8 text-center text-sm text-slate-300">
+                  <td colSpan={isAllTab ? 4 : 3} className="px-5 py-8 text-center text-sm text-slate-300">
                     해당 월 수업 일정이 없습니다
                   </td>
                 </tr>
@@ -563,14 +560,23 @@ export default function DashboardPage() {
                     </td>
                   )}
                   <td className="px-4 py-3 align-top">
-                    {row.hwDescription
-                      ? <span className="text-slate-700">{row.hwDescription}</span>
-                      : <span className="text-slate-300 text-xs">미입력</span>}
+                    {row.hwItems.length > 0 ? (
+                      <ul className="space-y-0.5">
+                        {row.hwItems.map((item, i) => (
+                          <li key={i} className={`text-sm flex items-center gap-1 ${item.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                            <span className="shrink-0">{item.done ? '✓' : '·'}</span>{item.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : row.hwDescription ? (
+                      <span className="text-slate-700">{row.hwDescription}</span>
+                    ) : (
+                      <span className="text-slate-300 text-xs">미입력</span>
+                    )}
                   </td>
-                  <td className="px-4 py-3 align-top"><NameTags names={row.hwNoSubmitNames} color="red" limit={3} /></td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.hwNotGoodNames} color="orange" limit={3} /></td>
                   <td className="px-2 py-3 align-top">
-                    {!isJogyo && row.hwDescription && (
+                    {!isJogyo && (row.hwDescription || row.hwItems.length > 0) && (
                       <button
                         onClick={() => handleDeleteHw(row)}
                         className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"

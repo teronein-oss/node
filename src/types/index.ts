@@ -49,16 +49,24 @@ export interface RetestRecord {
   createdAt: string
 }
 
+export interface HomeworkItem {
+  id: string
+  text: string
+  done: boolean
+  studentStatuses?: { studentId: string; status: '제출' | '미흡' }[]
+}
+
 export interface HomeworkAssignment {
   id: string
   classId: string
   sessionNum: number
   weekStart: string
   description: string
+  items?: HomeworkItem[]
   createdAt: string
 }
 
-export type HomeworkStatus = '제출' | '미제출' | '미흡' | '재확인완료' | '결석' | null
+export type HomeworkStatus = '제출' | '미흡' | '재확인완료' | '결석' | null
 
 export interface SessionScope {
   id: string

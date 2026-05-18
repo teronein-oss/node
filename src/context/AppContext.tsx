@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
+import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions } from '../utils/helpers'
 
@@ -39,6 +39,8 @@ type Action =
   | { type: 'ADD_RETEST'; payload: Omit<RetestRecord, 'id' | 'createdAt'> }
   | { type: 'SAVE_HOMEWORK'; payload: Omit<HomeworkAssignment, 'id' | 'createdAt'> }
   | { type: 'DELETE_HOMEWORK'; payload: string }
+  | { type: 'TOGGLE_HOMEWORK_ITEM'; payload: { assignmentId: string; itemId: string } }
+  | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
   | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
   | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name: string } }
@@ -170,20 +172,95 @@ function reducer(state: AppState, action: Action): AppState {
       }
 
     case 'SAVE_HOMEWORK': {
-      const existing = state.homeworks.filter(h =>
+      const prev = state.homeworks.find(h =>
+        h.sessionNum === action.payload.sessionNum && h.classId === action.payload.classId
+      )
+      const others = state.homeworks.filter(h =>
         !(h.sessionNum === action.payload.sessionNum && h.classId === action.payload.classId)
       )
       return {
         ...state,
         homeworks: [
-          ...existing,
-          { ...action.payload, id: genId(), createdAt: new Date().toISOString() },
+          ...others,
+          {
+            ...action.payload,
+            id: prev?.id ?? genId(),
+            createdAt: prev?.createdAt ?? new Date().toISOString(),
+          },
         ],
       }
     }
 
     case 'DELETE_HOMEWORK':
       return { ...state, homeworks: state.homeworks.filter(h => h.id !== action.payload) }
+
+    case 'TOGGLE_HOMEWORK_ITEM': {
+      const { assignmentId, itemId } = action.payload
+      return {
+        ...state,
+        homeworks: state.homeworks.map(h =>
+          h.id !== assignmentId ? h : {
+            ...h,
+            items: (h.items ?? []).map((item: HomeworkItem) =>
+              item.id === itemId ? { ...item, done: !item.done } : item
+            ),
+          }
+        ),
+      }
+    }
+
+    case 'SET_ITEM_STUDENT_STATUS': {
+      const { assignmentId, itemId, studentId, status } = action.payload
+      const updatedHomeworks = state.homeworks.map(h => {
+        if (h.id !== assignmentId) return h
+        return {
+          ...h,
+          items: (h.items ?? []).map((item: HomeworkItem) => {
+            if (item.id !== itemId) return item
+            const others = (item.studentStatuses ?? []).filter(ss => ss.studentId !== studentId)
+            return {
+              ...item,
+              studentStatuses: status === null ? others : [...others, { studentId, status }],
+            }
+          }),
+        }
+      })
+
+      // 모든 항목 상태에서 전체 homeworkDone 자동 계산
+      const hw = updatedHomeworks.find(h => h.id === assignmentId)
+      const sessionNum = hw?.sessionNum
+      if (!hw || sessionNum === undefined) return { ...state, homeworks: updatedHomeworks }
+
+      const allStatuses = (hw.items ?? []).map(item =>
+        (item.studentStatuses ?? []).find(ss => ss.studentId === studentId)?.status
+      )
+      const derivedStatus: HomeworkStatus =
+        allStatuses.some(s => s === '미흡') ? '미흡'
+        : allStatuses.every(s => s !== undefined) ? '제출'
+        : null
+
+      if (derivedStatus === null) return { ...state, homeworks: updatedHomeworks }
+
+      const existingGrade = state.grades.find(g => g.studentId === studentId && g.sessionNum === sessionNum)
+      // 재확인완료는 수동으로만 변경
+      if (existingGrade?.homeworkDone === '재확인완료') return { ...state, homeworks: updatedHomeworks }
+
+      const updatedGrades = existingGrade
+        ? state.grades.map(g =>
+            g.studentId === studentId && g.sessionNum === sessionNum
+              ? { ...g, homeworkDone: derivedStatus }
+              : g
+          )
+        : [...state.grades, {
+            id: genId(), studentId, sessionNum,
+            weekStart: getWeekStartForSession(sessionNum),
+            vocabScore: null, dailyTestScore: null, extras: {},
+            attendance: null, homeworkDone: derivedStatus,
+            createdAt: new Date().toISOString(),
+          }]
+
+      return { ...state, homeworks: updatedHomeworks, grades: updatedGrades }
+    }
 
     case 'UPDATE_HOMEWORK_STATUS': {
       const { studentId, sessionNum, status } = action.payload
@@ -443,7 +520,7 @@ function normalizeState(parsed: AppState): AppState {
         extras: g.extras ?? {},
         attendance: g.attendance ?? null,
         homeworkDone: hd === true ? '제출'
-          : hd === false ? '미제출'
+          : (hd === false || hd === '미제출') ? '미흡'
           : (hd as HomeworkStatus) ?? null,
       }
     }),

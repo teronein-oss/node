@@ -9,7 +9,6 @@ type Tab = 'input' | 'retest'
 
 const HW_OPTIONS: { value: HomeworkStatus; label: string; color: string }[] = [
   { value: '제출',      label: '제출',      color: 'text-green-700 bg-green-50 border-green-200' },
-  { value: '미제출',    label: '미제출',    color: 'text-red-600 bg-red-50 border-red-200' },
   { value: '미흡',      label: '미흡',      color: 'text-orange-600 bg-orange-50 border-orange-200' },
   { value: '재확인완료', label: '재확인완료', color: 'text-blue-600 bg-blue-50 border-blue-200' },
 ]
