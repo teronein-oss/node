@@ -44,7 +44,6 @@ export default function StudentDetail({ student, onClose }: Props) {
   const hwCounts = homeworkRows.reduce(
     (acc, { status }) => {
       if (status === '제출') acc.submitted++
-      else if (status === '미제출') acc.missing++
       else if (status === '미흡') acc.incomplete++
       else if (status === '결석') acc.absent++
       return acc
@@ -144,7 +143,6 @@ export default function StudentDetail({ student, onClose }: Props) {
                           ))}
                           <td className="text-center px-4 py-2.5">
                             {g.homeworkDone === '제출' && <span className="text-xs text-green-600 font-medium">제출</span>}
-                            {g.homeworkDone === '미제출' && <span className="text-xs text-red-500 font-medium">미제출</span>}
                             {g.homeworkDone === '미흡' && <span className="text-xs text-orange-500 font-medium">미흡</span>}
                             {g.homeworkDone === '재확인완료' && <span className="text-xs text-blue-600 font-medium">재확인완료</span>}
                             {g.homeworkDone === null && <span className="text-slate-300 text-xs">-</span>}
@@ -178,11 +176,6 @@ export default function StudentDetail({ student, onClose }: Props) {
                       제출 {hwCounts.submitted}회
                     </span>
                   )}
-                  {hwCounts.missing > 0 && (
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-red-50 text-red-600 font-medium">
-                      미제출 {hwCounts.missing}회
-                    </span>
-                  )}
                   {hwCounts.incomplete > 0 && (
                     <span className="text-xs px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 font-medium">
                       미흡 {hwCounts.incomplete}회
@@ -213,7 +206,6 @@ export default function StudentDetail({ student, onClose }: Props) {
                           <td className="px-4 py-2.5 text-slate-600">{hw.description}</td>
                           <td className="px-4 py-2.5 text-center">
                             {status === '제출' && <span className="text-xs text-green-600 font-medium">제출</span>}
-                            {status === '미제출' && <span className="text-xs text-red-500 font-medium">미제출</span>}
                             {status === '미흡' && <span className="text-xs text-orange-500 font-medium">미흡</span>}
                             {status === '재확인완료' && <span className="text-xs text-blue-600 font-medium">재확인완료</span>}
                             {status === '결석' && <span className="text-xs text-slate-400">결석</span>}

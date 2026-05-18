@@ -84,7 +84,7 @@ export default function StudentPage() {
     monthRetests.filter(r => r.passed === null).map(r => r.studentId)
   )
   const noHomeworkIds = new Set(
-    monthGrades.filter(g => g.homeworkDone === '미제출' || g.homeworkDone === '미흡').map(g => g.studentId)
+    monthGrades.filter(g => g.homeworkDone === '미흡').map(g => g.studentId)
   )
 
   const filteredStudents = state.students
@@ -249,7 +249,7 @@ export default function StudentPage() {
           {([
             { key: 'all', label: '전체' },
             { key: 'retest', label: '재시험' },
-            { key: 'no-homework', label: '미제출' },
+            { key: 'no-homework', label: '미흡' },
           ] as const).map(({ key, label }) => (
             <button
               key={key}
@@ -302,7 +302,7 @@ export default function StudentPage() {
             filteredStudents.map(student => {
               const studentGrades = monthGrades.filter(g => g.studentId === student.id)
               const studentRetests = monthRetests.filter(r => r.studentId === student.id && r.passed === null)
-              const noHwCount = studentGrades.filter(g => g.homeworkDone === '미제출' || g.homeworkDone === '미흡').length
+              const noHwCount = studentGrades.filter(g => g.homeworkDone === '미흡').length
               const recorded = studentGrades.length
 
               return (
@@ -332,7 +332,7 @@ export default function StudentPage() {
                       )}
                       {noHwCount > 0 && (
                         <span className="flex items-center gap-0.5 text-xs text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full">
-                          <BookX size={10} /> 미제출 {noHwCount}회
+                          <BookX size={10} /> 미흡 {noHwCount}회
                         </span>
                       )}
                       {recorded > 0 && studentRetests.length === 0 && noHwCount === 0 && (
