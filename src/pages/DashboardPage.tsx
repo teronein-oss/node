@@ -230,14 +230,12 @@ export default function DashboardPage() {
       ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
     }
     for (const g of state.grades) {
-      const ws = getWeekStartForSession(g.sessionNum)
-      const d = new Date(ws + 'T00:00:00')
+      const d = new Date(g.weekStart + 'T00:00:00')
       const thu = new Date(d); thu.setDate(d.getDate() + 3)
       ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
     }
     for (const h of state.homeworks) {
-      const ws = getWeekStartForSession(h.sessionNum)
-      const d = new Date(ws + 'T00:00:00')
+      const d = new Date(h.weekStart + 'T00:00:00')
       const thu = new Date(d); thu.setDate(d.getDate() + 3)
       ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
     }
@@ -284,18 +282,18 @@ export default function DashboardPage() {
           const hw = state.homeworks.find(
             h => h.sessionNum === sNum - 1 && (h.classId === classId || h.classId === '')
           )
-          const noHw = state.grades.filter(
-            g => g.sessionNum === sNum &&
-              g.homeworkDone === '미제출' &&
-              studentIds.has(g.studentId)
-          )
           const gradeRecords = state.grades.filter(
             g => g.sessionNum === sNum && studentIds.has(g.studentId)
           )
           const vocabNames = retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId))
           const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
           const hwDescription = hw?.description ?? ''
-          const hwNoSubmitNames = noHw.map(g => getStudentName(g.studentId))
+          const hwNoSubmitNames = gradeRecords
+            .filter(g => g.homeworkDone === '미제출')
+            .map(g => getStudentName(g.studentId))
+          const hwNotGoodNames = gradeRecords
+            .filter(g => g.homeworkDone === '미흡')
+            .map(g => getStudentName(g.studentId))
           const absentNames = gradeRecords
             .filter(g => g.attendance === '결석')
             .map(g => getStudentName(g.studentId))
@@ -305,7 +303,7 @@ export default function DashboardPage() {
             vocabNames.length > 0 ||
             dailyNames.length > 0 ||
             gradeRecords.length > 0
-          const hasHwData = hwDescription !== '' || hwNoSubmitNames.length > 0
+          const hasHwData = hwDescription !== '' || hwNoSubmitNames.length > 0 || hwNotGoodNames.length > 0
           const hasAbsentData = absentNames.length > 0
 
           return {
@@ -320,6 +318,7 @@ export default function DashboardPage() {
             dailyNames,
             hwDescription,
             hwNoSubmitNames,
+            hwNotGoodNames,
             absentNames,
             hasGradeData,
             hasHwData,
@@ -534,13 +533,14 @@ export default function DashboardPage() {
                 {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
                 <th className="text-left px-4 py-3">숙제 내용</th>
                 <th className="text-left px-4 py-3 w-40">미제출</th>
+                <th className="text-left px-4 py-3 w-40">미흡</th>
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {hwRows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAllTab ? 4 : 3} className="px-5 py-8 text-center text-sm text-slate-300">
+                  <td colSpan={isAllTab ? 5 : 4} className="px-5 py-8 text-center text-sm text-slate-300">
                     해당 월 수업 일정이 없습니다
                   </td>
                 </tr>
@@ -568,6 +568,7 @@ export default function DashboardPage() {
                       : <span className="text-slate-300 text-xs">미입력</span>}
                   </td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.hwNoSubmitNames} color="red" limit={3} /></td>
+                  <td className="px-4 py-3 align-top"><NameTags names={row.hwNotGoodNames} color="orange" limit={3} /></td>
                   <td className="px-2 py-3 align-top">
                     {!isJogyo && row.hwDescription && (
                       <button
