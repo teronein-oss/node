@@ -87,6 +87,16 @@ export interface ClinicSchedule {
   createdAt: string
 }
 
+export interface SessionTestConfig {
+  sessionNum: number
+  vocabMode: '점수' | '개수'
+  vocabTotal: number
+  vocabThreshold: number
+  dailyMode: '점수' | '개수'
+  dailyTotal: number
+  dailyThreshold: number
+}
+
 export interface ExamInfo {
   classId: string
   semester: string   // '1학기 중간' | '1학기 기말' | '2학기 중간' | '2학기 기말'

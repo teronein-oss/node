@@ -95,11 +95,20 @@ export default function GradePage() {
   // 초기화 확인 상태
   const [confirmClear, setConfirmClear] = useState(false)
 
+  // 선택 회차별 시험 설정 (없으면 전역 기본값 사용)
+  const sessionConfig = state.sessionTestConfigs.find(c => c.sessionNum === selectedSession)
+  const vocabMode = sessionConfig?.vocabMode ?? state.vocabMode
+  const vocabTotal = sessionConfig?.vocabTotal ?? state.vocabTotal
+  const vocabThreshold = sessionConfig?.vocabThreshold ?? state.vocabThreshold
+  const dailyMode = sessionConfig?.dailyMode ?? state.dailyMode
+  const dailyTotal = sessionConfig?.dailyTotal ?? state.dailyTotal
+  const dailyThreshold = sessionConfig?.dailyThreshold ?? state.dailyThreshold
+
   // 통과 기준 · 총점 로컬 상태 (빈 값 입력 허용 — 버그 수정)
-  const [vocabThreshStr, setVocabThreshStr] = useState(state.vocabThreshold.toString())
-  const [dailyThreshStr, setDailyThreshStr] = useState(state.dailyThreshold.toString())
-  const [vocabTotalStr, setVocabTotalStr] = useState(state.vocabTotal.toString())
-  const [dailyTotalStr, setDailyTotalStr] = useState(state.dailyTotal.toString())
+  const [vocabThreshStr, setVocabThreshStr] = useState(vocabThreshold.toString())
+  const [dailyThreshStr, setDailyThreshStr] = useState(dailyThreshold.toString())
+  const [vocabTotalStr, setVocabTotalStr] = useState(vocabTotal.toString())
+  const [dailyTotalStr, setDailyTotalStr] = useState(dailyTotal.toString())
 
   // 재시험 처리 탭 상태
   const [retestClass, setRetestClass] = useState('all')
@@ -120,6 +129,16 @@ export default function GradePage() {
     setDailyRange(scope?.dailyRange ?? '')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession, selectedClass])
+
+  // 회차 변경 시 해당 회차 시험 설정으로 로컬 입력값 동기화
+  useEffect(() => {
+    const cfg = state.sessionTestConfigs.find(c => c.sessionNum === selectedSession)
+    setVocabThreshStr((cfg?.vocabThreshold ?? state.vocabThreshold).toString())
+    setDailyThreshStr((cfg?.dailyThreshold ?? state.dailyThreshold).toString())
+    setVocabTotalStr((cfg?.vocabTotal ?? state.vocabTotal).toString())
+    setDailyTotalStr((cfg?.dailyTotal ?? state.dailyTotal).toString())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSession])
 
   const saveScope = () => {
     dispatch({
@@ -507,24 +526,24 @@ export default function GradePage() {
                   <th className="text-center px-4 py-3 w-36">
                     단어시험
                     <div className="flex items-center justify-center gap-1 mt-1">
-                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { vocabMode: '점수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '점수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                       <span className="text-slate-300 text-xs">|</span>
-                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { vocabMode: '개수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '개수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
                     </div>
                     <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                       <span>총</span>
                       <input type="number" value={vocabTotalStr}
-                        onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_TEST_CONFIG', payload: { vocabTotal: v } }) }}
-                        onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(state.vocabTotal.toString()) }}
+                        onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabTotal: v } }) }}
+                        onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(vocabTotal.toString()) }}
                         className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <span>{state.vocabMode === '점수' ? '점' : '개'}</span>
+                      <span>{vocabMode === '점수' ? '점' : '개'}</span>
                     </div>
                     <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                       <input type="number" value={vocabThreshStr}
-                        onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= state.vocabTotal) dispatch({ type: 'SET_THRESHOLD', payload: { key: 'vocabThreshold', value: v } }) }}
-                        onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(state.vocabThreshold.toString()) }}
+                        onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabThreshold: v } }) }}
+                        onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(vocabThreshold.toString()) }}
                         className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       <span>이상 통과</span>
                     </div>
@@ -532,24 +551,24 @@ export default function GradePage() {
                   <th className="text-center px-4 py-3 w-36">
                     Daily Test
                     <div className="flex items-center justify-center gap-1 mt-1">
-                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { dailyMode: '점수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '점수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                       <span className="text-slate-300 text-xs">|</span>
-                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { dailyMode: '개수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '개수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
                     </div>
                     <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                       <span>총</span>
                       <input type="number" value={dailyTotalStr}
-                        onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_TEST_CONFIG', payload: { dailyTotal: v } }) }}
-                        onBlur={() => { if (!Number(dailyTotalStr)) setDailyTotalStr(state.dailyTotal.toString()) }}
+                        onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyTotal: v } }) }}
+                        onBlur={() => { if (!Number(dailyTotalStr)) setDailyTotalStr(dailyTotal.toString()) }}
                         className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <span>{state.dailyMode === '점수' ? '점' : '개'}</span>
+                      <span>{dailyMode === '점수' ? '점' : '개'}</span>
                     </div>
                     <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                       <input type="number" value={dailyThreshStr}
-                        onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= state.dailyTotal) dispatch({ type: 'SET_THRESHOLD', payload: { key: 'dailyThreshold', value: v } }) }}
-                        onBlur={() => { if (!Number(dailyThreshStr)) setDailyThreshStr(state.dailyThreshold.toString()) }}
+                        onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= dailyTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyThreshold: v } }) }}
+                        onBlur={() => { if (!Number(dailyThreshStr)) setDailyThreshStr(dailyThreshold.toString()) }}
                         className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       <span>이상 통과</span>
                     </div>
@@ -601,7 +620,7 @@ export default function GradePage() {
                     const isAbsent = row.attendance === '결석'
                     const vocabNum = row.vocabScore !== '' ? Number(row.vocabScore) : null
                     const dailyNum = row.dailyScore !== '' ? Number(row.dailyScore) : null
-                    const isRetestNeeded = !isAbsent && (needsRetest(vocabNum, state.vocabThreshold) || needsRetest(dailyNum, state.dailyThreshold))
+                    const isRetestNeeded = !isAbsent && (needsRetest(vocabNum, vocabThreshold) || needsRetest(dailyNum, dailyThreshold))
 
                     const studentRetests = state.retests.filter(
                       r => r.studentId === row.studentId && r.sessionNum === selectedSession
@@ -637,18 +656,18 @@ export default function GradePage() {
                               <input
                                 type="number"
                                 min={0}
-                                max={state.vocabTotal}
+                                max={vocabTotal}
                                 value={row.vocabScore}
                                 onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
                                 placeholder="-"
                                 className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                  ${needsRetest(vocabNum, state.vocabThreshold)
+                                  ${needsRetest(vocabNum, vocabThreshold)
                                     ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
                                     : 'border-slate-200 focus:ring-blue-200'
                                   }`}
                               />
-                              <span className="text-slate-300 text-xs shrink-0">/{state.vocabTotal}</span>
-                              {needsRetest(vocabNum, state.vocabThreshold) && (
+                              <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
+                              {needsRetest(vocabNum, vocabThreshold) && (
                                 <AlertCircle size={14} className="text-orange-400 shrink-0" />
                               )}
                             </div>
@@ -662,18 +681,18 @@ export default function GradePage() {
                               <input
                                 type="number"
                                 min={0}
-                                max={state.dailyTotal}
+                                max={dailyTotal}
                                 value={row.dailyScore}
                                 onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
                                 placeholder="-"
                                 className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                  ${needsRetest(dailyNum, state.dailyThreshold)
+                                  ${needsRetest(dailyNum, dailyThreshold)
                                     ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
                                     : 'border-slate-200 focus:ring-blue-200'
                                   }`}
                               />
-                              <span className="text-slate-300 text-xs shrink-0">/{state.dailyTotal}</span>
-                              {needsRetest(dailyNum, state.dailyThreshold) && (
+                              <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
+                              {needsRetest(dailyNum, dailyThreshold) && (
                                 <AlertCircle size={14} className="text-orange-400 shrink-0" />
                               )}
                             </div>

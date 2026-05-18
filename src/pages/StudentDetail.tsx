@@ -114,6 +114,13 @@ export default function StudentDetail({ student, onClose }: Props) {
                   <tbody className="divide-y divide-slate-50">
                     {grades.map(g => {
                       const hasRetest = retests.some(r => r.sessionNum === g.sessionNum)
+                      const sCfg = state.sessionTestConfigs.find(c => c.sessionNum === g.sessionNum)
+                      const vThresh = sCfg?.vocabThreshold ?? state.vocabThreshold
+                      const vTotal = sCfg?.vocabTotal ?? state.vocabTotal
+                      const vMode = sCfg?.vocabMode ?? state.vocabMode
+                      const dThresh = sCfg?.dailyThreshold ?? state.dailyThreshold
+                      const dTotal = sCfg?.dailyTotal ?? state.dailyTotal
+                      const dMode = sCfg?.dailyMode ?? state.dailyMode
                       return (
                         <tr key={g.id} className="hover:bg-slate-50">
                           <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">
@@ -121,17 +128,17 @@ export default function StudentDetail({ student, onClose }: Props) {
                           </td>
                           <td className="text-center px-4 py-2.5">
                             {g.vocabScore !== null ? (
-                              <span className={`font-medium ${g.vocabScore < state.vocabThreshold ? 'text-orange-500' : 'text-slate-700'}`}>
+                              <span className={`font-medium ${g.vocabScore < vThresh ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {g.vocabScore}
-                                <span className="text-slate-400 font-normal text-xs">/{state.vocabTotal}{state.vocabMode === '개수' ? '개' : '점'}</span>
+                                <span className="text-slate-400 font-normal text-xs">/{vTotal}{vMode === '개수' ? '개' : '점'}</span>
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>
                           <td className="text-center px-4 py-2.5">
                             {g.dailyTestScore !== null ? (
-                              <span className={`font-medium ${g.dailyTestScore < state.dailyThreshold ? 'text-orange-500' : 'text-slate-700'}`}>
+                              <span className={`font-medium ${g.dailyTestScore < dThresh ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {g.dailyTestScore}
-                                <span className="text-slate-400 font-normal text-xs">/{state.dailyTotal}{state.dailyMode === '개수' ? '개' : '점'}</span>
+                                <span className="text-slate-400 font-normal text-xs">/{dTotal}{dMode === '개수' ? '개' : '점'}</span>
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>

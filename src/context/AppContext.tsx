@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule } from '../types'
+import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions } from '../utils/helpers'
 
@@ -27,6 +27,7 @@ interface AppState {
   weeklyProgress: WeeklyProgress[]
   scheduleEvents: ScheduleEvent[]
   clinicSchedules: ClinicSchedule[]
+  sessionTestConfigs: SessionTestConfig[]
 }
 
 // ─── Actions ────────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ type Action =
   | { type: 'CLEAR_SESSION_GRADES'; payload: { sessionNum: number; studentIds: string[] } }
   | { type: 'ADD_CLINIC_SCHEDULE'; payload: Omit<ClinicSchedule, 'id' | 'createdAt'> }
   | { type: 'DELETE_CLINIC_SCHEDULE'; payload: string }
+  | { type: 'SET_SESSION_TEST_CONFIG'; payload: { sessionNum: number } & Partial<Omit<SessionTestConfig, 'sessionNum'>> }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -133,9 +135,12 @@ function reducer(state: AppState, action: Action): AppState {
       const retestIdsToRemove = new Set<string>()
 
       for (const g of newGrades) {
+        const sessionCfg = state.sessionTestConfigs.find(c => c.sessionNum === g.sessionNum)
         for (const type of ['vocab', 'daily'] as const) {
           const score = type === 'vocab' ? g.vocabScore : g.dailyTestScore
-          const threshold = type === 'vocab' ? state.vocabThreshold : state.dailyThreshold
+          const threshold = type === 'vocab'
+            ? (sessionCfg?.vocabThreshold ?? state.vocabThreshold)
+            : (sessionCfg?.dailyThreshold ?? state.dailyThreshold)
           if (needsRetest(score, threshold)) {
             const exists = state.retests.some(
               r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === type
@@ -463,6 +468,35 @@ function reducer(state: AppState, action: Action): AppState {
     case 'DELETE_CLINIC_SCHEDULE':
       return { ...state, clinicSchedules: (state.clinicSchedules ?? []).filter(c => c.id !== action.payload) }
 
+    case 'SET_SESSION_TEST_CONFIG': {
+      const { sessionNum, ...updates } = action.payload
+      const existing = state.sessionTestConfigs.find(c => c.sessionNum === sessionNum)
+      if (existing) {
+        return {
+          ...state,
+          sessionTestConfigs: state.sessionTestConfigs.map(c =>
+            c.sessionNum === sessionNum ? { ...c, ...updates } : c
+          ),
+        }
+      }
+      return {
+        ...state,
+        sessionTestConfigs: [
+          ...state.sessionTestConfigs,
+          {
+            sessionNum,
+            vocabMode: state.vocabMode,
+            vocabTotal: state.vocabTotal,
+            vocabThreshold: state.vocabThreshold,
+            dailyMode: state.dailyMode,
+            dailyTotal: state.dailyTotal,
+            dailyThreshold: state.dailyThreshold,
+            ...updates,
+          },
+        ],
+      }
+    }
+
     default:
       return state
   }
@@ -492,6 +526,7 @@ const DEFAULT_STATE: AppState = {
   weeklyProgress: [],
   scheduleEvents: [],
   clinicSchedules: [],
+  sessionTestConfigs: [],
 }
 
 function normalizeState(parsed: AppState): AppState {
@@ -546,6 +581,7 @@ function normalizeState(parsed: AppState): AppState {
       }
     }),
     clinicSchedules: parsed.clinicSchedules ?? [],
+    sessionTestConfigs: parsed.sessionTestConfigs ?? [],
     weeklyProgress: (parsed.weeklyProgress ?? []).map((p: WeeklyProgress & { schoolId?: string }) => ({
       ...p,
       classId: p.classId ?? p.schoolId ?? '',
