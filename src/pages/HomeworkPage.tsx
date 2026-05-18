@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Save, CheckCircle, ClipboardList, Calendar, Pencil, Trash2, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession } from '../utils/helpers'
+import { getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
 
 export default function HomeworkPage() {
   const { state, dispatch, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
 
   const today = new Date()
+  const todayStr = fmtDate(today)
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth() + 1
   const currentYM = `${currentYear}-${currentMonth}`
@@ -49,6 +50,7 @@ export default function HomeworkPage() {
     if (selectedCls.days === 'mon-wed-fri') {
       return getMonthMWFSessions(selectedMonthInfo.year, selectedMonthInfo.month)
         .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
+        .filter(({ date }) => date <= todayStr)
         .sort((a, b) => a.date.localeCompare(b.date))
     }
     return monthSessions
@@ -57,8 +59,9 @@ export default function HomeworkPage() {
         const [y, m] = date.split('-').map(Number)
         return y === selectedMonthInfo.year && m === selectedMonthInfo.month
       })
+      .filter(({ date }) => date <= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date))
-  }, [selectedCls, monthSessions, selectedMonthInfo])
+  }, [selectedCls, monthSessions, selectedMonthInfo, todayStr])
 
   const [description, setDescription] = useState('')
   const [saved, setSaved] = useState(false)

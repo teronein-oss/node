@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, ClipboardList, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession } from '../utils/helpers'
+import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
 import type { HomeworkStatus } from '../types'
 import { Pencil, Trash2, X } from 'lucide-react'
 
@@ -30,6 +30,7 @@ export default function GradePage() {
 
   // 현재 월
   const today = new Date()
+  const todayStr = fmtDate(today)
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth() + 1
   const currentYM = `${currentYear}-${currentMonth}`
@@ -74,6 +75,7 @@ export default function GradePage() {
     if (selectedCls.days === 'mon-wed-fri') {
       return getMonthMWFSessions(selectedMonthInfo.year, selectedMonthInfo.month)
         .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
+        .filter(({ date }) => date <= todayStr)
         .sort((a, b) => a.date.localeCompare(b.date))
     }
     return monthSessions
@@ -82,8 +84,9 @@ export default function GradePage() {
         const [y, m] = date.split('-').map(Number)
         return y === selectedMonthInfo.year && m === selectedMonthInfo.month
       })
+      .filter(({ date }) => date <= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date))
-  }, [selectedCls, monthSessions, selectedMonthInfo])
+  }, [selectedCls, monthSessions, selectedMonthInfo, todayStr])
   const [rows, setRows] = useState<GradeRow[]>([])
   const [saved, setSaved] = useState(false)
   const isDirtyRef = useRef(false)
