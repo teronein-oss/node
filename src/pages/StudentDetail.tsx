@@ -121,15 +121,17 @@ export default function StudentDetail({ student, onClose }: Props) {
                           </td>
                           <td className="text-center px-4 py-2.5">
                             {g.vocabScore !== null ? (
-                              <span className={`font-medium ${g.vocabScore < 80 ? 'text-orange-500' : 'text-slate-700'}`}>
-                                {g.vocabScore}점
+                              <span className={`font-medium ${g.vocabScore < state.vocabThreshold ? 'text-orange-500' : 'text-slate-700'}`}>
+                                {g.vocabScore}
+                                <span className="text-slate-400 font-normal text-xs">/{state.vocabTotal}{state.vocabMode === '개수' ? '개' : '점'}</span>
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>
                           <td className="text-center px-4 py-2.5">
                             {g.dailyTestScore !== null ? (
-                              <span className={`font-medium ${g.dailyTestScore < 80 ? 'text-orange-500' : 'text-slate-700'}`}>
-                                {g.dailyTestScore}점
+                              <span className={`font-medium ${g.dailyTestScore < state.dailyThreshold ? 'text-orange-500' : 'text-slate-700'}`}>
+                                {g.dailyTestScore}
+                                <span className="text-slate-400 font-normal text-xs">/{state.dailyTotal}{state.dailyMode === '개수' ? '개' : '점'}</span>
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>

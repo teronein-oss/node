@@ -95,6 +95,12 @@ export default function GradePage() {
   // 초기화 확인 상태
   const [confirmClear, setConfirmClear] = useState(false)
 
+  // 통과 기준 · 총점 로컬 상태 (빈 값 입력 허용 — 버그 수정)
+  const [vocabThreshStr, setVocabThreshStr] = useState(state.vocabThreshold.toString())
+  const [dailyThreshStr, setDailyThreshStr] = useState(state.dailyThreshold.toString())
+  const [vocabTotalStr, setVocabTotalStr] = useState(state.vocabTotal.toString())
+  const [dailyTotalStr, setDailyTotalStr] = useState(state.dailyTotal.toString())
+
   // 재시험 처리 탭 상태
   const [retestClass, setRetestClass] = useState('all')
   const [retestPassed, setRetestPassed] = useState<Record<string, boolean>>({})
@@ -498,37 +504,53 @@ export default function GradePage() {
               <thead>
                 <tr className="bg-slate-50 text-xs text-slate-500">
                   <th className="text-left px-5 py-3 w-36">이름</th>
-                  <th className="text-center px-4 py-3 w-28">
+                  <th className="text-center px-4 py-3 w-36">
                     단어시험
-                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5">
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={state.vocabThreshold}
-                        onChange={e => {
-                          const v = Number(e.target.value)
-                          if (v > 0 && v <= 100) dispatch({ type: 'SET_THRESHOLD', payload: { key: 'vocabThreshold', value: v } })
-                        }}
-                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { vocabMode: '점수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                      <span className="text-slate-300 text-xs">|</span>
+                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { vocabMode: '개수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                    </div>
+                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                      <span>총</span>
+                      <input type="number" value={vocabTotalStr}
+                        onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_TEST_CONFIG', payload: { vocabTotal: v } }) }}
+                        onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(state.vocabTotal.toString()) }}
+                        className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <span>{state.vocabMode === '점수' ? '점' : '개'}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                      <input type="number" value={vocabThreshStr}
+                        onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= state.vocabTotal) dispatch({ type: 'SET_THRESHOLD', payload: { key: 'vocabThreshold', value: v } }) }}
+                        onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(state.vocabThreshold.toString()) }}
+                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       <span>이상 통과</span>
                     </div>
                   </th>
-                  <th className="text-center px-4 py-3 w-28">
+                  <th className="text-center px-4 py-3 w-36">
                     Daily Test
-                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5">
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={state.dailyThreshold}
-                        onChange={e => {
-                          const v = Number(e.target.value)
-                          if (v > 0 && v <= 100) dispatch({ type: 'SET_THRESHOLD', payload: { key: 'dailyThreshold', value: v } })
-                        }}
-                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      />
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { dailyMode: '점수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                      <span className="text-slate-300 text-xs">|</span>
+                      <button onClick={() => dispatch({ type: 'SET_TEST_CONFIG', payload: { dailyMode: '개수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${state.dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                    </div>
+                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                      <span>총</span>
+                      <input type="number" value={dailyTotalStr}
+                        onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_TEST_CONFIG', payload: { dailyTotal: v } }) }}
+                        onBlur={() => { if (!Number(dailyTotalStr)) setDailyTotalStr(state.dailyTotal.toString()) }}
+                        className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <span>{state.dailyMode === '점수' ? '점' : '개'}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                      <input type="number" value={dailyThreshStr}
+                        onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= state.dailyTotal) dispatch({ type: 'SET_THRESHOLD', payload: { key: 'dailyThreshold', value: v } }) }}
+                        onBlur={() => { if (!Number(dailyThreshStr)) setDailyThreshStr(state.dailyThreshold.toString()) }}
+                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       <span>이상 통과</span>
                     </div>
                   </th>
@@ -615,16 +637,17 @@ export default function GradePage() {
                               <input
                                 type="number"
                                 min={0}
-                                max={100}
+                                max={state.vocabTotal}
                                 value={row.vocabScore}
                                 onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
                                 placeholder="-"
-                                className={`w-16 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
                                   ${needsRetest(vocabNum, state.vocabThreshold)
                                     ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
                                     : 'border-slate-200 focus:ring-blue-200'
                                   }`}
                               />
+                              <span className="text-slate-300 text-xs shrink-0">/{state.vocabTotal}</span>
                               {needsRetest(vocabNum, state.vocabThreshold) && (
                                 <AlertCircle size={14} className="text-orange-400 shrink-0" />
                               )}
@@ -639,16 +662,17 @@ export default function GradePage() {
                               <input
                                 type="number"
                                 min={0}
-                                max={100}
+                                max={state.dailyTotal}
                                 value={row.dailyScore}
                                 onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
                                 placeholder="-"
-                                className={`w-16 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
                                   ${needsRetest(dailyNum, state.dailyThreshold)
                                     ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
                                     : 'border-slate-200 focus:ring-blue-200'
                                   }`}
                               />
+                              <span className="text-slate-300 text-xs shrink-0">/{state.dailyTotal}</span>
                               {needsRetest(dailyNum, state.dailyThreshold) && (
                                 <AlertCircle size={14} className="text-orange-400 shrink-0" />
                               )}

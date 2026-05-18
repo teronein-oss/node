@@ -17,6 +17,10 @@ interface AppState {
   scopes: SessionScope[]
   vocabThreshold: number
   dailyThreshold: number
+  vocabMode: '점수' | '개수'
+  dailyMode: '점수' | '개수'
+  vocabTotal: number
+  dailyTotal: number
   notices: NoticeItem[]
   todos: NoticeItem[]
   examInfo: ExamInfo[]
@@ -47,6 +51,7 @@ type Action =
   | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name: string } }
   | { type: 'DELETE_SCORE_COLUMN'; payload: string }
   | { type: 'SET_THRESHOLD'; payload: { key: 'vocabThreshold' | 'dailyThreshold'; value: number } }
+  | { type: 'SET_TEST_CONFIG'; payload: Partial<{ vocabMode: '점수' | '개수'; dailyMode: '점수' | '개수'; vocabTotal: number; dailyTotal: number }> }
   | { type: 'SAVE_SCOPE'; payload: Omit<SessionScope, 'id' | 'createdAt'> }
   | { type: 'DELETE_SCOPE'; payload: { sessionNum: number; classId: string } }
   | { type: 'ADD_NOTICE'; payload: { message: string; deadline?: string } }
@@ -349,6 +354,9 @@ function reducer(state: AppState, action: Action): AppState {
     case 'SET_THRESHOLD':
       return { ...state, [action.payload.key]: action.payload.value }
 
+    case 'SET_TEST_CONFIG':
+      return { ...state, ...action.payload }
+
     case 'SAVE_SCOPE': {
       const filtered = state.scopes.filter(
         s => !(s.sessionNum === action.payload.sessionNum && s.classId === action.payload.classId)
@@ -474,6 +482,10 @@ const DEFAULT_STATE: AppState = {
   scopes: [],
   vocabThreshold: 80,
   dailyThreshold: 80,
+  vocabMode: '점수' as const,
+  dailyMode: '점수' as const,
+  vocabTotal: 100,
+  dailyTotal: 100,
   notices: [],
   todos: [],
   examInfo: [],
@@ -510,6 +522,10 @@ function normalizeState(parsed: AppState): AppState {
     })),
     vocabThreshold: parsed.vocabThreshold ?? 80,
     dailyThreshold: parsed.dailyThreshold ?? 80,
+    vocabMode: parsed.vocabMode ?? '점수',
+    dailyMode: parsed.dailyMode ?? '점수',
+    vocabTotal: parsed.vocabTotal ?? 100,
+    dailyTotal: parsed.dailyTotal ?? 100,
     notices: parsed.notices ?? [{ id: '1', message: 'Test', completed: false }],
     todos: parsed.todos ?? [],
     examInfo: (parsed.examInfo ?? []).map((e: ExamInfo & { semester?: string }) => ({
