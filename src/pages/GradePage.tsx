@@ -2,16 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, ClipboardList, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
-import type { HomeworkStatus } from '../types'
 import { Pencil, Trash2, X } from 'lucide-react'
 
 type Tab = 'input' | 'retest'
-
-const HW_OPTIONS: { value: HomeworkStatus; label: string; color: string }[] = [
-  { value: '제출',      label: '제출',      color: 'text-green-700 bg-green-50 border-green-200' },
-  { value: '미흡',      label: '미흡',      color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  { value: '재확인완료', label: '재확인완료', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-]
 
 interface GradeRow {
   studentId: string
@@ -19,7 +12,6 @@ interface GradeRow {
   vocabScore: string
   dailyScore: string
   extras: Record<string, string>
-  homeworkDone: HomeworkStatus
   attendance: '출석' | '결석'
 }
 
@@ -152,7 +144,6 @@ export default function GradePage() {
             existing?.extras?.[col.id]?.toString() ?? '',
           ])
         ),
-        homeworkDone: existing?.homeworkDone ?? '제출',
         attendance: (existing?.attendance === '결석' ? '결석' : '출석') as '출석' | '결석',
       }
     })
@@ -178,7 +169,7 @@ export default function GradePage() {
           r.attendance === '결석' ? null : (r.extras[col.id] !== '' ? Number(r.extras[col.id]) : null),
         ])
       ),
-      homeworkDone: r.homeworkDone,
+      homeworkDone: state.grades.find(g => g.studentId === r.studentId && g.sessionNum === sessionNum)?.homeworkDone ?? null,
       attendance: r.attendance === '결석' ? '결석' as const : null,
     }))
   }
@@ -203,7 +194,7 @@ export default function GradePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
 
-  const updateRow = (idx: number, field: keyof GradeRow, value: string | HomeworkStatus) => {
+  const updateRow = (idx: number, field: keyof GradeRow, value: string) => {
     isDirtyRef.current = true
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
     setSaved(false)
@@ -220,10 +211,9 @@ export default function GradePage() {
           vocabScore: '',
           dailyScore: '',
           extras: Object.fromEntries(Object.keys(r.extras).map(k => [k, ''])),
-          homeworkDone: '결석',
         }
       } else {
-        return { ...r, attendance: '출석', homeworkDone: '제출' }
+        return { ...r, attendance: '출석' }
       }
     }))
     setSaved(false)
@@ -574,14 +564,13 @@ export default function GradePage() {
                       )}
                     </th>
                   ))}
-                  <th className="text-center px-4 py-3 w-24">숙제</th>
                   <th className="text-center px-4 py-3 w-20">상태</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + state.scoreColumns.length} className="text-center py-10 text-slate-400">
+                    <td colSpan={4 + state.scoreColumns.length} className="text-center py-10 text-slate-400">
                       이 반에 등록된 학생이 없습니다
                     </td>
                   </tr>
@@ -683,23 +672,6 @@ export default function GradePage() {
                             )}
                           </td>
                         ))}
-                        <td className="px-4 py-2.5 text-center">
-                          {isAbsent ? (
-                            <span className="text-xs font-medium rounded-lg px-2.5 py-1.5 border bg-slate-50 text-slate-400 border-slate-200">결석</span>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                const idx2 = HW_OPTIONS.findIndex(o => o.value === row.homeworkDone)
-                                const next = HW_OPTIONS[(idx2 + 1) % HW_OPTIONS.length]
-                                updateRow(idx, 'homeworkDone', next.value as HomeworkStatus)
-                              }}
-                              className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border cursor-pointer transition-colors
-                                ${HW_OPTIONS.find(o => o.value === row.homeworkDone)?.color ?? 'text-slate-500 bg-slate-50 border-slate-200'}`}
-                            >
-                              {HW_OPTIONS.find(o => o.value === row.homeworkDone)?.label ?? '제출'}
-                            </button>
-                          )}
-                        </td>
                         <td className="px-4 py-2.5 text-center">
                           {isAbsent ? (
                             <span className="text-xs text-slate-400">결석</span>

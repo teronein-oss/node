@@ -40,7 +40,7 @@ type Action =
   | { type: 'SAVE_HOMEWORK'; payload: Omit<HomeworkAssignment, 'id' | 'createdAt'> }
   | { type: 'DELETE_HOMEWORK'; payload: string }
   | { type: 'TOGGLE_HOMEWORK_ITEM'; payload: { assignmentId: string; itemId: string } }
-  | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | null } }
+  | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
   | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
   | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name: string } }
@@ -235,11 +235,7 @@ function reducer(state: AppState, action: Action): AppState {
         (item.studentStatuses ?? []).find(ss => ss.studentId === studentId)?.status
       )
       const derivedStatus: HomeworkStatus =
-        allStatuses.some(s => s === '미흡') ? '미흡'
-        : allStatuses.every(s => s !== undefined) ? '제출'
-        : null
-
-      if (derivedStatus === null) return { ...state, homeworks: updatedHomeworks }
+        allStatuses.some(s => s === '미흡' || s === '미제출') ? '미흡' : '제출'
 
       const existingGrade = state.grades.find(g => g.studentId === studentId && g.sessionNum === sessionNum)
       // 재확인완료는 수동으로만 변경

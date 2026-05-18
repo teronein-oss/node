@@ -53,7 +53,7 @@ export interface HomeworkItem {
   id: string
   text: string
   done: boolean
-  studentStatuses?: { studentId: string; status: '제출' | '미흡' }[]
+  studentStatuses?: { studentId: string; status: '제출' | '미흡' | '미제출' }[]
 }
 
 export interface HomeworkAssignment {
