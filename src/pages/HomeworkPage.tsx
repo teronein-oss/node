@@ -300,21 +300,37 @@ export default function HomeworkPage() {
                       <span className="text-slate-700">{hw.description}</span>
                       {(() => {
                         if (!hw.classId) return null
-                        const missing = state.grades
-                          .filter(g =>
-                            g.sessionNum === hw.sessionNum + 1 &&
-                            g.homeworkDone === '미제출' &&
-                            state.students.find(s => s.id === g.studentId)?.classId === hw.classId
-                          )
+                        const nextGrades = state.grades.filter(g =>
+                          g.sessionNum === hw.sessionNum + 1 &&
+                          state.students.find(s => s.id === g.studentId)?.classId === hw.classId
+                        )
+                        const missing = nextGrades
+                          .filter(g => g.homeworkDone === '미제출')
                           .map(g => state.students.find(s => s.id === g.studentId)?.name)
                           .filter(Boolean)
-                        if (missing.length === 0) return null
+                        const notGood = nextGrades
+                          .filter(g => g.homeworkDone === '미흡')
+                          .map(g => state.students.find(s => s.id === g.studentId)?.name)
+                          .filter(Boolean)
+                        if (missing.length === 0 && notGood.length === 0) return null
                         return (
-                          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                            <span className="text-xs text-red-400 shrink-0">미제출</span>
-                            {missing.map(name => (
-                              <span key={name} className="text-xs bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full">{name}</span>
-                            ))}
+                          <div className="space-y-1 mt-1.5">
+                            {missing.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-xs text-red-400 shrink-0">미제출</span>
+                                {missing.map(name => (
+                                  <span key={name} className="text-xs bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full">{name}</span>
+                                ))}
+                              </div>
+                            )}
+                            {notGood.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-xs text-orange-400 shrink-0">미흡</span>
+                                {notGood.map(name => (
+                                  <span key={name} className="text-xs bg-orange-50 text-orange-500 px-1.5 py-0.5 rounded-full">{name}</span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )
                       })()}

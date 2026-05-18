@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen } from 'lucide-react'
 import type { Student } from '../types'
 import { useApp } from '../context/AppContext'
-import { getClassDate, formatDateKo } from '../utils/helpers'
+import { getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
 
 interface Props {
   student: Student
@@ -19,17 +19,21 @@ export default function StudentDetail({ student, onClose }: Props) {
   const className = studentCls?.name ?? ''
   const { sessionNum: currentSessionNum } = getCurrentSession()
   const classDays = studentCls?.days ?? 'mon-fri'
+  const todayStr = fmtDate(new Date())
 
   const grades = state.grades
     .filter(g => g.studentId === student.id)
+    .filter(g => getClassDate(g.sessionNum, classDays) <= todayStr)
     .sort((a, b) => b.sessionNum - a.sessionNum)
 
   const retests = state.retests
     .filter(r => r.studentId === student.id)
+    .filter(r => getClassDate(r.sessionNum, classDays) <= todayStr)
     .sort((a, b) => b.sessionNum - a.sessionNum)
 
   const homeworkRows = state.homeworks
     .filter(hw => hw.classId === student.classId || hw.classId === '')
+    .filter(hw => getClassDate(hw.sessionNum, classDays) <= todayStr)
     .slice()
     .sort((a, b) => b.sessionNum - a.sessionNum)
     .map(hw => {
