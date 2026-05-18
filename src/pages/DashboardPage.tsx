@@ -289,9 +289,23 @@ export default function DashboardPage() {
           const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
           const hwDescription = hw?.description ?? ''
           const hwItems = hw?.items ?? []
-          const hwNotGoodNames = gradeRecords
-            .filter(g => g.homeworkDone === '미흡')
-            .map(g => getStudentName(g.studentId))
+
+          const hwMissSet = new Set<string>()
+          const hwBadSet = new Set<string>()
+          for (const g of gradeRecords) {
+            if (g.attendance === '결석') hwMissSet.add(getStudentName(g.studentId))
+          }
+          for (const item of hwItems) {
+            for (const ss of (item.studentStatuses ?? [])) {
+              if (!studentIds.has(ss.studentId)) continue
+              const name = getStudentName(ss.studentId)
+              if (ss.status === '미제출') hwMissSet.add(name)
+              else if (ss.status === '미흡') hwBadSet.add(name)
+            }
+          }
+          const hwMissNames = [...hwMissSet]
+          const hwNotGoodNames = [...hwBadSet].filter(n => !hwMissSet.has(n))
+
           const absentNames = gradeRecords
             .filter(g => g.attendance === '결석')
             .map(g => getStudentName(g.studentId))
@@ -301,7 +315,7 @@ export default function DashboardPage() {
             vocabNames.length > 0 ||
             dailyNames.length > 0 ||
             gradeRecords.length > 0
-          const hasHwData = hwItems.length > 0 || hwDescription !== '' || hwNotGoodNames.length > 0
+          const hasHwData = hwItems.length > 0 || hwDescription !== '' || hwNotGoodNames.length > 0 || hwMissNames.length > 0
           const hasAbsentData = absentNames.length > 0
 
           return {
@@ -317,6 +331,7 @@ export default function DashboardPage() {
             hwDescription,
             hwItems,
             hwNotGoodNames,
+            hwMissNames,
             absentNames,
             hasGradeData,
             hasHwData,
@@ -530,14 +545,15 @@ export default function DashboardPage() {
                 <th className="text-left px-5 py-3 w-36">날짜</th>
                 {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
                 <th className="text-left px-4 py-3">숙제 내용</th>
-                <th className="text-left px-4 py-3 w-40">미흡</th>
+                <th className="text-left px-4 py-3 w-36">미흡</th>
+                <th className="text-left px-4 py-3 w-36">미제출</th>
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {hwRows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAllTab ? 4 : 3} className="px-5 py-8 text-center text-sm text-slate-300">
+                  <td colSpan={isAllTab ? 5 : 4} className="px-5 py-8 text-center text-sm text-slate-300">
                     해당 월 수업 일정이 없습니다
                   </td>
                 </tr>
@@ -575,6 +591,7 @@ export default function DashboardPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 align-top"><NameTags names={row.hwNotGoodNames} color="orange" limit={3} /></td>
+                  <td className="px-4 py-3 align-top"><NameTags names={row.hwMissNames} color="red" limit={3} /></td>
                   <td className="px-2 py-3 align-top">
                     {!isJogyo && (row.hwDescription || row.hwItems.length > 0) && (
                       <button
