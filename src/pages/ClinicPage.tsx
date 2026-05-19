@@ -29,6 +29,7 @@ export default function ClinicPage() {
 
   const [calYM, setCalYM] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 })
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
+  const [confirmingRetestId, setConfirmingRetestId] = useState<string | null>(null)
 
   const getStudent = (id: string) => state.students.find(s => s.id === id)
   const getClassName = (studentId: string) => {
@@ -216,29 +217,55 @@ export default function ClinicPage() {
               {selectedDayEntries.length === 0 ? (
                 <p className="px-4 py-10 text-xs text-slate-400 text-center">방문 예정 학생이 없습니다</p>
               ) : selectedDayEntries.map((entry, idx) => (
-                <div key={idx} className="flex items-center gap-2 px-4 py-3 hover:bg-slate-50">
-                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
-                    {entry.name[0]}
+                <div key={idx} className="px-4 py-3 hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
+                      {entry.name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-slate-800">{entry.name}</span>
+                      <span className="text-xs text-slate-400 ml-1.5">{entry.className}</span>
+                    </div>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${entry.color}`}>
+                      {entry.label}
+                    </span>
+                    {confirmingRetestId === entry.retestId ? null : (
+                      <>
+                        <button
+                          onClick={() => setConfirmingRetestId(entry.retestId)}
+                          className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium shrink-0 transition-colors"
+                        >
+                          완료
+                        </button>
+                        <button
+                          onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId, retestDate: null } })}
+                          className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
+                        >
+                          미응시
+                        </button>
+                      </>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-slate-800">{entry.name}</span>
-                    <span className="text-xs text-slate-400 ml-1.5">{entry.className}</span>
-                  </div>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${entry.color}`}>
-                    {entry.label}
-                  </span>
-                  <button
-                    onClick={() => dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })}
-                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium shrink-0 transition-colors"
-                  >
-                    완료
-                  </button>
-                  <button
-                    onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId, retestDate: null } })}
-                    className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
-                  >
-                    미응시
-                  </button>
+                  {confirmingRetestId === entry.retestId && (
+                    <div className="mt-2 flex items-center gap-2 pl-9">
+                      <span className="text-xs text-slate-500">재시험 완료 처리할까요?</span>
+                      <button
+                        onClick={() => {
+                          dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })
+                          setConfirmingRetestId(null)
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors"
+                      >
+                        확인
+                      </button>
+                      <button
+                        onClick={() => setConfirmingRetestId(null)}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium transition-colors"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
