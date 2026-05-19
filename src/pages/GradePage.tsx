@@ -269,14 +269,18 @@ export default function GradePage() {
     dispatch({ type: 'DELETE_SCORE_COLUMN', payload: id })
   }
 
-  const handleRetestDateChange = (studentId: string, type: 'vocab' | 'daily', date: string) => {
+  const handleRetestDateChange = (studentId: string, type: 'vocab' | 'daily', date: string, retestId?: string) => {
     const key = `${studentId}-${type}`
     setRetestDateSelections(prev => ({ ...prev, [key]: date }))
-    const records = state.retests.filter(
-      r => r.studentId === studentId && r.sessionNum === selectedSession && r.passed === null && r.type === type
-    )
-    for (const r of records) {
-      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date || null } })
+    if (retestId) {
+      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: retestId, retestDate: date || null } })
+    } else {
+      const records = state.retests.filter(
+        r => r.studentId === studentId && r.sessionNum === selectedSession && r.passed === null && r.type === type
+      )
+      for (const r of records) {
+        dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date || null } })
+      }
     }
   }
 
@@ -695,7 +699,7 @@ export default function GradePage() {
                           {(isVocabRetest || vocabRetest) && (
                             <select
                               value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? ''}
-                              onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value)}
+                              onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id)}
                               className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
                             >
                               <option value="">날짜 선택</option>
@@ -734,7 +738,7 @@ export default function GradePage() {
                           {(isDailyRetest || dailyRetest) && (
                             <select
                               value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? ''}
-                              onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value)}
+                              onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value, dailyRetest?.id)}
                               className="border border-blue-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-blue-700"
                             >
                               <option value="">날짜 선택</option>

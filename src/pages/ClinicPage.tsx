@@ -15,6 +15,7 @@ function buildCalDays(year: number, month: number): (Date | null)[] {
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
 
 interface DayEntry {
+  retestId: string
   name: string
   className: string
   label: string
@@ -22,7 +23,7 @@ interface DayEntry {
 }
 
 export default function ClinicPage() {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
   const today = new Date()
   const todayStr = fmtDate(today)
 
@@ -79,6 +80,7 @@ export default function ClinicPage() {
       const s = getStudent(r.studentId)
       if (!s) continue
       entries.push({
+        retestId: r.id,
         name: s.name,
         className: getClassName(r.studentId),
         label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
@@ -214,7 +216,7 @@ export default function ClinicPage() {
               {selectedDayEntries.length === 0 ? (
                 <p className="px-4 py-10 text-xs text-slate-400 text-center">방문 예정 학생이 없습니다</p>
               ) : selectedDayEntries.map((entry, idx) => (
-                <div key={idx} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                <div key={idx} className="flex items-center gap-2 px-4 py-3 hover:bg-slate-50">
                   <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
                     {entry.name[0]}
                   </div>
@@ -225,6 +227,18 @@ export default function ClinicPage() {
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${entry.color}`}>
                     {entry.label}
                   </span>
+                  <button
+                    onClick={() => dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })}
+                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium shrink-0 transition-colors"
+                  >
+                    완료
+                  </button>
+                  <button
+                    onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId, retestDate: null } })}
+                    className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
+                  >
+                    미응시
+                  </button>
                 </div>
               ))}
             </div>
