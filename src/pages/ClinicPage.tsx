@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, ChevronRight, Stethoscope } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { fmtDate, formatDateKo, getClassDate } from '../utils/helpers'
+import { fmtDate, formatDateKo } from '../utils/helpers'
 
 function buildCalDays(year: number, month: number): (Date | null)[] {
   const first = new Date(year, month - 1, 1)
@@ -34,11 +34,6 @@ export default function ClinicPage() {
     const classId = state.students.find(s => s.id === studentId)?.classId
     return state.classes.find(c => c.id === classId)?.name ?? ''
   }
-  const getStudentClassDays = (studentId: string): 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri' => {
-    const cid = state.students.find(s => s.id === studentId)?.classId
-    return state.classes.find(c => c.id === cid)?.days ?? 'mon-fri'
-  }
-
   // 날짜별 방문 예정 (재시험 날짜 기준)
   const retestsByDate = useMemo(() => {
     const map: Record<string, typeof state.retests> = {}
@@ -246,7 +241,6 @@ export default function ClinicPage() {
                 <p className="px-4 py-8 text-xs text-slate-400 text-center">클리닉 필요 학생이 없습니다</p>
               ) : clinicStudentList.map(({ studentId, reasons }) => {
                 const student = getStudent(studentId)
-                const classDays = getStudentClassDays(studentId)
                 // 해당 학생의 미처리 재시험 중 retestDate가 설정된 것 찾기
                 const scheduledRetests = state.retests.filter(
                   r => r.studentId === studentId && r.passed === null && r.retestDate
