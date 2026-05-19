@@ -73,6 +73,7 @@ type Action =
   | { type: 'ADD_CLINIC_SCHEDULE'; payload: Omit<ClinicSchedule, 'id' | 'createdAt'> }
   | { type: 'DELETE_CLINIC_SCHEDULE'; payload: string }
   | { type: 'SET_SESSION_TEST_CONFIG'; payload: { sessionNum: number } & Partial<Omit<SessionTestConfig, 'sessionNum'>> }
+  | { type: 'UPDATE_RETEST_DATE'; payload: { id: string; retestDate: string | null } }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -329,6 +330,16 @@ function reducer(state: AppState, action: Action): AppState {
         retests: state.retests.map(r =>
           r.id === action.payload.id
             ? { ...r, retestScore: action.payload.retestScore, passed: action.payload.passed }
+            : r
+        ),
+      }
+
+    case 'UPDATE_RETEST_DATE':
+      return {
+        ...state,
+        retests: state.retests.map(r =>
+          r.id === action.payload.id
+            ? { ...r, retestDate: action.payload.retestDate ?? undefined }
             : r
         ),
       }

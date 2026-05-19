@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, Plus, X, Clock, Stethoscope } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Stethoscope } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { fmtDate, formatDateKo } from '../utils/helpers'
+import { fmtDate, formatDateKo, getClassDate } from '../utils/helpers'
 
 function buildCalDays(year: number, month: number): (Date | null)[] {
   const first = new Date(year, month - 1, 1)
@@ -12,29 +12,47 @@ function buildCalDays(year: number, month: number): (Date | null)[] {
   return days
 }
 
-const REASON_COLORS: Record<string, string> = {
-  '단어재시험':  'bg-purple-100 text-purple-700',
-  'Daily재시험': 'bg-blue-100 text-blue-700',
-  '숙제미흡':    'bg-orange-100 text-orange-700',
-  '숙제미제출':  'bg-red-100 text-red-700',
-}
-
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
 
+interface DayEntry {
+  name: string
+  className: string
+  label: string
+  color: string
+}
+
 export default function ClinicPage() {
-  const { state, dispatch } = useApp()
+  const { state } = useApp()
   const today = new Date()
   const todayStr = fmtDate(today)
 
   const [calYM, setCalYM] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 })
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
-  const [selectedClass, setSelectedClass] = useState('all')
-  const [scheduleInputs, setScheduleInputs] = useState<Record<string, { date: string; time: string }>>({})
 
-  // 클리닉 필요 학생 계산 (재시험 미통과 + 숙제 미흡/미제출)
+  const getStudent = (id: string) => state.students.find(s => s.id === id)
+  const getClassName = (studentId: string) => {
+    const classId = state.students.find(s => s.id === studentId)?.classId
+    return state.classes.find(c => c.id === classId)?.name ?? ''
+  }
+  const getStudentClassDays = (studentId: string): 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri' => {
+    const cid = state.students.find(s => s.id === studentId)?.classId
+    return state.classes.find(c => c.id === cid)?.days ?? 'mon-fri'
+  }
+
+  // 날짜별 방문 예정 (재시험 날짜 기준)
+  const retestsByDate = useMemo(() => {
+    const map: Record<string, typeof state.retests> = {}
+    for (const r of state.retests) {
+      if (!r.retestDate || r.passed !== null) continue
+      if (!map[r.retestDate]) map[r.retestDate] = []
+      map[r.retestDate].push(r)
+    }
+    return map
+  }, [state.retests])
+
+  // 클리닉 필요 학생 (재시험 미통과 + 숙제 미흡/미제출)
   const needsClinicMap = useMemo(() => {
     const map: Record<string, Set<string>> = {}
-
     for (const r of state.retests) {
       if (r.passed !== null) continue
       const s = state.students.find(st => st.id === r.studentId)
@@ -42,7 +60,6 @@ export default function ClinicPage() {
       if (!map[r.studentId]) map[r.studentId] = new Set()
       map[r.studentId].add(r.type === 'vocab' ? '단어재시험' : 'Daily재시험')
     }
-
     for (const hw of state.homeworks) {
       for (const item of hw.items ?? []) {
         for (const ss of item.studentStatuses ?? []) {
@@ -54,56 +71,28 @@ export default function ClinicPage() {
         }
       }
     }
-
     return map
   }, [state.retests, state.homeworks, state.students])
 
-  const filteredStudents = useMemo(() =>
-    Object.entries(needsClinicMap)
-      .filter(([studentId]) => {
-        const s = state.students.find(st => st.id === studentId)
-        return selectedClass === 'all' || s?.classId === selectedClass
-      })
-      .map(([studentId, reasonSet]) => ({ studentId, reasons: [...reasonSet] }))
-      .sort((a, b) => {
-        const na = state.students.find(s => s.id === a.studentId)?.name ?? ''
-        const nb = state.students.find(s => s.id === b.studentId)?.name ?? ''
-        return na.localeCompare(nb, 'ko')
-      }),
-    [needsClinicMap, selectedClass, state.students]
-  )
-
   const calDays = useMemo(() => buildCalDays(calYM.year, calYM.month), [calYM])
 
-  const schedulesByDate = useMemo(() => {
-    const map: Record<string, typeof state.clinicSchedules> = {}
-    for (const s of state.clinicSchedules ?? []) {
-      if (!map[s.date]) map[s.date] = []
-      map[s.date].push(s)
+  // 선택 날짜 방문 예정 목록 (재시험)
+  const selectedDayEntries = useMemo((): DayEntry[] => {
+    const entries: DayEntry[] = []
+    const dayRetests = retestsByDate[selectedDate] ?? []
+    for (const r of dayRetests) {
+      const s = getStudent(r.studentId)
+      if (!s) continue
+      entries.push({
+        name: s.name,
+        className: getClassName(r.studentId),
+        label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
+        color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
+      })
     }
-    return map
-  }, [state.clinicSchedules])
-
-  const selectedDaySchedules = useMemo(() =>
-    (schedulesByDate[selectedDate] ?? []).sort((a, b) => a.time.localeCompare(b.time)),
-    [selectedDate, schedulesByDate]
-  )
-
-  const getStudent = (id: string) => state.students.find(s => s.id === id)
-  const getClassName = (studentId: string) => {
-    const classId = state.students.find(s => s.id === studentId)?.classId
-    return state.classes.find(c => c.id === classId)?.name ?? ''
-  }
-
-  const handleAddSchedule = (studentId: string) => {
-    const input = scheduleInputs[studentId]
-    if (!input?.date || !input?.time) return
-    dispatch({ type: 'ADD_CLINIC_SCHEDULE', payload: { studentId, date: input.date, time: input.time } })
-    setScheduleInputs(prev => ({ ...prev, [studentId]: { date: '', time: '' } }))
-    const [y, m] = input.date.split('-').map(Number)
-    setCalYM({ year: y, month: m })
-    setSelectedDate(input.date)
-  }
+    return entries.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, retestsByDate, state.students, state.classes])
 
   const prevMonth = () => setCalYM(({ year, month }) =>
     month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
@@ -112,13 +101,36 @@ export default function ClinicPage() {
     month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
   )
 
+  // 클리닉 필요 학생 목록 (이름 가나다순)
+  const clinicStudentList = useMemo(() =>
+    Object.entries(needsClinicMap)
+      .map(([studentId, reasonSet]) => ({ studentId, reasons: [...reasonSet] }))
+      .filter(({ studentId }) => {
+        const s = state.students.find(st => st.id === studentId)
+        return s?.active
+      })
+      .sort((a, b) => {
+        const na = state.students.find(s => s.id === a.studentId)?.name ?? ''
+        const nb = state.students.find(s => s.id === b.studentId)?.name ?? ''
+        return na.localeCompare(nb, 'ko')
+      }),
+    [needsClinicMap, state.students]
+  )
+
+  const REASON_COLORS: Record<string, string> = {
+    '단어재시험':  'bg-purple-100 text-purple-700',
+    'Daily재시험': 'bg-blue-100 text-blue-700',
+    '숙제미흡':    'bg-orange-100 text-orange-700',
+    '숙제미제출':  'bg-red-100 text-red-700',
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-4">
       <div className="flex items-center gap-3">
         <Stethoscope size={20} className="text-blue-600 shrink-0" />
         <div>
           <h1 className="text-2xl font-bold text-slate-800">보충/클리닉 일정</h1>
-          <p className="text-sm text-slate-500 mt-0.5">재시험·숙제 미흡/미제출 학생 보충 일정 관리</p>
+          <p className="text-sm text-slate-500 mt-0.5">재시험 날짜별 방문 예정 학생 관리</p>
         </div>
       </div>
 
@@ -151,7 +163,9 @@ export default function ClinicPage() {
               const dateStr = fmtDate(date)
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
-              const daySchs = (schedulesByDate[dateStr] ?? []).sort((a, b) => a.time.localeCompare(b.time))
+              const dayRetests = (retestsByDate[dateStr] ?? []).sort((a, b) =>
+                (getStudent(a.studentId)?.name ?? '').localeCompare(getStudent(b.studentId)?.name ?? '', 'ko')
+              )
               const dow = date.getDay()
               return (
                 <div
@@ -169,13 +183,17 @@ export default function ClinicPage() {
                     {date.getDate()}
                   </div>
                   <div className="space-y-0.5">
-                    {daySchs.slice(0, 3).map(sch => (
-                      <div key={sch.id} className="text-xs truncate px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium leading-tight">
-                        {sch.time} {getStudent(sch.studentId)?.name ?? '?'}
+                    {dayRetests.slice(0, 3).map(r => (
+                      <div
+                        key={r.id}
+                        className={`text-xs truncate px-1 py-0.5 rounded font-medium leading-tight
+                          ${r.type === 'vocab' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}
+                      >
+                        {getStudent(r.studentId)?.name ?? '?'}
                       </div>
                     ))}
-                    {daySchs.length > 3 && (
-                      <div className="text-xs text-slate-400 px-0.5">+{daySchs.length - 3}명</div>
+                    {dayRetests.length > 3 && (
+                      <div className="text-xs text-slate-400 px-0.5">+{dayRetests.length - 3}명</div>
                     )}
                   </div>
                 </div>
@@ -187,101 +205,84 @@ export default function ClinicPage() {
         {/* ── 우측 패널 ── */}
         <div className="space-y-4">
 
+          {/* 선택 날짜 방문 예정 */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-800">{formatDateKo(selectedDate)} 방문 예정</h2>
+              {selectedDayEntries.length > 0 && (
+                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                  {selectedDayEntries.length}명
+                </span>
+              )}
+            </div>
+            <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
+              {selectedDayEntries.length === 0 ? (
+                <p className="px-4 py-10 text-xs text-slate-400 text-center">방문 예정 학생이 없습니다</p>
+              ) : selectedDayEntries.map((entry, idx) => (
+                <div key={idx} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
+                    {entry.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-slate-800">{entry.name}</span>
+                    <span className="text-xs text-slate-400 ml-1.5">{entry.className}</span>
+                  </div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${entry.color}`}>
+                    {entry.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* 클리닉 필요 학생 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100">
               <h2 className="text-sm font-semibold text-slate-800">클리닉 필요 학생</h2>
               <p className="text-xs text-slate-400 mt-0.5">재시험 미통과 / 숙제 미흡·미제출</p>
             </div>
-
-            <div className="flex flex-wrap gap-1 px-4 py-2 border-b border-slate-100">
-              {[{ id: 'all', name: '전체' }, ...state.classes].map(cls => (
-                <button
-                  key={cls.id}
-                  onClick={() => setSelectedClass(cls.id)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors
-                    ${selectedClass === cls.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                >
-                  {cls.name}
-                </button>
-              ))}
-            </div>
-
-            <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
-              {filteredStudents.length === 0 ? (
+            <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
+              {clinicStudentList.length === 0 ? (
                 <p className="px-4 py-8 text-xs text-slate-400 text-center">클리닉 필요 학생이 없습니다</p>
-              ) : filteredStudents.map(({ studentId, reasons }) => {
+              ) : clinicStudentList.map(({ studentId, reasons }) => {
                 const student = getStudent(studentId)
-                const input = scheduleInputs[studentId] ?? { date: '', time: '' }
+                const classDays = getStudentClassDays(studentId)
+                // 해당 학생의 미처리 재시험 중 retestDate가 설정된 것 찾기
+                const scheduledRetests = state.retests.filter(
+                  r => r.studentId === studentId && r.passed === null && r.retestDate
+                )
                 return (
-                  <div key={studentId} className="px-4 py-3 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-slate-800">{student?.name}</span>
-                      <span className="text-xs text-slate-400">{getClassName(studentId)}</span>
-                      {reasons.map(r => (
-                        <span key={r} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${REASON_COLORS[r] ?? 'bg-slate-100 text-slate-600'}`}>
-                          {r}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="date"
-                        value={input.date}
-                        onChange={e => setScheduleInputs(prev => ({ ...prev, [studentId]: { ...input, date: e.target.value } }))}
-                        className="flex-1 min-w-0 border border-slate-200 rounded-md px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                      <input
-                        type="time"
-                        value={input.time}
-                        onChange={e => setScheduleInputs(prev => ({ ...prev, [studentId]: { ...input, time: e.target.value } }))}
-                        className="w-[68px] border border-slate-200 rounded-md px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                      <button
-                        onClick={() => handleAddSchedule(studentId)}
-                        disabled={!input.date || !input.time}
-                        className="p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0"
-                      >
-                        <Plus size={13} />
-                      </button>
+                  <div key={studentId} className="px-4 py-3">
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0 mt-0.5">
+                        {student?.name[0]}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold text-slate-800">{student?.name}</span>
+                          <span className="text-xs text-slate-400">{getClassName(studentId)}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {reasons.map(r => (
+                            <span key={r} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${REASON_COLORS[r] ?? 'bg-slate-100 text-slate-600'}`}>
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                        {scheduledRetests.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {scheduledRetests.map(r => (
+                              <span key={r.id} className="text-xs text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                                {r.type === 'vocab' ? '단어' : 'Daily'} → {formatDateKo(r.retestDate!)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
               })}
-            </div>
-          </div>
-
-          {/* 선택 날짜 일정 */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold text-slate-800">{formatDateKo(selectedDate)} 일정</h2>
-              {selectedDaySchedules.length > 0 && (
-                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
-                  {selectedDaySchedules.length}명
-                </span>
-              )}
-            </div>
-            <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
-              {selectedDaySchedules.length === 0 ? (
-                <p className="px-4 py-8 text-xs text-slate-400 text-center">예정된 일정이 없습니다</p>
-              ) : selectedDaySchedules.map(sch => (
-                <div key={sch.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50">
-                  <div className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 w-14 shrink-0">
-                    <Clock size={12} className="shrink-0" />
-                    {sch.time}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-slate-800">{getStudent(sch.studentId)?.name ?? '?'}</span>
-                    <span className="text-xs text-slate-400 ml-2">{getClassName(sch.studentId)}</span>
-                  </div>
-                  <button
-                    onClick={() => dispatch({ type: 'DELETE_CLINIC_SCHEDULE', payload: sch.id })}
-                    className="text-slate-300 hover:text-red-400 transition-colors shrink-0"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
             </div>
           </div>
         </div>

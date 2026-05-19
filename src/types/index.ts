@@ -46,6 +46,7 @@ export interface RetestRecord {
   retestScore: number | null
   passed: boolean | null
   scheduledNote: string    // 재시험 일정 메모
+  retestDate?: string      // YYYY-MM-DD 재시험 날짜
   createdAt: string
 }
 

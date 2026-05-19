@@ -4,6 +4,15 @@ import { useApp } from '../context/AppContext'
 import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
 import { Pencil, Trash2, X } from 'lucide-react'
 
+function getRetestDateOptions(testDate: string): string[] {
+  const d = new Date(testDate + 'T00:00:00')
+  return Array.from({ length: 8 }, (_, i) => {
+    const opt = new Date(d)
+    opt.setDate(d.getDate() + i)
+    return fmtDate(opt)
+  })
+}
+
 type Tab = 'input' | 'retest'
 
 interface GradeRow {
@@ -328,7 +337,7 @@ export default function GradePage() {
             ${tab === 'retest' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
         >
           <AlertCircle size={16} />
-          재시험 처리
+          재시험관리
           {pendingRetests.length > 0 && (
             <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
               {pendingRetests.length}
@@ -776,23 +785,33 @@ export default function GradePage() {
               <thead>
                 <tr className="bg-slate-50 text-xs text-slate-500">
                   <th className="text-left px-5 py-3">이름</th>
-                  <th className="text-center px-4 py-3">반</th>
-                  <th className="text-center px-4 py-3">날짜</th>
-                  <th className="text-left px-4 py-3">종류 / 범위</th>
-                  <th className="text-center px-4 py-3">원점수</th>
-                  <th className="text-center px-4 py-3">통과 여부</th>
+                  <th className="text-center px-3 py-3">반</th>
+                  <th className="text-center px-3 py-3">시험 날짜</th>
+                  <th className="text-left px-3 py-3">종류 / 범위</th>
+                  <th className="text-center px-3 py-3">점수</th>
+                  <th className="text-center px-3 py-3">재시험 날짜</th>
+                  <th className="text-center px-3 py-3">통과 여부</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filteredRetests.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-400">
+                    <td colSpan={7} className="text-center py-12 text-slate-400">
                       미처리 재시험이 없습니다
                     </td>
                   </tr>
                 ) : (
                   filteredRetests.map(r => {
                     const passed = retestPassed[r.id] ?? false
+                    const sCfg = state.sessionTestConfigs.find(c => c.sessionNum === r.sessionNum)
+                    const total = r.type === 'vocab'
+                      ? (sCfg?.vocabTotal ?? state.vocabTotal)
+                      : (sCfg?.dailyTotal ?? state.dailyTotal)
+                    const unit = r.type === 'vocab'
+                      ? ((sCfg?.vocabMode ?? state.vocabMode) === '개수' ? '개' : '점')
+                      : ((sCfg?.dailyMode ?? state.dailyMode) === '개수' ? '개' : '점')
+                    const testDate = getClassDate(r.sessionNum, getStudentClassDays(r.studentId))
+                    const dateOptions = getRetestDateOptions(testDate)
                     return (
                       <tr key={r.id} className={`hover:bg-slate-50 ${passed ? 'bg-green-50/40' : ''}`}>
                         <td className="px-5 py-3">
@@ -803,11 +822,11 @@ export default function GradePage() {
                             <span className="font-medium text-slate-800">{getStudentName(r.studentId)}</span>
                           </div>
                         </td>
-                        <td className="text-center px-4 py-3 text-slate-500 text-xs">{getClassName(r.studentId)}</td>
-                        <td className="text-center px-4 py-3 text-slate-500 whitespace-nowrap">
-                          {formatDateKo(getClassDate(r.sessionNum, getStudentClassDays(r.studentId)))}
+                        <td className="text-center px-3 py-3 text-slate-500 text-xs">{getClassName(r.studentId)}</td>
+                        <td className="text-center px-3 py-3 text-slate-500 whitespace-nowrap text-xs">
+                          {formatDateKo(testDate)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3">
                           <div className="flex items-center gap-2">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0
                               ${r.type === 'vocab' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
@@ -818,15 +837,28 @@ export default function GradePage() {
                               const scope = getScope(r.sessionNum, studentClassId)
                               const range = r.type === 'vocab' ? scope?.vocabRange : scope?.dailyRange
                               return range ? (
-                                <span className="text-xs text-slate-400 truncate">{range}</span>
+                                <span className="text-xs text-slate-400 truncate max-w-[100px]">{range}</span>
                               ) : null
                             })()}
                           </div>
                         </td>
-                        <td className="text-center px-4 py-3">
-                          <span className="text-orange-600 font-medium">{r.originalScore}점</span>
+                        <td className="text-center px-3 py-3 whitespace-nowrap">
+                          <span className="text-orange-600 font-medium">{r.originalScore}</span>
+                          <span className="text-slate-400 text-xs">/{total}{unit}</span>
                         </td>
-                        <td className="text-center px-4 py-3">
+                        <td className="text-center px-3 py-3">
+                          <select
+                            value={r.retestDate ?? ''}
+                            onChange={e => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: e.target.value || null } })}
+                            className="border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                          >
+                            <option value="">날짜 선택</option>
+                            {dateOptions.map(d => (
+                              <option key={d} value={d}>{formatDateKo(d)}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="text-center px-3 py-3">
                           <button
                             onClick={() => toggleRetestPassed(r.id)}
                             className={`px-4 py-1.5 rounded-lg text-xs font-medium border transition-colors
