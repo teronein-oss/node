@@ -193,12 +193,12 @@ export default function GradePage() {
       studentId: r.studentId,
       sessionNum,
       weekStart,
-      vocabScore: r.attendance === '결석' ? null : (r.vocabScore !== '' ? Number(r.vocabScore) : null),
-      dailyTestScore: r.attendance === '결석' ? null : (r.dailyScore !== '' ? Number(r.dailyScore) : null),
+      vocabScore: r.vocabScore !== '' ? Number(r.vocabScore) : null,
+      dailyTestScore: r.dailyScore !== '' ? Number(r.dailyScore) : null,
       extras: Object.fromEntries(
         state.scoreColumns.map(col => [
           col.id,
-          r.attendance === '결석' ? null : (r.extras[col.id] !== '' ? Number(r.extras[col.id]) : null),
+          r.extras[col.id] !== '' ? Number(r.extras[col.id]) : null,
         ])
       ),
       homeworkDone: state.grades.find(g => g.studentId === r.studentId && g.sessionNum === sessionNum)?.homeworkDone ?? null,
@@ -233,20 +233,9 @@ export default function GradePage() {
 
   const toggleAttendance = (idx: number) => {
     isDirtyRef.current = true
-    setRows(prev => prev.map((r, i) => {
-      if (i !== idx) return r
-      if (r.attendance === '출석') {
-        return {
-          ...r,
-          attendance: '결석',
-          vocabScore: '',
-          dailyScore: '',
-          extras: Object.fromEntries(Object.keys(r.extras).map(k => [k, ''])),
-        }
-      } else {
-        return { ...r, attendance: '출석' }
-      }
-    }))
+    setRows(prev => prev.map((r, i) =>
+      i !== idx ? r : { ...r, attendance: r.attendance === '출석' ? '결석' : '출석' }
+    ))
     setSaved(false)
   }
 
@@ -703,98 +692,86 @@ export default function GradePage() {
 
                     {/* 단어시험 점수 + 재시험 날짜 */}
                     <td className="px-4 py-2.5">
-                      {isAbsent ? (
-                        <span className="block text-center text-xs text-slate-300">-</span>
-                      ) : (
-                        <div className="flex items-center gap-1.5 justify-center flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              min={0}
-                              max={vocabTotal}
-                              value={row.vocabScore}
-                              onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
-                              placeholder="-"
-                              className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                ${needsRetest(vocabNum, vocabThreshold)
-                                  ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                  : 'border-slate-200 focus:ring-blue-200'
-                                }`}
-                            />
-                            <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
-                            {needsRetest(vocabNum, vocabThreshold) && (
-                              <AlertCircle size={14} className="text-orange-400 shrink-0" />
-                            )}
-                          </div>
-                          {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
-                            <select
-                              value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? ''}
-                              onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
-                              className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
-                            >
-                              <option value="">날짜 선택</option>
-                              {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                            </select>
+                      <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={vocabTotal}
+                            value={row.vocabScore}
+                            onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
+                            placeholder="-"
+                            className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                              ${needsRetest(vocabNum, vocabThreshold)
+                                ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                : 'border-slate-200 focus:ring-blue-200'
+                              }`}
+                          />
+                          <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
+                          {needsRetest(vocabNum, vocabThreshold) && (
+                            <AlertCircle size={14} className="text-orange-400 shrink-0" />
                           )}
                         </div>
-                      )}
+                        {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
+                          <select
+                            value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? ''}
+                            onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
+                            className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
+                          >
+                            <option value="">날짜 선택</option>
+                            {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                          </select>
+                        )}
+                      </div>
                     </td>
 
                     {/* Daily Test 점수 + 재시험 날짜 */}
                     <td className="px-4 py-2.5">
-                      {isAbsent ? (
-                        <span className="block text-center text-xs text-slate-300">-</span>
-                      ) : (
-                        <div className="flex items-center gap-1.5 justify-center flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              min={0}
-                              max={dailyTotal}
-                              value={row.dailyScore}
-                              onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
-                              placeholder="-"
-                              className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                ${needsRetest(dailyNum, dailyThreshold)
-                                  ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                  : 'border-slate-200 focus:ring-blue-200'
-                                }`}
-                            />
-                            <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
-                            {needsRetest(dailyNum, dailyThreshold) && (
-                              <AlertCircle size={14} className="text-orange-400 shrink-0" />
-                            )}
-                          </div>
-                          {(isDailyRetest || dailyRetest) && !dailyRetestPassed && (
-                            <select
-                              value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? ''}
-                              onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value, dailyRetest?.id, dailyNum)}
-                              className="border border-blue-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-blue-700"
-                            >
-                              <option value="">날짜 선택</option>
-                              {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                            </select>
+                      <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={dailyTotal}
+                            value={row.dailyScore}
+                            onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
+                            placeholder="-"
+                            className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                              ${needsRetest(dailyNum, dailyThreshold)
+                                ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                : 'border-slate-200 focus:ring-blue-200'
+                              }`}
+                          />
+                          <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
+                          {needsRetest(dailyNum, dailyThreshold) && (
+                            <AlertCircle size={14} className="text-orange-400 shrink-0" />
                           )}
                         </div>
-                      )}
+                        {(isDailyRetest || dailyRetest) && !dailyRetestPassed && (
+                          <select
+                            value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? ''}
+                            onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value, dailyRetest?.id, dailyNum)}
+                            className="border border-blue-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-blue-700"
+                          >
+                            <option value="">날짜 선택</option>
+                            {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                          </select>
+                        )}
+                      </div>
                     </td>
 
                     {/* 추가 항목들 */}
                     {state.scoreColumns.map(col => (
                       <td key={col.id} className="px-4 py-2.5">
-                        {isAbsent ? (
-                          <span className="block text-center text-xs text-slate-300">-</span>
-                        ) : (
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={row.extras[col.id] ?? ''}
-                            onChange={e => updateExtra(idx, col.id, e.target.value)}
-                            placeholder="-"
-                            className="w-16 text-center border border-slate-200 rounded-lg py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 mx-auto block"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={row.extras[col.id] ?? ''}
+                          onChange={e => updateExtra(idx, col.id, e.target.value)}
+                          placeholder="-"
+                          className="w-16 text-center border border-slate-200 rounded-lg py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 mx-auto block"
+                        />
                       </td>
                     ))}
 

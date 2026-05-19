@@ -308,49 +308,48 @@ export default function HomeworkPage() {
                                   const displayStatus = itemStatus ?? '제출'
                                   return (
                                     <div key={student.id} className="flex items-center gap-1.5">
-                                      <span className="text-xs text-slate-600 w-14 shrink-0 truncate">{student.name}</span>
-                                      {isAbsent ? (
-                                        <span className="text-xs px-1.5 py-0.5 rounded border text-slate-400 border-slate-200 bg-slate-50">미제출</span>
-                                      ) : (
-                                        <div className="flex gap-1">
-                                          <button
-                                            onClick={() => dispatch({
-                                              type: 'SET_ITEM_STUDENT_STATUS',
-                                              payload: { assignmentId: hw!.id, itemId: item.id, studentId: student.id, status: null },
-                                            })}
-                                            className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
-                                              ${displayStatus === '제출'
-                                                ? 'text-green-700 bg-green-50 border-green-200'
-                                                : 'text-slate-300 border-slate-200 hover:text-green-600 hover:border-green-300'}`}
-                                          >
-                                            제출
-                                          </button>
-                                          <button
-                                            onClick={() => dispatch({
-                                              type: 'SET_ITEM_STUDENT_STATUS',
-                                              payload: { assignmentId: hw!.id, itemId: item.id, studentId: student.id, status: itemStatus === '미흡' ? null : '미흡' },
-                                            })}
-                                            className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
-                                              ${itemStatus === '미흡'
-                                                ? 'text-orange-600 bg-orange-50 border-orange-200'
-                                                : 'text-slate-300 border-slate-200 hover:text-orange-500 hover:border-orange-300'}`}
-                                          >
-                                            미흡
-                                          </button>
-                                          <button
-                                            onClick={() => dispatch({
-                                              type: 'SET_ITEM_STUDENT_STATUS',
-                                              payload: { assignmentId: hw!.id, itemId: item.id, studentId: student.id, status: itemStatus === '미제출' ? null : '미제출' },
-                                            })}
-                                            className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
-                                              ${itemStatus === '미제출'
-                                                ? 'text-red-600 bg-red-50 border-red-200'
-                                                : 'text-slate-300 border-slate-200 hover:text-red-500 hover:border-red-300'}`}
-                                          >
-                                            미제출
-                                          </button>
-                                        </div>
-                                      )}
+                                      <div className="flex items-center gap-1 w-16 shrink-0">
+                                        <span className="text-xs text-slate-600 truncate">{student.name}</span>
+                                        {isAbsent && <span className="text-xs text-red-400 font-medium shrink-0">결석</span>}
+                                      </div>
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => dispatch({
+                                            type: 'SET_ITEM_STUDENT_STATUS',
+                                            payload: { assignmentId: hw!.id, itemId: item.id, studentId: student.id, status: null },
+                                          })}
+                                          className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                                            ${displayStatus === '제출'
+                                              ? 'text-green-700 bg-green-50 border-green-200'
+                                              : 'text-slate-300 border-slate-200 hover:text-green-600 hover:border-green-300'}`}
+                                        >
+                                          제출
+                                        </button>
+                                        <button
+                                          onClick={() => dispatch({
+                                            type: 'SET_ITEM_STUDENT_STATUS',
+                                            payload: { assignmentId: hw!.id, itemId: item.id, studentId: student.id, status: itemStatus === '미흡' ? null : '미흡' },
+                                          })}
+                                          className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                                            ${itemStatus === '미흡'
+                                              ? 'text-orange-600 bg-orange-50 border-orange-200'
+                                              : 'text-slate-300 border-slate-200 hover:text-orange-500 hover:border-orange-300'}`}
+                                        >
+                                          미흡
+                                        </button>
+                                        <button
+                                          onClick={() => dispatch({
+                                            type: 'SET_ITEM_STUDENT_STATUS',
+                                            payload: { assignmentId: hw!.id, itemId: item.id, studentId: student.id, status: itemStatus === '미제출' ? null : '미제출' },
+                                          })}
+                                          className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                                            ${itemStatus === '미제출'
+                                              ? 'text-red-600 bg-red-50 border-red-200'
+                                              : 'text-slate-300 border-slate-200 hover:text-red-500 hover:border-red-300'}`}
+                                        >
+                                          미제출
+                                        </button>
+                                      </div>
                                     </div>
                                   )
                                 })}
