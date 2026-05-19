@@ -675,6 +675,8 @@ export default function GradePage() {
                 )
                 const vocabRetest = studentRetests.find(r => r.type === 'vocab' && r.passed === null)
                 const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
+                const vocabRetestPassed = studentRetests.some(r => r.type === 'vocab' && r.passed === true)
+                const dailyRetestPassed = studentRetests.some(r => r.type === 'daily' && r.passed === true)
                 const hasPendingRetest = !isAbsent && (vocabRetest !== undefined || dailyRetest !== undefined)
                 const allRetestsPassed = !isAbsent && studentRetests.length > 0 && studentRetests.every(r => r.passed === true)
 
@@ -724,7 +726,7 @@ export default function GradePage() {
                               <AlertCircle size={14} className="text-orange-400 shrink-0" />
                             )}
                           </div>
-                          {(isVocabRetest || vocabRetest) && (
+                          {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
                             <select
                               value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? ''}
                               onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
@@ -763,7 +765,7 @@ export default function GradePage() {
                               <AlertCircle size={14} className="text-orange-400 shrink-0" />
                             )}
                           </div>
-                          {(isDailyRetest || dailyRetest) && (
+                          {(isDailyRetest || dailyRetest) && !dailyRetestPassed && (
                             <select
                               value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? ''}
                               onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value, dailyRetest?.id, dailyNum)}
