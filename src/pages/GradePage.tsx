@@ -455,7 +455,7 @@ export default function GradePage() {
           <table className="w-full text-sm break-words">
             <thead>
               <tr className="bg-slate-50 text-xs text-slate-500">
-                <th className="text-left px-5 py-3 w-36">이름</th>
+                <th className="text-left px-5 py-3 w-44">이름</th>
 
                 {/* 단어시험 */}
                 <th className="text-center px-4 py-3 min-w-[13rem]">
@@ -653,10 +653,10 @@ export default function GradePage() {
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isAbsent ? 'bg-slate-200 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
                           {row.name[0]}
                         </div>
-                        <span className={`font-medium ${isAbsent ? 'text-slate-400' : 'text-slate-800'}`}>{row.name}</span>
+                        <span className={`font-medium whitespace-nowrap ${isAbsent ? 'text-slate-400' : 'text-slate-800'}`}>{row.name}</span>
                         <button
                           onClick={() => toggleAttendance(idx)}
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0 whitespace-nowrap
                             ${isAbsent
                               ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
                               : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
