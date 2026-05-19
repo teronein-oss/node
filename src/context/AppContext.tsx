@@ -169,10 +169,27 @@ function reducer(state: AppState, action: Action): AppState {
         }
       }
 
+      // 성적 저장 시 회차별 시험 설정이 없으면 현재 설정으로 스냅샷 생성
+      const newSessionConfigs = [...state.sessionTestConfigs]
+      for (const sNum of [...new Set(newGrades.map(g => g.sessionNum))]) {
+        if (!newSessionConfigs.find(c => c.sessionNum === sNum)) {
+          newSessionConfigs.push({
+            sessionNum: sNum,
+            vocabMode: state.vocabMode,
+            vocabTotal: state.vocabTotal,
+            vocabThreshold: state.vocabThreshold,
+            dailyMode: state.dailyMode,
+            dailyTotal: state.dailyTotal,
+            dailyThreshold: state.dailyThreshold,
+          })
+        }
+      }
+
       return {
         ...state,
         grades: [...filtered, ...newGrades],
         retests: [...state.retests.filter(r => !retestIdsToRemove.has(r.id)), ...newRetests],
+        sessionTestConfigs: newSessionConfigs,
       }
     }
 

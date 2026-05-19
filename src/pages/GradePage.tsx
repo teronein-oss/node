@@ -746,7 +746,8 @@ export default function GradePage() {
           </div>
 
           <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
-            * 단어시험·Daily Test 80점 미만 입력 시 자동으로 재시험 대상에 추가됩니다
+            * 단어시험 {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
+            Daily Test {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만 입력 시 자동으로 재시험 대상에 추가됩니다
           </div>
         </div>
       )}
