@@ -90,6 +90,7 @@ export interface ClinicSchedule {
 
 export interface SessionTestConfig {
   sessionNum: number
+  classId?: string
   vocabMode: '점수' | '개수'
   vocabTotal: number
   vocabThreshold: number

@@ -100,7 +100,11 @@ export default function GradePage() {
   const [confirmClear, setConfirmClear] = useState(false)
   const [retestDateSelections, setRetestDateSelections] = useState<Record<string, string>>({})
 
-  const sessionConfig = state.sessionTestConfigs.find(c => c.sessionNum === selectedSession)
+  const sessionConfig = state.sessionTestConfigs.find(
+    c => c.sessionNum === selectedSession && c.classId === selectedClass
+  ) ?? state.sessionTestConfigs.find(
+    c => c.sessionNum === selectedSession && !c.classId
+  )
   const vocabMode = sessionConfig?.vocabMode ?? state.vocabMode
   const vocabTotal = sessionConfig?.vocabTotal ?? state.vocabTotal
   const vocabThreshold = sessionConfig?.vocabThreshold ?? state.vocabThreshold
@@ -129,7 +133,11 @@ export default function GradePage() {
   }, [selectedSession, selectedClass])
 
   useEffect(() => {
-    const cfg = state.sessionTestConfigs.find(c => c.sessionNum === selectedSession)
+    const cfg = state.sessionTestConfigs.find(
+      c => c.sessionNum === selectedSession && c.classId === selectedClass
+    ) ?? state.sessionTestConfigs.find(
+      c => c.sessionNum === selectedSession && !c.classId
+    )
     setVocabThreshStr((cfg?.vocabThreshold ?? state.vocabThreshold).toString())
     setDailyThreshStr((cfg?.dailyThreshold ?? state.dailyThreshold).toString())
     setVocabTotalStr((cfg?.vocabTotal ?? state.vocabTotal).toString())
@@ -137,7 +145,7 @@ export default function GradePage() {
     setEditingVocabName(false)
     setEditingDailyName(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSession])
+  }, [selectedSession, selectedClass])
 
   const saveScope = () => {
     dispatch({
@@ -300,12 +308,12 @@ export default function GradePage() {
   }
 
   const saveVocabName = (name: string) => {
-    dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabName: name.trim() || '단어시험' } })
+    dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabName: name.trim() || '단어시험' } })
     setEditingVocabName(false)
   }
 
   const saveDailyName = (name: string) => {
-    dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyName: name.trim() || 'Daily Test' } })
+    dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyName: name.trim() || 'Daily Test' } })
     setEditingDailyName(false)
   }
 
@@ -500,23 +508,23 @@ export default function GradePage() {
                     </div>
                   )}
                   <div className="flex items-center justify-center gap-1 mt-1">
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '점수' } })}
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '점수' } })}
                       className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                     <span className="text-slate-300 text-xs">|</span>
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '개수' } })}
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '개수' } })}
                       className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
                   </div>
                   <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                     <span>총</span>
                     <input type="number" value={vocabTotalStr}
-                      onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabTotal: v } }) }}
+                      onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabTotal: v } }) }}
                       onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(vocabTotal.toString()) }}
                       className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     <span>{vocabMode === '점수' ? '점' : '개'}</span>
                   </div>
                   <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                     <input type="number" value={vocabThreshStr}
-                      onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabThreshold: v } }) }}
+                      onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabThreshold: v } }) }}
                       onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(vocabThreshold.toString()) }}
                       className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     <span>이상 통과</span>
@@ -547,23 +555,23 @@ export default function GradePage() {
                     </div>
                   )}
                   <div className="flex items-center justify-center gap-1 mt-1">
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '점수' } })}
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyMode: '점수' } })}
                       className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                     <span className="text-slate-300 text-xs">|</span>
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '개수' } })}
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyMode: '개수' } })}
                       className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
                   </div>
                   <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                     <span>총</span>
                     <input type="number" value={dailyTotalStr}
-                      onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyTotal: v } }) }}
+                      onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyTotal: v } }) }}
                       onBlur={() => { if (!Number(dailyTotalStr)) setDailyTotalStr(dailyTotal.toString()) }}
                       className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     <span>{dailyMode === '점수' ? '점' : '개'}</span>
                   </div>
                   <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                     <input type="number" value={dailyThreshStr}
-                      onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= dailyTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyThreshold: v } }) }}
+                      onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= dailyTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyThreshold: v } }) }}
                       onBlur={() => { if (!Number(dailyThreshStr)) setDailyThreshStr(dailyThreshold.toString()) }}
                       className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     <span>이상 통과</span>

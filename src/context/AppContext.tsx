@@ -72,7 +72,7 @@ type Action =
   | { type: 'CLEAR_SESSION_GRADES'; payload: { sessionNum: number; studentIds: string[] } }
   | { type: 'ADD_CLINIC_SCHEDULE'; payload: Omit<ClinicSchedule, 'id' | 'createdAt'> }
   | { type: 'DELETE_CLINIC_SCHEDULE'; payload: string }
-  | { type: 'SET_SESSION_TEST_CONFIG'; payload: { sessionNum: number } & Partial<Omit<SessionTestConfig, 'sessionNum'>> }
+  | { type: 'SET_SESSION_TEST_CONFIG'; payload: { sessionNum: number; classId?: string } & Partial<Omit<SessionTestConfig, 'sessionNum' | 'classId'>> }
   | { type: 'UPDATE_RETEST_DATE'; payload: { id: string; retestDate: string | null } }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -136,7 +136,10 @@ function reducer(state: AppState, action: Action): AppState {
       const retestIdsToRemove = new Set<string>()
 
       for (const g of newGrades) {
-        const sessionCfg = state.sessionTestConfigs.find(c => c.sessionNum === g.sessionNum)
+        const gClassId = state.students.find(s => s.id === g.studentId)?.classId
+        const sessionCfg = state.sessionTestConfigs.find(
+          c => c.sessionNum === g.sessionNum && (gClassId ? c.classId === gClassId : !c.classId)
+        ) ?? state.sessionTestConfigs.find(c => c.sessionNum === g.sessionNum)
         for (const type of ['vocab', 'daily'] as const) {
           const score = type === 'vocab' ? g.vocabScore : g.dailyTestScore
           const threshold = type === 'vocab'
@@ -171,16 +174,23 @@ function reducer(state: AppState, action: Action): AppState {
 
       // 성적 저장 시 회차별 시험 설정이 없으면 현재 설정으로 스냅샷 생성
       const newSessionConfigs = [...state.sessionTestConfigs]
-      for (const sNum of [...new Set(newGrades.map(g => g.sessionNum))]) {
-        if (!newSessionConfigs.find(c => c.sessionNum === sNum)) {
+      for (const g of newGrades) {
+        const sNum = g.sessionNum
+        const classId = state.students.find(s => s.id === g.studentId)?.classId
+        const exists = newSessionConfigs.find(
+          c => c.sessionNum === sNum && (classId ? c.classId === classId : !c.classId)
+        )
+        if (!exists) {
+          const baseCfg = newSessionConfigs.find(c => c.sessionNum === sNum)
           newSessionConfigs.push({
             sessionNum: sNum,
-            vocabMode: state.vocabMode,
-            vocabTotal: state.vocabTotal,
-            vocabThreshold: state.vocabThreshold,
-            dailyMode: state.dailyMode,
-            dailyTotal: state.dailyTotal,
-            dailyThreshold: state.dailyThreshold,
+            classId,
+            vocabMode: baseCfg?.vocabMode ?? state.vocabMode,
+            vocabTotal: baseCfg?.vocabTotal ?? state.vocabTotal,
+            vocabThreshold: baseCfg?.vocabThreshold ?? state.vocabThreshold,
+            dailyMode: baseCfg?.dailyMode ?? state.dailyMode,
+            dailyTotal: baseCfg?.dailyTotal ?? state.dailyTotal,
+            dailyThreshold: baseCfg?.dailyThreshold ?? state.dailyThreshold,
           })
         }
       }
@@ -497,28 +507,35 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, clinicSchedules: (state.clinicSchedules ?? []).filter(c => c.id !== action.payload) }
 
     case 'SET_SESSION_TEST_CONFIG': {
-      const { sessionNum, ...updates } = action.payload
-      const existing = state.sessionTestConfigs.find(c => c.sessionNum === sessionNum)
+      const { sessionNum, classId, ...updates } = action.payload
+      const matches = (c: SessionTestConfig) =>
+        c.sessionNum === sessionNum && (classId ? c.classId === classId : !c.classId)
+      const existing = state.sessionTestConfigs.find(matches)
       if (existing) {
         return {
           ...state,
           sessionTestConfigs: state.sessionTestConfigs.map(c =>
-            c.sessionNum === sessionNum ? { ...c, ...updates } : c
+            matches(c) ? { ...c, ...updates } : c
           ),
         }
       }
+      // Inherit from legacy (no-classId) config for this session if available
+      const legacy = classId ? state.sessionTestConfigs.find(c => c.sessionNum === sessionNum && !c.classId) : undefined
       return {
         ...state,
         sessionTestConfigs: [
           ...state.sessionTestConfigs,
           {
             sessionNum,
-            vocabMode: state.vocabMode,
-            vocabTotal: state.vocabTotal,
-            vocabThreshold: state.vocabThreshold,
-            dailyMode: state.dailyMode,
-            dailyTotal: state.dailyTotal,
-            dailyThreshold: state.dailyThreshold,
+            classId,
+            vocabMode: legacy?.vocabMode ?? state.vocabMode,
+            vocabTotal: legacy?.vocabTotal ?? state.vocabTotal,
+            vocabThreshold: legacy?.vocabThreshold ?? state.vocabThreshold,
+            dailyMode: legacy?.dailyMode ?? state.dailyMode,
+            dailyTotal: legacy?.dailyTotal ?? state.dailyTotal,
+            dailyThreshold: legacy?.dailyThreshold ?? state.dailyThreshold,
+            vocabName: legacy?.vocabName,
+            dailyName: legacy?.dailyName,
             ...updates,
           },
         ],
