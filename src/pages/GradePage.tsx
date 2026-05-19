@@ -4,11 +4,11 @@ import { useApp } from '../context/AppContext'
 import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
 import { Pencil, Trash2, X } from 'lucide-react'
 
-function getRetestDateOptions(testDate: string): string[] {
-  const d = new Date(testDate + 'T00:00:00')
+function getTodayRetestDateOptions(): string[] {
+  const today = new Date()
   return Array.from({ length: 8 }, (_, i) => {
-    const opt = new Date(d)
-    opt.setDate(d.getDate() + i)
+    const opt = new Date(today)
+    opt.setDate(today.getDate() + i)
     return fmtDate(opt)
   })
 }
@@ -25,17 +25,14 @@ interface GradeRow {
 export default function GradePage() {
   const { state, dispatch, getScope, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
 
-  // 현재 월
   const today = new Date()
   const todayStr = fmtDate(today)
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth() + 1
   const currentYM = `${currentYear}-${currentMonth}`
 
-  // 성적 입력 탭 상태
   const availableMonths = useMemo(() => {
     const ymSet = new Set<string>([currentYM])
-    // 최근 3개월 항상 포함
     for (let i = 1; i <= 3; i++) {
       const d = new Date(currentYear, currentMonth - 1 - i, 1)
       ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
@@ -65,7 +62,6 @@ export default function GradePage() {
     return matched?.id ?? state.classes[0]?.id ?? ''
   })
 
-  // 선택된 반의 수업 날짜 목록
   const selectedCls = state.classes.find(c => c.id === selectedClass)
   const classDates = useMemo(() => {
     if (!selectedCls || !selectedMonthInfo) return []
@@ -84,24 +80,26 @@ export default function GradePage() {
       .filter(({ date }) => date <= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date))
   }, [selectedCls, monthSessions, selectedMonthInfo, todayStr])
+
   const [rows, setRows] = useState<GradeRow[]>([])
   const [saved, setSaved] = useState(false)
   const isDirtyRef = useRef(false)
 
-  // 항목 추가 상태
   const [showAddCol, setShowAddCol] = useState(false)
   const [newColName, setNewColName] = useState('')
   const [editingColId, setEditingColId] = useState<string | null>(null)
   const [editingColName, setEditingColName] = useState('')
 
-  // 범위 입력 상태
+  const [editingVocabName, setEditingVocabName] = useState(false)
+  const [vocabNameStr, setVocabNameStr] = useState('')
+  const [editingDailyName, setEditingDailyName] = useState(false)
+  const [dailyNameStr, setDailyNameStr] = useState('')
+
   const [vocabRange, setVocabRange] = useState('')
   const [dailyRange, setDailyRange] = useState('')
-
-  // 초기화 확인 상태
   const [confirmClear, setConfirmClear] = useState(false)
+  const [retestDateSelections, setRetestDateSelections] = useState<Record<string, string>>({})
 
-  // 선택 회차별 시험 설정 (없으면 전역 기본값 사용)
   const sessionConfig = state.sessionTestConfigs.find(c => c.sessionNum === selectedSession)
   const vocabMode = sessionConfig?.vocabMode ?? state.vocabMode
   const vocabTotal = sessionConfig?.vocabTotal ?? state.vocabTotal
@@ -109,21 +107,20 @@ export default function GradePage() {
   const dailyMode = sessionConfig?.dailyMode ?? state.dailyMode
   const dailyTotal = sessionConfig?.dailyTotal ?? state.dailyTotal
   const dailyThreshold = sessionConfig?.dailyThreshold ?? state.dailyThreshold
+  const vocabName = sessionConfig?.vocabName ?? '단어시험'
+  const dailyName = sessionConfig?.dailyName ?? 'Daily Test'
 
-  // 통과 기준 · 총점 로컬 상태 (빈 값 입력 허용 — 버그 수정)
   const [vocabThreshStr, setVocabThreshStr] = useState(vocabThreshold.toString())
   const [dailyThreshStr, setDailyThreshStr] = useState(dailyThreshold.toString())
   const [vocabTotalStr, setVocabTotalStr] = useState(vocabTotal.toString())
   const [dailyTotalStr, setDailyTotalStr] = useState(dailyTotal.toString())
 
-  // 반/월 변경 시 선택 날짜를 해당 반의 마지막 수업일로 동기화
   useEffect(() => {
     if (classDates.length === 0) return
     const valid = classDates.find(d => d.sessionNum === selectedSession)
     if (!valid) setSelectedSession(classDates[classDates.length - 1].sessionNum)
   }, [classDates])
 
-  // 회차/반 변경 시 범위 불러오기
   useEffect(() => {
     const scope = getScope(selectedSession, selectedClass)
     setVocabRange(scope?.vocabRange ?? '')
@@ -131,13 +128,14 @@ export default function GradePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession, selectedClass])
 
-  // 회차 변경 시 해당 회차 시험 설정으로 로컬 입력값 동기화
   useEffect(() => {
     const cfg = state.sessionTestConfigs.find(c => c.sessionNum === selectedSession)
     setVocabThreshStr((cfg?.vocabThreshold ?? state.vocabThreshold).toString())
     setDailyThreshStr((cfg?.dailyThreshold ?? state.dailyThreshold).toString())
     setVocabTotalStr((cfg?.vocabTotal ?? state.vocabTotal).toString())
     setDailyTotalStr((cfg?.dailyTotal ?? state.dailyTotal).toString())
+    setEditingVocabName(false)
+    setEditingDailyName(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession])
 
@@ -148,7 +146,6 @@ export default function GradePage() {
     })
   }
 
-  // 클래스/회차/커스텀 항목 변경 시 rows 초기화
   useEffect(() => {
     const students = state.students
       .filter(s => s.classId === selectedClass && s.active)
@@ -176,6 +173,7 @@ export default function GradePage() {
     setRows(newRows)
     setSaved(false)
     setConfirmClear(false)
+    setRetestDateSelections({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClass, selectedSession, state.students, state.scoreColumns])
 
@@ -206,7 +204,6 @@ export default function GradePage() {
     setTimeout(() => setSaved(false), 3000)
   }
 
-  // 800ms 디바운스 자동저장
   useEffect(() => {
     if (!isDirtyRef.current) return
     const timer = setTimeout(() => {
@@ -272,6 +269,40 @@ export default function GradePage() {
     dispatch({ type: 'DELETE_SCORE_COLUMN', payload: id })
   }
 
+  const handleRetestDateChange = (studentId: string, type: 'vocab' | 'daily', date: string) => {
+    const key = `${studentId}-${type}`
+    setRetestDateSelections(prev => ({ ...prev, [key]: date }))
+    const records = state.retests.filter(
+      r => r.studentId === studentId && r.sessionNum === selectedSession && r.passed === null && r.type === type
+    )
+    for (const r of records) {
+      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date || null } })
+    }
+  }
+
+  const saveVocabName = (name: string) => {
+    dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabName: name.trim() || '단어시험' } })
+    setEditingVocabName(false)
+  }
+
+  const saveDailyName = (name: string) => {
+    dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyName: name.trim() || 'Daily Test' } })
+    setEditingDailyName(false)
+  }
+
+  useEffect(() => {
+    if (Object.keys(retestDateSelections).length === 0) return
+    for (const r of state.retests) {
+      if (r.passed !== null || r.sessionNum !== selectedSession || r.retestDate) continue
+      const key = `${r.studentId}-${r.type}`
+      const pending = retestDateSelections[key]
+      if (pending) dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: pending } })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.retests, selectedSession])
+
+  const retestDateOptions = getTodayRetestDateOptions()
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
@@ -280,436 +311,473 @@ export default function GradePage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100">
-          {/* 필터 바 */}
-          <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100">
-            {/* 월 선택 */}
-            <div className="flex items-center gap-2">
-              <Calendar size={15} className="text-slate-400 shrink-0" />
-              <select
-                value={selectedYM}
-                onChange={e => setSelectedYM(e.target.value)}
-                className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
-              >
-                {availableMonths.map(m => (
-                  <option key={m.ym} value={m.ym}>
-                    {m.label}{m.ym === currentYM ? ' (현재)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {/* 필터 바 */}
+        <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100">
+          {/* 월 선택 */}
+          <div className="flex items-center gap-2">
+            <Calendar size={15} className="text-slate-400 shrink-0" />
+            <select
+              value={selectedYM}
+              onChange={e => setSelectedYM(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+            >
+              {availableMonths.map(m => (
+                <option key={m.ym} value={m.ym}>
+                  {m.label}{m.ym === currentYM ? ' (현재)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            <div className="w-px h-5 bg-slate-200" />
+          <div className="w-px h-5 bg-slate-200" />
 
-            {/* 날짜 선택 */}
-            {(() => {
-              const dateIdx = classDates.findIndex(d => d.sessionNum === selectedSession)
-              const currentEntry = classDates[dateIdx]
-              return (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => dateIdx > 0 && setSelectedSession(classDates[dateIdx - 1].sessionNum)}
-                    disabled={dateIdx <= 0}
-                    className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                  <span className="text-sm font-semibold text-slate-700 w-32 text-center">
-                    {currentEntry ? formatDateKo(currentEntry.date) : '-'}
-                  </span>
-                  <button
-                    onClick={() => dateIdx < classDates.length - 1 && setSelectedSession(classDates[dateIdx + 1].sessionNum)}
-                    disabled={dateIdx >= classDates.length - 1}
-                    className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30"
-                  >
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              )
-            })()}
-
-            <div className="w-px h-5 bg-slate-200" />
-
-            {/* 항목 추가 */}
-            {showAddCol ? (
+          {/* 날짜 선택 */}
+          {(() => {
+            const dateIdx = classDates.findIndex(d => d.sessionNum === selectedSession)
+            const currentEntry = classDates[dateIdx]
+            return (
               <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newColName}
-                  onChange={e => setNewColName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddCol()}
-                  placeholder="항목 이름"
-                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 w-28"
-                />
                 <button
-                  onClick={handleAddCol}
-                  disabled={!newColName.trim()}
-                  className="px-2.5 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40"
+                  onClick={() => dateIdx > 0 && setSelectedSession(classDates[dateIdx - 1].sessionNum)}
+                  disabled={dateIdx <= 0}
+                  className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30"
                 >
-                  추가
+                  <ChevronLeft size={18} />
                 </button>
+                <span className="text-sm font-semibold text-slate-700 w-32 text-center">
+                  {currentEntry ? formatDateKo(currentEntry.date) : '-'}
+                </span>
                 <button
-                  onClick={() => { setShowAddCol(false); setNewColName('') }}
-                  className="p-1.5 text-slate-400 hover:text-slate-600"
+                  onClick={() => dateIdx < classDates.length - 1 && setSelectedSession(classDates[dateIdx + 1].sessionNum)}
+                  disabled={dateIdx >= classDates.length - 1}
+                  className="p-1 rounded hover:bg-slate-100 text-slate-500 disabled:opacity-30"
                 >
-                  <X size={14} />
+                  <ChevronRight size={18} />
                 </button>
               </div>
+            )
+          })()}
+
+          <div className="w-px h-5 bg-slate-200" />
+
+          {/* 반 선택 */}
+          <div className="flex gap-1.5">
+            {state.classes.map(cls => (
+              <button
+                key={cls.id}
+                onClick={() => setSelectedClass(cls.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
+                  ${selectedClass === cls.id
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+              >
+                {cls.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            {confirmClear ? (
+              <>
+                <span className="text-xs text-slate-500">이 날짜 성적을 모두 초기화?</span>
+                <button
+                  onClick={() => {
+                    const studentIds = state.students
+                      .filter(s => s.classId === selectedClass && s.active)
+                      .map(s => s.id)
+                    dispatch({ type: 'CLEAR_SESSION_GRADES', payload: { sessionNum: selectedSession, studentIds } })
+                    setConfirmClear(false)
+                    isDirtyRef.current = false
+                  }}
+                  className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  확인
+                </button>
+                <button
+                  onClick={() => setConfirmClear(false)}
+                  className="px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  취소
+                </button>
+              </>
             ) : (
               <button
-                onClick={() => setShowAddCol(true)}
-                className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                onClick={() => setConfirmClear(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-slate-400 border border-slate-200 rounded-lg text-sm hover:text-red-500 hover:border-red-200 transition-colors"
+                title="이 날짜 성적 초기화"
               >
-                <Plus size={13} />
-                항목 추가
+                <RotateCcw size={14} />
+                초기화
               </button>
             )}
-
-            <div className="w-px h-5 bg-slate-200" />
-
-            {/* 반 선택 */}
-            <div className="flex gap-1.5">
-              {state.classes.map(cls => (
-                <button
-                  key={cls.id}
-                  onClick={() => setSelectedClass(cls.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                    ${selectedClass === cls.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                >
-                  {cls.name}
-                </button>
-              ))}
-            </div>
-
-            <div className="ml-auto flex items-center gap-2">
-              {confirmClear ? (
-                <>
-                  <span className="text-xs text-slate-500">이 날짜 성적을 모두 초기화?</span>
-                  <button
-                    onClick={() => {
-                      const studentIds = state.students
-                        .filter(s => s.classId === selectedClass && s.active)
-                        .map(s => s.id)
-                      dispatch({ type: 'CLEAR_SESSION_GRADES', payload: { sessionNum: selectedSession, studentIds } })
-                      setConfirmClear(false)
-                      isDirtyRef.current = false
-                    }}
-                    className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                  >
-                    확인
-                  </button>
-                  <button
-                    onClick={() => setConfirmClear(false)}
-                    className="px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors"
-                  >
-                    취소
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setConfirmClear(true)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-slate-400 border border-slate-200 rounded-lg text-sm hover:text-red-500 hover:border-red-200 transition-colors"
-                  title="이 날짜 성적 초기화"
-                >
-                  <RotateCcw size={14} />
-                  초기화
-                </button>
-              )}
-              <button
-                onClick={handleSave}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-              >
-                {saved ? <CheckCircle size={16} /> : <Save size={16} />}
-                {saved ? '저장됨' : '저장'}
-              </button>
-            </div>
-          </div>
-
-          {/* 범위 입력 */}
-          <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-            <span className="text-xs text-slate-400 shrink-0">범위</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-slate-500 shrink-0">단어</span>
-              <input
-                type="text"
-                value={vocabRange}
-                onChange={e => setVocabRange(e.target.value)}
-                onBlur={saveScope}
-                onKeyDown={e => e.key === 'Enter' && saveScope()}
-                placeholder="예) Day 1~5"
-                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-36 bg-white"
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-slate-500 shrink-0">Daily Test</span>
-              <input
-                type="text"
-                value={dailyRange}
-                onChange={e => setDailyRange(e.target.value)}
-                onBlur={saveScope}
-                onKeyDown={e => e.key === 'Enter' && saveScope()}
-                placeholder="예) Unit 1 p.12~15"
-                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-40 bg-white"
-              />
-            </div>
-          </div>
-
-          {/* 성적 테이블 */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm break-words">
-              <thead>
-                <tr className="bg-slate-50 text-xs text-slate-500">
-                  <th className="text-left px-5 py-3 w-36">이름</th>
-                  <th className="text-center px-4 py-3 w-36">
-                    단어시험
-                    <div className="flex items-center justify-center gap-1 mt-1">
-                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '점수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
-                      <span className="text-slate-300 text-xs">|</span>
-                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '개수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
-                    </div>
-                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
-                      <span>총</span>
-                      <input type="number" value={vocabTotalStr}
-                        onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabTotal: v } }) }}
-                        onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(vocabTotal.toString()) }}
-                        className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <span>{vocabMode === '점수' ? '점' : '개'}</span>
-                    </div>
-                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
-                      <input type="number" value={vocabThreshStr}
-                        onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabThreshold: v } }) }}
-                        onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(vocabThreshold.toString()) }}
-                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <span>이상 통과</span>
-                    </div>
-                  </th>
-                  <th className="text-center px-4 py-3 w-36">
-                    Daily Test
-                    <div className="flex items-center justify-center gap-1 mt-1">
-                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '점수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
-                      <span className="text-slate-300 text-xs">|</span>
-                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '개수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
-                    </div>
-                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
-                      <span>총</span>
-                      <input type="number" value={dailyTotalStr}
-                        onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyTotal: v } }) }}
-                        onBlur={() => { if (!Number(dailyTotalStr)) setDailyTotalStr(dailyTotal.toString()) }}
-                        className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <span>{dailyMode === '점수' ? '점' : '개'}</span>
-                    </div>
-                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
-                      <input type="number" value={dailyThreshStr}
-                        onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= dailyTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyThreshold: v } }) }}
-                        onBlur={() => { if (!Number(dailyThreshStr)) setDailyThreshStr(dailyThreshold.toString()) }}
-                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      <span>이상 통과</span>
-                    </div>
-                  </th>
-                  {state.scoreColumns.map(col => (
-                    <th key={col.id} className="text-center px-4 py-3 w-28">
-                      {editingColId === col.id ? (
-                        <input
-                          autoFocus
-                          value={editingColName}
-                          onChange={e => setEditingColName(e.target.value)}
-                          onBlur={() => handleSaveColName(col.id)}
-                          onKeyDown={e => e.key === 'Enter' && handleSaveColName(col.id)}
-                          className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center gap-1">
-                          <span>{col.name}</span>
-                          <button
-                            onClick={() => { setEditingColId(col.id); setEditingColName(col.name) }}
-                            className="text-slate-300 hover:text-blue-500 transition-colors"
-                            title="이름 수정"
-                          >
-                            <Pencil size={11} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCol(col.id)}
-                            className="text-slate-300 hover:text-red-500 transition-colors"
-                            title="항목 삭제"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </div>
-                      )}
-                    </th>
-                  ))}
-                  <th className="text-center px-4 py-3 w-20">상태</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4 + state.scoreColumns.length} className="text-center py-10 text-slate-400">
-                      이 반에 등록된 학생이 없습니다
-                    </td>
-                  </tr>
-                ) : (() => {
-                  const testDate = classDates.find(d => d.sessionNum === selectedSession)?.date ?? ''
-                  const dateOptions = testDate ? getRetestDateOptions(testDate) : []
-                  return rows.map((row, idx) => {
-                    const isAbsent = row.attendance === '결석'
-                    const vocabNum = row.vocabScore !== '' ? Number(row.vocabScore) : null
-                    const dailyNum = row.dailyScore !== '' ? Number(row.dailyScore) : null
-                    const isRetestNeeded = !isAbsent && (needsRetest(vocabNum, vocabThreshold) || needsRetest(dailyNum, dailyThreshold))
-
-                    const studentRetests = state.retests.filter(
-                      r => r.studentId === row.studentId && r.sessionNum === selectedSession
-                    )
-                    const vocabRetest = studentRetests.find(r => r.type === 'vocab' && r.passed === null)
-                    const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
-                    const allPassed = studentRetests.length > 0 && studentRetests.every(r => r.passed === true)
-                    const anyFailed = studentRetests.some(r => r.passed === false)
-
-                    return (
-                      <tr key={row.studentId} className={`hover:bg-slate-50 ${isAbsent ? 'bg-slate-100/60' : isRetestNeeded && !allPassed ? 'bg-orange-50/40' : ''}`}>
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isAbsent ? 'bg-slate-200 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
-                              {row.name[0]}
-                            </div>
-                            <span className={`font-medium ${isAbsent ? 'text-slate-400' : 'text-slate-800'}`}>{row.name}</span>
-                            <button
-                              onClick={() => toggleAttendance(idx)}
-                              className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors
-                                ${isAbsent
-                                  ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
-                                  : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
-                                }`}
-                            >
-                              {isAbsent ? '결석' : '출석'}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {isAbsent ? (
-                            <span className="block text-center text-xs text-slate-300">-</span>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-1 justify-center">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={vocabTotal}
-                                  value={row.vocabScore}
-                                  onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
-                                  placeholder="-"
-                                  className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                    ${needsRetest(vocabNum, vocabThreshold)
-                                      ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                      : 'border-slate-200 focus:ring-blue-200'
-                                    }`}
-                                />
-                                <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
-                                {needsRetest(vocabNum, vocabThreshold) && (
-                                  <AlertCircle size={14} className="text-orange-400 shrink-0" />
-                                )}
-                              </div>
-                              {vocabRetest && dateOptions.length > 0 && (
-                                <select
-                                  value={vocabRetest.retestDate ?? ''}
-                                  onChange={e => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: vocabRetest.id, retestDate: e.target.value || null } })}
-                                  className="border border-orange-200 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-300 bg-white text-orange-700 w-full"
-                                >
-                                  <option value="">재시험 날짜</option>
-                                  {dateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                                </select>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {isAbsent ? (
-                            <span className="block text-center text-xs text-slate-300">-</span>
-                          ) : (
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-1 justify-center">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={dailyTotal}
-                                  value={row.dailyScore}
-                                  onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
-                                  placeholder="-"
-                                  className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                    ${needsRetest(dailyNum, dailyThreshold)
-                                      ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                      : 'border-slate-200 focus:ring-blue-200'
-                                    }`}
-                                />
-                                <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
-                                {needsRetest(dailyNum, dailyThreshold) && (
-                                  <AlertCircle size={14} className="text-orange-400 shrink-0" />
-                                )}
-                              </div>
-                              {dailyRetest && dateOptions.length > 0 && (
-                                <select
-                                  value={dailyRetest.retestDate ?? ''}
-                                  onChange={e => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: dailyRetest.id, retestDate: e.target.value || null } })}
-                                  className="border border-orange-200 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-300 bg-white text-orange-700 w-full"
-                                >
-                                  <option value="">재시험 날짜</option>
-                                  {dateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                                </select>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        {state.scoreColumns.map(col => (
-                          <td key={col.id} className="px-4 py-2.5">
-                            {isAbsent ? (
-                              <span className="block text-center text-xs text-slate-300">-</span>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={row.extras[col.id] ?? ''}
-                                onChange={e => updateExtra(idx, col.id, e.target.value)}
-                                placeholder="-"
-                                className="w-16 text-center border border-slate-200 rounded-lg py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 mx-auto block"
-                              />
-                            )}
-                          </td>
-                        ))}
-                        <td className="px-4 py-2.5 text-center">
-                          {isAbsent ? (
-                            <span className="text-xs text-slate-400">결석</span>
-                          ) : allPassed ? (
-                            <span className="text-xs text-blue-600 font-medium">재시험 통과</span>
-                          ) : anyFailed ? (
-                            <span className="text-xs text-red-500 font-medium">재시험 불통과</span>
-                          ) : isRetestNeeded ? (
-                            <span className="text-xs text-orange-500 font-medium">재시험</span>
-                          ) : (
-                            <span className="text-xs text-green-500">정상</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })
-                })()}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
-            * 단어시험 {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
-            Daily Test {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만 입력 시 자동으로 재시험 대상에 추가됩니다
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              {saved ? <CheckCircle size={16} /> : <Save size={16} />}
+              {saved ? '저장됨' : '저장'}
+            </button>
           </div>
         </div>
 
+        {/* 범위 입력 */}
+        <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+          <span className="text-xs text-slate-400 shrink-0">범위</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 shrink-0">단어</span>
+            <input
+              type="text"
+              value={vocabRange}
+              onChange={e => setVocabRange(e.target.value)}
+              onBlur={saveScope}
+              onKeyDown={e => e.key === 'Enter' && saveScope()}
+              placeholder="예) Day 1~5"
+              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-36 bg-white"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 shrink-0">Daily Test</span>
+            <input
+              type="text"
+              value={dailyRange}
+              onChange={e => setDailyRange(e.target.value)}
+              onBlur={saveScope}
+              onKeyDown={e => e.key === 'Enter' && saveScope()}
+              placeholder="예) Unit 1 p.12~15"
+              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-40 bg-white"
+            />
+          </div>
+        </div>
+
+        {/* 성적 테이블 */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm break-words">
+            <thead>
+              <tr className="bg-slate-50 text-xs text-slate-500">
+                <th className="text-left px-5 py-3 w-36">이름</th>
+
+                {/* 단어시험 */}
+                <th className="text-center px-4 py-3 min-w-[13rem]">
+                  {editingVocabName ? (
+                    <input
+                      autoFocus
+                      value={vocabNameStr}
+                      onChange={e => setVocabNameStr(e.target.value)}
+                      onBlur={() => saveVocabName(vocabNameStr)}
+                      onKeyDown={e => e.key === 'Enter' && saveVocabName(vocabNameStr)}
+                      className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{vocabName}</span>
+                      <button
+                        onClick={() => { setEditingVocabName(true); setVocabNameStr(vocabName) }}
+                        className="text-slate-300 hover:text-blue-500 transition-colors"
+                        title="이름 수정"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '점수' } })}
+                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabMode: '개수' } })}
+                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                  </div>
+                  <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                    <span>총</span>
+                    <input type="number" value={vocabTotalStr}
+                      onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabTotal: v } }) }}
+                      onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(vocabTotal.toString()) }}
+                      className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                    <span>{vocabMode === '점수' ? '점' : '개'}</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                    <input type="number" value={vocabThreshStr}
+                      onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, vocabThreshold: v } }) }}
+                      onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(vocabThreshold.toString()) }}
+                      className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                    <span>이상 통과</span>
+                  </div>
+                </th>
+
+                {/* Daily Test */}
+                <th className="text-center px-4 py-3 min-w-[13rem]">
+                  {editingDailyName ? (
+                    <input
+                      autoFocus
+                      value={dailyNameStr}
+                      onChange={e => setDailyNameStr(e.target.value)}
+                      onBlur={() => saveDailyName(dailyNameStr)}
+                      onKeyDown={e => e.key === 'Enter' && saveDailyName(dailyNameStr)}
+                      className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center gap-1">
+                      <span>{dailyName}</span>
+                      <button
+                        onClick={() => { setEditingDailyName(true); setDailyNameStr(dailyName) }}
+                        className="text-slate-300 hover:text-blue-500 transition-colors"
+                        title="이름 수정"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-center gap-1 mt-1">
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '점수' } })}
+                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyMode: '개수' } })}
+                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                  </div>
+                  <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                    <span>총</span>
+                    <input type="number" value={dailyTotalStr}
+                      onChange={e => { setDailyTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyTotal: v } }) }}
+                      onBlur={() => { if (!Number(dailyTotalStr)) setDailyTotalStr(dailyTotal.toString()) }}
+                      className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                    <span>{dailyMode === '점수' ? '점' : '개'}</span>
+                  </div>
+                  <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                    <input type="number" value={dailyThreshStr}
+                      onChange={e => { setDailyThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= dailyTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, dailyThreshold: v } }) }}
+                      onBlur={() => { if (!Number(dailyThreshStr)) setDailyThreshStr(dailyThreshold.toString()) }}
+                      className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                    <span>이상 통과</span>
+                  </div>
+                </th>
+
+                {/* 추가 항목 컬럼들 */}
+                {state.scoreColumns.map(col => (
+                  <th key={col.id} className="text-center px-4 py-3 w-28">
+                    {editingColId === col.id ? (
+                      <input
+                        autoFocus
+                        value={editingColName}
+                        onChange={e => setEditingColName(e.target.value)}
+                        onBlur={() => handleSaveColName(col.id)}
+                        onKeyDown={e => e.key === 'Enter' && handleSaveColName(col.id)}
+                        className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center gap-1">
+                        <span>{col.name}</span>
+                        <button
+                          onClick={() => { setEditingColId(col.id); setEditingColName(col.name) }}
+                          className="text-slate-300 hover:text-blue-500 transition-colors"
+                          title="이름 수정"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCol(col.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors"
+                          title="항목 삭제"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    )}
+                  </th>
+                ))}
+
+                {/* 항목 추가 (마지막 컬럼) */}
+                <th className="text-center px-4 py-3 w-32">
+                  {showAddCol ? (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={newColName}
+                        onChange={e => setNewColName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleAddCol()}
+                        placeholder="항목 이름"
+                        className="border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-20"
+                      />
+                      <div className="flex gap-1">
+                        <button
+                          onClick={handleAddCol}
+                          disabled={!newColName.trim()}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40"
+                        >
+                          추가
+                        </button>
+                        <button
+                          onClick={() => { setShowAddCol(false); setNewColName('') }}
+                          className="p-1 text-slate-400 hover:text-slate-600"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowAddCol(true)}
+                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors mx-auto"
+                    >
+                      <Plus size={13} />
+                      항목 추가
+                    </button>
+                  )}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={4 + state.scoreColumns.length} className="text-center py-10 text-slate-400">
+                    이 반에 등록된 학생이 없습니다
+                  </td>
+                </tr>
+              ) : rows.map((row, idx) => {
+                const isAbsent = row.attendance === '결석'
+                const vocabNum = row.vocabScore !== '' ? Number(row.vocabScore) : null
+                const dailyNum = row.dailyScore !== '' ? Number(row.dailyScore) : null
+                const isVocabRetest = !isAbsent && needsRetest(vocabNum, vocabThreshold)
+                const isDailyRetest = !isAbsent && needsRetest(dailyNum, dailyThreshold)
+
+                const studentRetests = state.retests.filter(
+                  r => r.studentId === row.studentId && r.sessionNum === selectedSession
+                )
+                const vocabRetest = studentRetests.find(r => r.type === 'vocab' && r.passed === null)
+                const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
+
+                return (
+                  <tr key={row.studentId} className={`hover:bg-slate-50 ${isAbsent ? 'bg-slate-100/60' : (isVocabRetest || isDailyRetest) ? 'bg-orange-50/40' : ''}`}>
+                    <td className="px-5 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isAbsent ? 'bg-slate-200 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+                          {row.name[0]}
+                        </div>
+                        <span className={`font-medium ${isAbsent ? 'text-slate-400' : 'text-slate-800'}`}>{row.name}</span>
+                        <button
+                          onClick={() => toggleAttendance(idx)}
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-colors
+                            ${isAbsent
+                              ? 'bg-red-50 text-red-500 border-red-200 hover:bg-red-100'
+                              : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                            }`}
+                        >
+                          {isAbsent ? '결석' : '출석'}
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* 단어시험 점수 + 재시험 날짜 */}
+                    <td className="px-4 py-2.5">
+                      {isAbsent ? (
+                        <span className="block text-center text-xs text-slate-300">-</span>
+                      ) : (
+                        <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={vocabTotal}
+                              value={row.vocabScore}
+                              onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
+                              placeholder="-"
+                              className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                ${needsRetest(vocabNum, vocabThreshold)
+                                  ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                  : 'border-slate-200 focus:ring-blue-200'
+                                }`}
+                            />
+                            <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
+                            {needsRetest(vocabNum, vocabThreshold) && (
+                              <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                            )}
+                          </div>
+                          {(isVocabRetest || vocabRetest) && (
+                            <select
+                              value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? ''}
+                              onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value)}
+                              className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
+                            >
+                              <option value="">날짜 선택</option>
+                              {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Daily Test 점수 + 재시험 날짜 */}
+                    <td className="px-4 py-2.5">
+                      {isAbsent ? (
+                        <span className="block text-center text-xs text-slate-300">-</span>
+                      ) : (
+                        <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={dailyTotal}
+                              value={row.dailyScore}
+                              onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
+                              placeholder="-"
+                              className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                ${needsRetest(dailyNum, dailyThreshold)
+                                  ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                  : 'border-slate-200 focus:ring-blue-200'
+                                }`}
+                            />
+                            <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
+                            {needsRetest(dailyNum, dailyThreshold) && (
+                              <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                            )}
+                          </div>
+                          {(isDailyRetest || dailyRetest) && (
+                            <select
+                              value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? ''}
+                              onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value)}
+                              className="border border-blue-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-blue-700"
+                            >
+                              <option value="">날짜 선택</option>
+                              {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* 추가 항목들 */}
+                    {state.scoreColumns.map(col => (
+                      <td key={col.id} className="px-4 py-2.5">
+                        {isAbsent ? (
+                          <span className="block text-center text-xs text-slate-300">-</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={row.extras[col.id] ?? ''}
+                            onChange={e => updateExtra(idx, col.id, e.target.value)}
+                            placeholder="-"
+                            className="w-16 text-center border border-slate-200 rounded-lg py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 mx-auto block"
+                          />
+                        )}
+                      </td>
+                    ))}
+
+                    {/* 항목 추가 컬럼 빈 셀 */}
+                    <td className="px-4 py-2.5"></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
+          * {vocabName} {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
+          {' '}{dailyName} {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만 입력 시 자동으로 재시험 대상에 추가됩니다
+        </div>
+      </div>
     </div>
   )
 }

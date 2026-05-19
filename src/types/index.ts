@@ -96,6 +96,8 @@ export interface SessionTestConfig {
   dailyMode: '점수' | '개수'
   dailyTotal: number
   dailyThreshold: number
+  vocabName?: string
+  dailyName?: string
 }
 
 export interface ExamInfo {
