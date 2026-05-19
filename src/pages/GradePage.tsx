@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Save, CheckCircle, ClipboardList, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
+import { Save, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
 import { Pencil, Trash2, X } from 'lucide-react'
@@ -13,8 +13,6 @@ function getRetestDateOptions(testDate: string): string[] {
   })
 }
 
-type Tab = 'input' | 'retest'
-
 interface GradeRow {
   studentId: string
   name: string
@@ -26,7 +24,6 @@ interface GradeRow {
 
 export default function GradePage() {
   const { state, dispatch, getScope, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
-  const [tab, setTab] = useState<Tab>('input')
 
   // 현재 월
   const today = new Date()
@@ -118,11 +115,6 @@ export default function GradePage() {
   const [dailyThreshStr, setDailyThreshStr] = useState(dailyThreshold.toString())
   const [vocabTotalStr, setVocabTotalStr] = useState(vocabTotal.toString())
   const [dailyTotalStr, setDailyTotalStr] = useState(dailyTotal.toString())
-
-  // 재시험 처리 탭 상태
-  const [retestClass, setRetestClass] = useState('all')
-  const [retestPassed, setRetestPassed] = useState<Record<string, boolean>>({})
-  const [retestSaveDone, setRetestSaveDone] = useState(false)
 
   // 반/월 변경 시 선택 날짜를 해당 반의 마지막 수업일로 동기화
   useEffect(() => {
@@ -280,75 +272,14 @@ export default function GradePage() {
     dispatch({ type: 'DELETE_SCORE_COLUMN', payload: id })
   }
 
-  // 재시험 대상 목록
-  const pendingRetests = state.retests.filter(r => r.passed === null)
-  const filteredRetests = retestClass === 'all'
-    ? pendingRetests
-    : pendingRetests.filter(r =>
-        state.students.find(s => s.id === r.studentId)?.classId === retestClass
-      )
-
-  const getStudentName = (id: string) => state.students.find(s => s.id === id)?.name ?? ''
-  const getClassName = (studentId: string) => {
-    const cid = state.students.find(s => s.id === studentId)?.classId
-    return state.classes.find(c => c.id === cid)?.name ?? ''
-  }
-  const getStudentClassDays = (studentId: string): 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri' => {
-    const cid = state.students.find(s => s.id === studentId)?.classId
-    return state.classes.find(c => c.id === cid)?.days ?? 'mon-fri'
-  }
-
-  const toggleRetestPassed = (id: string) => {
-    setRetestPassed(prev => ({ ...prev, [id]: !prev[id] }))
-    setRetestSaveDone(false)
-  }
-
-  const handleRetestBatchSave = () => {
-    const toSave = filteredRetests.filter(r => retestPassed[r.id])
-    if (toSave.length === 0) return
-    for (const r of toSave) {
-      dispatch({ type: 'SAVE_RETEST', payload: { id: r.id, retestScore: null, passed: true } })
-    }
-    setRetestPassed({})
-    setRetestSaveDone(true)
-    setTimeout(() => setRetestSaveDone(false), 2500)
-  }
-
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">성적관리</h1>
-        <p className="text-sm text-slate-500 mt-1">성적 입력 및 재시험 처리</p>
+        <p className="text-sm text-slate-500 mt-1">성적 입력</p>
       </div>
 
-      {/* 탭 */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setTab('input')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors
-            ${tab === 'input' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <ClipboardList size={16} />
-          성적 입력
-        </button>
-        <button
-          onClick={() => setTab('retest')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors
-            ${tab === 'retest' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <AlertCircle size={16} />
-          재시험관리
-          {pendingRetests.length > 0 && (
-            <span className="bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-              {pendingRetests.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* ─── 성적 입력 탭 ─── */}
-      {tab === 'input' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100">
           {/* 필터 바 */}
           <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100">
             {/* 월 선택 */}
@@ -624,8 +555,10 @@ export default function GradePage() {
                       이 반에 등록된 학생이 없습니다
                     </td>
                   </tr>
-                ) : (
-                  rows.map((row, idx) => {
+                ) : (() => {
+                  const testDate = classDates.find(d => d.sessionNum === selectedSession)?.date ?? ''
+                  const dateOptions = testDate ? getRetestDateOptions(testDate) : []
+                  return rows.map((row, idx) => {
                     const isAbsent = row.attendance === '결석'
                     const vocabNum = row.vocabScore !== '' ? Number(row.vocabScore) : null
                     const dailyNum = row.dailyScore !== '' ? Number(row.dailyScore) : null
@@ -634,6 +567,8 @@ export default function GradePage() {
                     const studentRetests = state.retests.filter(
                       r => r.studentId === row.studentId && r.sessionNum === selectedSession
                     )
+                    const vocabRetest = studentRetests.find(r => r.type === 'vocab' && r.passed === null)
+                    const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
                     const allPassed = studentRetests.length > 0 && studentRetests.every(r => r.passed === true)
                     const anyFailed = studentRetests.some(r => r.passed === false)
 
@@ -661,23 +596,35 @@ export default function GradePage() {
                           {isAbsent ? (
                             <span className="block text-center text-xs text-slate-300">-</span>
                           ) : (
-                            <div className="flex items-center gap-1 justify-center">
-                              <input
-                                type="number"
-                                min={0}
-                                max={vocabTotal}
-                                value={row.vocabScore}
-                                onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
-                                placeholder="-"
-                                className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                  ${needsRetest(vocabNum, vocabThreshold)
-                                    ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                    : 'border-slate-200 focus:ring-blue-200'
-                                  }`}
-                              />
-                              <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
-                              {needsRetest(vocabNum, vocabThreshold) && (
-                                <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-1 justify-center">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={vocabTotal}
+                                  value={row.vocabScore}
+                                  onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
+                                  placeholder="-"
+                                  className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                    ${needsRetest(vocabNum, vocabThreshold)
+                                      ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                      : 'border-slate-200 focus:ring-blue-200'
+                                    }`}
+                                />
+                                <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
+                                {needsRetest(vocabNum, vocabThreshold) && (
+                                  <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                                )}
+                              </div>
+                              {vocabRetest && dateOptions.length > 0 && (
+                                <select
+                                  value={vocabRetest.retestDate ?? ''}
+                                  onChange={e => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: vocabRetest.id, retestDate: e.target.value || null } })}
+                                  className="border border-orange-200 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-300 bg-white text-orange-700 w-full"
+                                >
+                                  <option value="">재시험 날짜</option>
+                                  {dateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                                </select>
                               )}
                             </div>
                           )}
@@ -686,23 +633,35 @@ export default function GradePage() {
                           {isAbsent ? (
                             <span className="block text-center text-xs text-slate-300">-</span>
                           ) : (
-                            <div className="flex items-center gap-1 justify-center">
-                              <input
-                                type="number"
-                                min={0}
-                                max={dailyTotal}
-                                value={row.dailyScore}
-                                onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
-                                placeholder="-"
-                                className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                                  ${needsRetest(dailyNum, dailyThreshold)
-                                    ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                    : 'border-slate-200 focus:ring-blue-200'
-                                  }`}
-                              />
-                              <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
-                              {needsRetest(dailyNum, dailyThreshold) && (
-                                <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-1 justify-center">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={dailyTotal}
+                                  value={row.dailyScore}
+                                  onChange={e => updateRow(idx, 'dailyScore', e.target.value)}
+                                  placeholder="-"
+                                  className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                    ${needsRetest(dailyNum, dailyThreshold)
+                                      ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                      : 'border-slate-200 focus:ring-blue-200'
+                                    }`}
+                                />
+                                <span className="text-slate-300 text-xs shrink-0">/{dailyTotal}</span>
+                                {needsRetest(dailyNum, dailyThreshold) && (
+                                  <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                                )}
+                              </div>
+                              {dailyRetest && dateOptions.length > 0 && (
+                                <select
+                                  value={dailyRetest.retestDate ?? ''}
+                                  onChange={e => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: dailyRetest.id, retestDate: e.target.value || null } })}
+                                  className="border border-orange-200 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-300 bg-white text-orange-700 w-full"
+                                >
+                                  <option value="">재시험 날짜</option>
+                                  {dateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                                </select>
                               )}
                             </div>
                           )}
@@ -740,7 +699,7 @@ export default function GradePage() {
                       </tr>
                     )
                   })
-                )}
+                })()}
               </tbody>
             </table>
           </div>
@@ -750,136 +709,7 @@ export default function GradePage() {
             Daily Test {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만 입력 시 자동으로 재시험 대상에 추가됩니다
           </div>
         </div>
-      )}
 
-      {/* ─── 재시험 처리 탭 ─── */}
-      {tab === 'retest' && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100">
-          {/* 반 필터 + 저장 */}
-          <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-slate-100">
-            <span className="text-sm text-slate-500 mr-1">반 필터:</span>
-            {[{ id: 'all', name: '전체' }, ...state.classes].map(cls => (
-              <button
-                key={cls.id}
-                onClick={() => setRetestClass(cls.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors
-                  ${retestClass === cls.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-              >
-                {cls.name}
-              </button>
-            ))}
-            <button
-              onClick={handleRetestBatchSave}
-              disabled={!filteredRetests.some(r => retestPassed[r.id])}
-              className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors"
-            >
-              {retestSaveDone ? <CheckCircle size={16} /> : <Save size={16} />}
-              {retestSaveDone ? '저장됨' : '저장'}
-            </button>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-xs text-slate-500">
-                  <th className="text-left px-5 py-3">이름</th>
-                  <th className="text-center px-3 py-3">반</th>
-                  <th className="text-center px-3 py-3">시험 날짜</th>
-                  <th className="text-left px-3 py-3">종류 / 범위</th>
-                  <th className="text-center px-3 py-3">점수</th>
-                  <th className="text-center px-3 py-3">재시험 날짜</th>
-                  <th className="text-center px-3 py-3">통과 여부</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredRetests.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-12 text-slate-400">
-                      미처리 재시험이 없습니다
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRetests.map(r => {
-                    const passed = retestPassed[r.id] ?? false
-                    const sCfg = state.sessionTestConfigs.find(c => c.sessionNum === r.sessionNum)
-                    const total = r.type === 'vocab'
-                      ? (sCfg?.vocabTotal ?? state.vocabTotal)
-                      : (sCfg?.dailyTotal ?? state.dailyTotal)
-                    const unit = r.type === 'vocab'
-                      ? ((sCfg?.vocabMode ?? state.vocabMode) === '개수' ? '개' : '점')
-                      : ((sCfg?.dailyMode ?? state.dailyMode) === '개수' ? '개' : '점')
-                    const testDate = getClassDate(r.sessionNum, getStudentClassDays(r.studentId))
-                    const dateOptions = getRetestDateOptions(testDate)
-                    return (
-                      <tr key={r.id} className={`hover:bg-slate-50 ${passed ? 'bg-green-50/40' : ''}`}>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 text-xs font-bold">
-                              {getStudentName(r.studentId)[0]}
-                            </div>
-                            <span className="font-medium text-slate-800">{getStudentName(r.studentId)}</span>
-                          </div>
-                        </td>
-                        <td className="text-center px-3 py-3 text-slate-500 text-xs">{getClassName(r.studentId)}</td>
-                        <td className="text-center px-3 py-3 text-slate-500 whitespace-nowrap text-xs">
-                          {formatDateKo(testDate)}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0
-                              ${r.type === 'vocab' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                              {r.type === 'vocab' ? '단어' : 'Daily'}
-                            </span>
-                            {(() => {
-                              const studentClassId = state.students.find(s => s.id === r.studentId)?.classId ?? ''
-                              const scope = getScope(r.sessionNum, studentClassId)
-                              const range = r.type === 'vocab' ? scope?.vocabRange : scope?.dailyRange
-                              return range ? (
-                                <span className="text-xs text-slate-400 truncate max-w-[100px]">{range}</span>
-                              ) : null
-                            })()}
-                          </div>
-                        </td>
-                        <td className="text-center px-3 py-3 whitespace-nowrap">
-                          <span className="text-orange-600 font-medium">{r.originalScore}</span>
-                          <span className="text-slate-400 text-xs">/{total}{unit}</span>
-                        </td>
-                        <td className="text-center px-3 py-3">
-                          <select
-                            value={r.retestDate ?? ''}
-                            onChange={e => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: e.target.value || null } })}
-                            className="border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white"
-                          >
-                            <option value="">날짜 선택</option>
-                            {dateOptions.map(d => (
-                              <option key={d} value={d}>{formatDateKo(d)}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="text-center px-3 py-3">
-                          <button
-                            onClick={() => toggleRetestPassed(r.id)}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-medium border transition-colors
-                              ${passed
-                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
-                              }`}
-                          >
-                            {passed ? '통과' : '미통과'}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
