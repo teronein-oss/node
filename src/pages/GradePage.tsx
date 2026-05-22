@@ -308,15 +308,27 @@ export default function GradePage() {
   }, [nextClassDate])
 
   useEffect(() => {
-    if (!nextClassDate) return
+    if (!nextClassDate || !selectedCls) return
+    const validDows = selectedCls.days === 'mon-fri' ? [1, 5]
+      : selectedCls.days === 'tue-thu' ? [2, 4]
+      : selectedCls.days === 'wed-sat' ? [3, 6]
+      : [1, 3, 5]
+    const classStudentIds = new Set(
+      state.students.filter(s => s.classId === selectedClass && s.active).map(s => s.id)
+    )
     for (const r of state.retests) {
-      if (r.passed !== null || r.sessionNum !== selectedSession || r.retestDate) continue
+      if (r.passed !== null || r.sessionNum !== selectedSession) continue
+      if (!classStudentIds.has(r.studentId)) continue
       const key = `${r.studentId}-${r.type}`
-      const dateToSet = retestDateSelections[key] ?? nextClassDate
-      if (dateToSet) dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: dateToSet } })
+      const retestDow = r.retestDate ? new Date(r.retestDate + 'T00:00:00').getDay() : null
+      const hasInvalidDay = retestDow !== null && !validDows.includes(retestDow)
+      if (!r.retestDate || hasInvalidDay) {
+        const dateToSet = retestDateSelections[key] ?? nextClassDate
+        if (dateToSet) dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: dateToSet } })
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.retests, selectedSession, nextClassDate])
+  }, [state.retests, selectedSession, nextClassDate, selectedClass, state.students, selectedCls])
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
