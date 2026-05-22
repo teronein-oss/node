@@ -4,15 +4,6 @@ import { useApp } from '../context/AppContext'
 import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
 import { Pencil, Trash2, X } from 'lucide-react'
 
-function getTodayRetestDateOptions(): string[] {
-  const today = new Date()
-  return Array.from({ length: 8 }, (_, i) => {
-    const opt = new Date(today)
-    opt.setDate(today.getDate() + i)
-    return fmtDate(opt)
-  })
-}
-
 interface GradeRow {
   studentId: string
   name: string
@@ -306,18 +297,36 @@ export default function GradePage() {
     setEditingDailyName(false)
   }
 
+  const nextClassDate = useMemo(() => {
+    if (!selectedCls) return ''
+    return getClassDate(selectedSession + 1, selectedCls.days)
+  }, [selectedSession, selectedCls])
+
+  const retestDateOptions = useMemo(() => {
+    const today = new Date()
+    const opts = Array.from({ length: 8 }, (_, i) => {
+      const opt = new Date(today)
+      opt.setDate(today.getDate() + i)
+      return fmtDate(opt)
+    })
+    if (nextClassDate && !opts.includes(nextClassDate)) {
+      const insertIdx = opts.findIndex(d => d > nextClassDate)
+      if (insertIdx === -1) opts.push(nextClassDate)
+      else opts.splice(insertIdx, 0, nextClassDate)
+    }
+    return opts
+  }, [nextClassDate])
+
   useEffect(() => {
-    if (Object.keys(retestDateSelections).length === 0) return
+    if (!nextClassDate) return
     for (const r of state.retests) {
       if (r.passed !== null || r.sessionNum !== selectedSession || r.retestDate) continue
       const key = `${r.studentId}-${r.type}`
-      const pending = retestDateSelections[key]
-      if (pending) dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: pending } })
+      const dateToSet = retestDateSelections[key] ?? nextClassDate
+      if (dateToSet) dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: dateToSet } })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.retests, selectedSession])
-
-  const retestDateOptions = getTodayRetestDateOptions()
+  }, [state.retests, selectedSession, nextClassDate])
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -714,7 +723,7 @@ export default function GradePage() {
                         </div>
                         {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
                           <select
-                            value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? ''}
+                            value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? nextClassDate}
                             onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
                             className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
                           >
@@ -749,7 +758,7 @@ export default function GradePage() {
                         </div>
                         {(isDailyRetest || dailyRetest) && !dailyRetestPassed && (
                           <select
-                            value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? ''}
+                            value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? nextClassDate}
                             onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value, dailyRetest?.id, dailyNum)}
                             className="border border-blue-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-blue-700"
                           >
