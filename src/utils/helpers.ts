@@ -173,6 +173,32 @@ export function getClassDate(sessionNum: number, days: 'mon-fri' | 'tue-thu' | '
   return fmtDate(mon)
 }
 
+/**
+ * 해당 월의 실제 수업 날짜와 회차 번호를 반환 (목요일 기준 주 배정이 아닌 실제 날짜 기준)
+ * 월 경계에서 목요일-기준 배정과 실제 날짜가 엇갈리는 버그를 방지함
+ */
+export function getMonthClassDates(
+  year: number,
+  month: number,
+  days: 'mon-fri' | 'tue-thu' | 'wed-sat'
+): { date: string; sessionNum: number }[] {
+  const firstDow = days === 'mon-fri' ? 1 : days === 'tue-thu' ? 2 : 3  // Mon/Tue/Wed
+  const secondDow = days === 'mon-fri' ? 5 : days === 'tue-thu' ? 4 : 6  // Fri/Thu/Sat
+  const result: { date: string; sessionNum: number }[] = []
+  const cur = new Date(year, month - 1, 1)
+  const end = new Date(year, month, 0)
+  while (cur <= end) {
+    const dow = cur.getDay()
+    if (dow === firstDow || dow === secondDow) {
+      const weekStart = getWeekStart(cur)
+      const baseSession = getSessionNum(weekStart)
+      result.push({ date: fmtDate(cur), sessionNum: dow === firstDow ? baseSession : baseSession + 1 })
+    }
+    cur.setDate(cur.getDate() + 1)
+  }
+  return result
+}
+
 /** 고유 ID 생성 */
 export function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2)

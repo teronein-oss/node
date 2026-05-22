@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { needsRetest, getWeekStartForSession, getMonthSessions, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
+import { needsRetest, getWeekStartForSession, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate, getMonthClassDates } from '../utils/helpers'
 import { Pencil, Trash2, X } from 'lucide-react'
 
 interface GradeRow {
@@ -41,11 +41,6 @@ export default function GradePage() {
 
   const selectedMonthInfo = availableMonths.find(m => m.ym === selectedYM) ?? availableMonths[0]
 
-  const monthSessions = useMemo(() => {
-    if (!selectedMonthInfo) return []
-    return getMonthSessions(selectedMonthInfo.year, selectedMonthInfo.month, 12)
-  }, [selectedMonthInfo])
-
   const [selectedClass, setSelectedClass] = useState(() => {
     const dow = new Date().getDay()
     const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
@@ -62,15 +57,10 @@ export default function GradePage() {
         .filter(({ date }) => date <= todayStr)
         .sort((a, b) => a.date.localeCompare(b.date))
     }
-    return monthSessions
-      .map(sNum => ({ date: getClassDate(sNum, selectedCls.days), sessionNum: sNum }))
-      .filter(({ date }) => {
-        const [y, m] = date.split('-').map(Number)
-        return y === selectedMonthInfo.year && m === selectedMonthInfo.month
-      })
+    return getMonthClassDates(selectedMonthInfo.year, selectedMonthInfo.month, selectedCls.days as 'mon-fri' | 'tue-thu' | 'wed-sat')
       .filter(({ date }) => date <= todayStr)
       .sort((a, b) => a.date.localeCompare(b.date))
-  }, [selectedCls, monthSessions, selectedMonthInfo, todayStr])
+  }, [selectedCls, selectedMonthInfo, todayStr])
 
   const [rows, setRows] = useState<GradeRow[]>([])
   const [saved, setSaved] = useState(false)
