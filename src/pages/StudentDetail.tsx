@@ -1,8 +1,19 @@
-import { useState } from 'react'
-import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen } from 'lucide-react'
+import { useState, useRef, useMemo } from 'react'
+import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download } from 'lucide-react'
 import type { Student } from '../types'
 import { useApp } from '../context/AppContext'
 import { getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
+import { toPng } from 'html-to-image'
+
+type Period = '1m' | '3m' | '6m' | '1y' | 'all'
+
+const PERIOD_OPTIONS: { value: Period; label: string }[] = [
+  { value: '1m', label: '최근 1개월' },
+  { value: '3m', label: '최근 3개월' },
+  { value: '6m', label: '최근 6개월' },
+  { value: '1y', label: '최근 1년' },
+  { value: 'all', label: '전체' },
+]
 
 interface Props {
   student: Student
@@ -14,6 +25,9 @@ export default function StudentDetail({ student, onClose }: Props) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [transferClassId, setTransferClassId] = useState('')
   const [showTransfer, setShowTransfer] = useState(false)
+  const [period, setPeriod] = useState<Period>('all')
+  const [downloading, setDownloading] = useState(false)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const studentCls = state.classes.find(c => c.id === student.classId)
   const className = studentCls?.name ?? ''
@@ -21,19 +35,44 @@ export default function StudentDetail({ student, onClose }: Props) {
   const classDays = studentCls?.days ?? 'mon-fri'
   const todayStr = fmtDate(new Date())
 
+  const cutoffDate = useMemo(() => {
+    if (period === 'all') return null
+    const d = new Date()
+    if (period === '1m') d.setMonth(d.getMonth() - 1)
+    else if (period === '3m') d.setMonth(d.getMonth() - 3)
+    else if (period === '6m') d.setMonth(d.getMonth() - 6)
+    else if (period === '1y') d.setFullYear(d.getFullYear() - 1)
+    return fmtDate(d)
+  }, [period])
+
   const grades = state.grades
     .filter(g => g.studentId === student.id)
-    .filter(g => getClassDate(g.sessionNum, classDays) <= todayStr)
+    .filter(g => {
+      const date = getClassDate(g.sessionNum, classDays)
+      if (date > todayStr) return false
+      if (cutoffDate && date < cutoffDate) return false
+      return true
+    })
     .sort((a, b) => b.sessionNum - a.sessionNum)
 
   const retests = state.retests
     .filter(r => r.studentId === student.id)
-    .filter(r => getClassDate(r.sessionNum, classDays) <= todayStr)
+    .filter(r => {
+      const date = getClassDate(r.sessionNum, classDays)
+      if (date > todayStr) return false
+      if (cutoffDate && date < cutoffDate) return false
+      return true
+    })
     .sort((a, b) => b.sessionNum - a.sessionNum)
 
   const homeworkRows = state.homeworks
     .filter(hw => hw.classId === student.classId || hw.classId === '')
-    .filter(hw => getClassDate(hw.sessionNum, classDays) <= todayStr)
+    .filter(hw => {
+      const date = getClassDate(hw.sessionNum, classDays)
+      if (date > todayStr) return false
+      if (cutoffDate && date < cutoffDate) return false
+      return true
+    })
     .slice()
     .sort((a, b) => b.sessionNum - a.sessionNum)
     .map(hw => {
@@ -63,34 +102,107 @@ export default function StudentDetail({ student, onClose }: Props) {
     setTransferClassId('')
   }
 
+  const handleDownloadPng = async () => {
+    if (!cardRef.current || downloading) return
+    setDownloading(true)
+
+    const card = cardRef.current
+    const scrollDiv = card.querySelector<HTMLElement>('[data-scroll-area]')
+
+    // Temporarily expand for full-height capture
+    card.style.maxHeight = 'none'
+    card.style.overflow = 'visible'
+    if (scrollDiv) {
+      scrollDiv.style.overflow = 'visible'
+      scrollDiv.style.flex = 'none'
+      scrollDiv.style.maxHeight = 'none'
+    }
+
+    try {
+      const dataUrl = await toPng(card, {
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        filter: (n) => !(n instanceof Element && n.getAttribute('data-no-capture') === 'true'),
+      })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `${student.name}_현황_${fmtDate(new Date())}.png`
+      a.click()
+    } catch (e) {
+      console.error('PNG 다운로드 실패:', e)
+    } finally {
+      card.style.maxHeight = ''
+      card.style.overflow = ''
+      if (scrollDiv) {
+        scrollDiv.style.overflow = ''
+        scrollDiv.style.flex = ''
+        scrollDiv.style.maxHeight = ''
+      }
+      setDownloading(false)
+    }
+  }
+
   const otherClasses = state.classes.filter(c => c.id !== student.classId)
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
+        ref={cardRef}
         className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-lg">
-              {student.name[0]}
+        <div className="px-6 pt-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-lg shrink-0">
+                {student.name[0]}
+              </div>
+              <div>
+                <h2 className="font-bold text-slate-800 text-lg">{student.name}</h2>
+                <p className="text-sm text-slate-500">{className}</p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-slate-800 text-lg">{student.name}</h2>
-              <p className="text-sm text-slate-500">{className}</p>
+            <div className="flex items-center gap-2" data-no-capture="true">
+              <button
+                onClick={handleDownloadPng}
+                disabled={downloading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                title="PNG 다운로드"
+              >
+                <Download size={14} />
+                {downloading ? '저장 중...' : 'PNG'}
+              </button>
+              <button
+                onClick={onClose}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X size={20} />
+              </button>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
-          >
-            <X size={20} />
-          </button>
+          {/* 기간 필터 */}
+          <div className="flex items-center gap-2 mt-2.5">
+            <span className="text-xs text-slate-400">기간</span>
+            <div className="flex gap-1">
+              {PERIOD_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setPeriod(opt.value)}
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors
+                    ${period === opt.value
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 p-6 space-y-6">
+        <div data-scroll-area className="overflow-y-auto flex-1 p-6 space-y-6">
           {/* 날짜별 성적 */}
           <section>
             <h3 className="text-sm font-semibold text-slate-600 mb-3">날짜별 성적</h3>
@@ -178,7 +290,6 @@ export default function StudentDetail({ student, onClose }: Props) {
               <p className="text-sm text-slate-400">등록된 숙제가 없습니다</p>
             ) : (
               <>
-                {/* 요약 */}
                 <div className="flex flex-wrap gap-2 mb-3">
                   {hwCounts.submitted > 0 && (
                     <span className="text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-700 font-medium">
@@ -196,7 +307,6 @@ export default function StudentDetail({ student, onClose }: Props) {
                     </span>
                   )}
                 </div>
-                {/* 목록 */}
                 <div className="border border-slate-100 rounded-xl overflow-hidden">
                   <table className="w-full text-sm">
                     <thead>
@@ -276,12 +386,12 @@ export default function StudentDetail({ student, onClose }: Props) {
             classId={student.classId}
             classDays={classDays}
             currentSessionNum={currentSessionNum}
+            cutoffDate={cutoffDate}
           />
         </div>
 
-        {/* 하단 액션 - 스크롤 영역 밖 */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
-          {/* 반 이동 */}
+        {/* 하단 액션 */}
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3" data-no-capture="true">
           <div>
             {showTransfer ? (
               <div className="flex items-center gap-2">
@@ -320,7 +430,6 @@ export default function StudentDetail({ student, onClose }: Props) {
             )}
           </div>
 
-          {/* 학생 제거 */}
           {confirmRemove ? (
             <div className="flex items-center gap-2">
               <span className="text-sm text-slate-500">정말 제거하시겠습니까?</span>
@@ -356,15 +465,22 @@ function WeeklyProgressSection({
   classId,
   classDays,
   currentSessionNum,
+  cutoffDate,
 }: {
   classId: string
   classDays: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
   currentSessionNum: number
+  cutoffDate: string | null
 }) {
   const { state } = useApp()
 
   const progressRows = (state.weeklyProgress ?? [])
-    .filter(p => p.classId === classId && p.sessionNum <= currentSessionNum)
+    .filter(p => {
+      if (p.classId !== classId) return false
+      if (p.sessionNum > currentSessionNum) return false
+      if (cutoffDate && getClassDate(p.sessionNum, classDays) < cutoffDate) return false
+      return true
+    })
     .sort((a, b) => a.sessionNum - b.sessionNum)
 
   if (progressRows.length === 0) return null
