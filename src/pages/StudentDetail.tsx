@@ -2,22 +2,36 @@ import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download } from 'lucide-react'
 import type { Student } from '../types'
 import { useApp } from '../context/AppContext'
-import { getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
+import { getClassDate, getMWFClassDate, formatDateKo, fmtDate, getMonthClassDates, getMonthMWFSessions } from '../utils/helpers'
 import { toPng } from 'html-to-image'
-
-type Period = '1m' | '3m' | '6m' | '1y' | 'all'
-
-const PERIOD_OPTIONS: { value: Period; label: string }[] = [
-  { value: '1m', label: '최근 1개월' },
-  { value: '3m', label: '최근 3개월' },
-  { value: '6m', label: '최근 6개월' },
-  { value: '1y', label: '최근 1년' },
-  { value: 'all', label: '전체' },
-]
 
 interface Props {
   student: Student
   onClose: () => void
+}
+
+/** 해당 반 유형의 과거 수업 날짜를 최신순으로 반환 */
+function buildClassDateList(classDays: string, todayStr: string): string[] {
+  const result: string[] = []
+  const now = new Date()
+  let y = 2025, m = 1
+
+  while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
+    if (classDays === 'mon-wed-fri') {
+      for (const sNum of getMonthMWFSessions(y, m)) {
+        const d = getMWFClassDate(sNum)
+        if (d <= todayStr) result.push(d)
+      }
+    } else {
+      for (const { date } of getMonthClassDates(y, m, classDays as 'mon-fri' | 'tue-thu' | 'wed-sat')) {
+        if (date <= todayStr) result.push(date)
+      }
+    }
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+
+  return [...new Set(result)].sort().reverse()
 }
 
 export default function StudentDetail({ student, onClose }: Props) {
@@ -25,32 +39,40 @@ export default function StudentDetail({ student, onClose }: Props) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [transferClassId, setTransferClassId] = useState('')
   const [showTransfer, setShowTransfer] = useState(false)
-  const [period, setPeriod] = useState<Period>('all')
+  const [fromDate, setFromDate] = useState<string>('')
   const [downloading, setDownloading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
 
   const studentCls = state.classes.find(c => c.id === student.classId)
   const className = studentCls?.name ?? ''
   const { sessionNum: currentSessionNum } = getCurrentSession()
-  const classDays = studentCls?.days ?? 'mon-fri'
+  const classDays = studentCls?.days ?? 'tue-thu'
   const todayStr = fmtDate(new Date())
 
-  const cutoffDate = useMemo(() => {
-    if (period === 'all') return null
-    const d = new Date()
-    if (period === '1m') d.setMonth(d.getMonth() - 1)
-    else if (period === '3m') d.setMonth(d.getMonth() - 3)
-    else if (period === '6m') d.setMonth(d.getMonth() - 6)
-    else if (period === '1y') d.setFullYear(d.getFullYear() - 1)
-    return fmtDate(d)
-  }, [period])
+  /** 드롭다운용 수업 날짜 목록 (최신순), 월별 그룹 */
+  const classDatesGrouped = useMemo(() => {
+    const all = buildClassDateList(classDays, todayStr)
+    const groups: { label: string; dates: string[] }[] = []
+    const map = new Map<string, string[]>()
+    for (const date of all) {
+      const [y, mo] = date.split('-').map(Number)
+      const key = `${y}년 ${mo}월`
+      if (!map.has(key)) {
+        const arr: string[] = []
+        map.set(key, arr)
+        groups.push({ label: key, dates: arr })
+      }
+      map.get(key)!.push(date)
+    }
+    return groups
+  }, [classDays, todayStr])
 
   const grades = state.grades
     .filter(g => g.studentId === student.id)
     .filter(g => {
       const date = getClassDate(g.sessionNum, classDays)
       if (date > todayStr) return false
-      if (cutoffDate && date < cutoffDate) return false
+      if (fromDate && date < fromDate) return false
       return true
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
@@ -60,7 +82,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     .filter(r => {
       const date = getClassDate(r.sessionNum, classDays)
       if (date > todayStr) return false
-      if (cutoffDate && date < cutoffDate) return false
+      if (fromDate && date < fromDate) return false
       return true
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
@@ -70,7 +92,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     .filter(hw => {
       const date = getClassDate(hw.sessionNum, classDays)
       if (date > todayStr) return false
-      if (cutoffDate && date < cutoffDate) return false
+      if (fromDate && date < fromDate) return false
       return true
     })
     .slice()
@@ -105,11 +127,8 @@ export default function StudentDetail({ student, onClose }: Props) {
   const handleDownloadPng = async () => {
     if (!cardRef.current || downloading) return
     setDownloading(true)
-
     const card = cardRef.current
     const scrollDiv = card.querySelector<HTMLElement>('[data-scroll-area]')
-
-    // Temporarily expand for full-height capture
     card.style.maxHeight = 'none'
     card.style.overflow = 'visible'
     if (scrollDiv) {
@@ -117,7 +136,6 @@ export default function StudentDetail({ student, onClose }: Props) {
       scrollDiv.style.flex = 'none'
       scrollDiv.style.maxHeight = 'none'
     }
-
     try {
       const dataUrl = await toPng(card, {
         backgroundColor: '#ffffff',
@@ -144,6 +162,8 @@ export default function StudentDetail({ student, onClose }: Props) {
 
   const otherClasses = state.classes.filter(c => c.id !== student.classId)
 
+  const fromDateLabel = fromDate ? `${formatDateKo(fromDate)} 이후` : '전체 기간'
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -168,7 +188,6 @@ export default function StudentDetail({ student, onClose }: Props) {
                 onClick={handleDownloadPng}
                 disabled={downloading}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                title="PNG 다운로드"
               >
                 <Download size={14} />
                 {downloading ? '저장 중...' : 'PNG'}
@@ -181,25 +200,39 @@ export default function StudentDetail({ student, onClose }: Props) {
               </button>
             </div>
           </div>
-          {/* 기간 필터 */}
+
+          {/* 기간 선택 */}
           <div className="flex items-center gap-2 mt-2.5">
-            <span className="text-xs text-slate-400">기간</span>
-            <div className="flex gap-1">
-              {PERIOD_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setPeriod(opt.value)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors
-                    ${period === opt.value
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
-                >
-                  {opt.label}
-                </button>
+            <span className="text-xs text-slate-400 shrink-0">기간</span>
+            <select
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 max-w-xs"
+            >
+              <option value="">전체 기간</option>
+              {classDatesGrouped.map(({ label, dates }) => (
+                <optgroup key={label} label={label}>
+                  {dates.map(date => (
+                    <option key={date} value={date}>
+                      {formatDateKo(date)} 이후
+                    </option>
+                  ))}
+                </optgroup>
               ))}
-            </div>
+            </select>
+            {fromDate && (
+              <button
+                onClick={() => setFromDate('')}
+                className="text-xs text-slate-400 hover:text-slate-600 underline"
+              >
+                초기화
+              </button>
+            )}
           </div>
+          {/* 선택된 기간 표시 (PNG 포함용) */}
+          {fromDate && (
+            <p className="text-xs text-blue-600 mt-1">{fromDateLabel} 현황</p>
+          )}
         </div>
 
         <div data-scroll-area className="overflow-y-auto flex-1 p-6 space-y-6">
@@ -386,7 +419,7 @@ export default function StudentDetail({ student, onClose }: Props) {
             classId={student.classId}
             classDays={classDays}
             currentSessionNum={currentSessionNum}
-            cutoffDate={cutoffDate}
+            fromDate={fromDate}
           />
         </div>
 
@@ -465,12 +498,12 @@ function WeeklyProgressSection({
   classId,
   classDays,
   currentSessionNum,
-  cutoffDate,
+  fromDate,
 }: {
   classId: string
   classDays: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
   currentSessionNum: number
-  cutoffDate: string | null
+  fromDate: string
 }) {
   const { state } = useApp()
 
@@ -478,7 +511,7 @@ function WeeklyProgressSection({
     .filter(p => {
       if (p.classId !== classId) return false
       if (p.sessionNum > currentSessionNum) return false
-      if (cutoffDate && getClassDate(p.sessionNum, classDays) < cutoffDate) return false
+      if (fromDate && getClassDate(p.sessionNum, classDays) < fromDate) return false
       return true
     })
     .sort((a, b) => a.sessionNum - b.sessionNum)
