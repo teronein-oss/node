@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Stethoscope } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { fmtDate, formatDateKo } from '../utils/helpers'
+import { fmtDate, formatDateKo, getClassDate } from '../utils/helpers'
 
 function buildCalDays(year: number, month: number): (Date | null)[] {
   const first = new Date(year, month - 1, 1)
@@ -23,9 +23,33 @@ interface DayEntry {
 }
 
 export default function ClinicPage() {
-  const { state, dispatch } = useApp()
+  const { state, dispatch, loading } = useApp()
+  const fixApplied = useRef(false)
   const today = new Date()
   const todayStr = fmtDate(today)
+
+  useEffect(() => {
+    if (loading || fixApplied.current) return
+    fixApplied.current = true
+    for (const r of state.retests) {
+      if (r.passed !== null) continue
+      const student = state.students.find(s => s.id === r.studentId)
+      if (!student?.active) continue
+      const cls = state.classes.find(c => c.id === student.classId)
+      if (!cls) continue
+      const validDows = cls.days === 'mon-fri' ? [1, 5]
+        : cls.days === 'tue-thu' ? [2, 4]
+        : cls.days === 'wed-sat' ? [3, 6]
+        : [1, 3, 5]
+      const correctDate = getClassDate(r.sessionNum + 1, cls.days)
+      const retestDow = r.retestDate ? new Date(r.retestDate + 'T00:00:00').getDay() : null
+      const hasInvalidDay = retestDow !== null && !validDows.includes(retestDow)
+      if (!r.retestDate || hasInvalidDay) {
+        dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: correctDate } })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
 
   const [calYM, setCalYM] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 })
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
