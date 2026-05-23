@@ -10,21 +10,24 @@ interface Props {
   onClose: () => void
 }
 
-/** 해당 반 유형의 과거 수업 날짜를 최신순으로 반환 */
+/** 해당 반 유형의 과거 수업 날짜를 최신순으로 반환 (3개월 이내) */
 function buildClassDateList(classDays: string, todayStr: string): string[] {
   const result: string[] = []
   const now = new Date()
-  let y = 2025, m = 1
+  const cutoff = new Date(now)
+  cutoff.setMonth(cutoff.getMonth() - 3)
+  let y = cutoff.getFullYear(), m = cutoff.getMonth() + 1
 
   while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
+    const cutoffStr = fmtDate(cutoff)
     if (classDays === 'mon-wed-fri') {
       for (const sNum of getMonthMWFSessions(y, m)) {
         const d = getMWFClassDate(sNum)
-        if (d <= todayStr) result.push(d)
+        if (d <= todayStr && d >= cutoffStr) result.push(d)
       }
     } else {
       for (const { date } of getMonthClassDates(y, m, classDays as 'mon-fri' | 'tue-thu' | 'wed-sat')) {
-        if (date <= todayStr) result.push(date)
+        if (date <= todayStr && date >= cutoffStr) result.push(date)
       }
     }
     m++
