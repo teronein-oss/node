@@ -276,11 +276,11 @@ function reducer(state: AppState, action: Action): AppState {
         (item.studentStatuses ?? []).find(ss => ss.studentId === studentId)?.status
       )
       const derivedStatus: HomeworkStatus =
-        allStatuses.some(s => s === '미흡' || s === '미제출') ? '미흡' : '제출'
+        allStatuses.some(s => s === '미흡' || s === '미제출') ? '미흡'
+        : allStatuses.some(s => s === '재확인완료') ? '재확인완료'
+        : '제출'
 
       const existingGrade = state.grades.find(g => g.studentId === studentId && g.sessionNum === sessionNum)
-      // 재확인완료는 수동으로만 변경
-      if (existingGrade?.homeworkDone === '재확인완료') return { ...state, homeworks: updatedHomeworks }
 
       const updatedGrades = existingGrade
         ? state.grades.map(g =>

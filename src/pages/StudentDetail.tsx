@@ -358,7 +358,22 @@ export default function StudentDetail({ student, onClose }: Props) {
                           <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-700">
                             {formatDateKo(getClassDate(hw.sessionNum, classDays))}
                           </td>
-                          <td className="px-4 py-2.5 text-slate-600">{hw.description}</td>
+                          <td className="px-4 py-2.5 text-slate-600">
+                            {(hw.items?.length ?? 0) > 0 ? (
+                              <ul className="space-y-0.5">
+                                {hw.items!.map(item => (
+                                  <li key={item.id} className="flex items-start gap-1.5">
+                                    <span className="text-slate-300 shrink-0">·</span>
+                                    <span>{item.text}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : hw.description ? (
+                              <span>{hw.description}</span>
+                            ) : (
+                              <span className="text-slate-300 text-xs">미입력</span>
+                            )}
+                          </td>
                           <td className="px-4 py-2.5 text-center">
                             {status === '제출' && <span className="text-xs text-green-600 font-medium">제출</span>}
                             {status === '미흡' && <span className="text-xs text-orange-500 font-medium">미흡</span>}
