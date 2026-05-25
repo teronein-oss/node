@@ -46,7 +46,7 @@ type Action =
   | { type: 'SAVE_HOMEWORK'; payload: Omit<HomeworkAssignment, 'id' | 'createdAt'> }
   | { type: 'DELETE_HOMEWORK'; payload: string }
   | { type: 'TOGGLE_HOMEWORK_ITEM'; payload: { assignmentId: string; itemId: string } }
-  | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | null } }
+  | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | '재확인완료' | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
   | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
   | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name: string } }
