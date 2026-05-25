@@ -47,6 +47,7 @@ type Action =
   | { type: 'DELETE_HOMEWORK'; payload: string }
   | { type: 'TOGGLE_HOMEWORK_ITEM'; payload: { assignmentId: string; itemId: string } }
   | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | '재확인완료' | null } }
+  | { type: 'SET_HOMEWORK_RECHECK_DATE'; payload: { assignmentId: string; studentId: string; date: string | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
   | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
   | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name: string } }
@@ -225,10 +226,26 @@ function reducer(state: AppState, action: Action): AppState {
           ...others,
           {
             ...action.payload,
+            recheckDates: action.payload.recheckDates ?? prev?.recheckDates,
             id: prev?.id ?? genId(),
             createdAt: prev?.createdAt ?? new Date().toISOString(),
           },
         ],
+      }
+    }
+
+    case 'SET_HOMEWORK_RECHECK_DATE': {
+      const { assignmentId, studentId, date } = action.payload
+      return {
+        ...state,
+        homeworks: state.homeworks.map(h => {
+          if (h.id !== assignmentId) return h
+          const others = (h.recheckDates ?? []).filter(rd => rd.studentId !== studentId)
+          return {
+            ...h,
+            recheckDates: date === null ? others : [...others, { studentId, date }],
+          }
+        }),
       }
     }
 

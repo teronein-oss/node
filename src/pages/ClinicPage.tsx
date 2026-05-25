@@ -15,11 +15,15 @@ function buildCalDays(year: number, month: number): (Date | null)[] {
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
 
 interface DayEntry {
-  retestId: string
+  kind: 'retest' | 'homework'
+  key: string
   name: string
   className: string
   label: string
   color: string
+  retestId?: string
+  studentId?: string
+  assignmentIds?: string[]
 }
 
 export default function ClinicPage() {
@@ -71,6 +75,55 @@ export default function ClinicPage() {
     return map
   }, [state.retests])
 
+  // 날짜별 숙제 재확인 예정 (미흡/미제출 학생, recheckDate ?? 다음 수업일)
+  const homeworkRechecksByDate = useMemo(() => {
+    const acc: Record<string, Map<string, { status: '미흡' | '미제출'; assignmentIds: string[] }>> = {}
+    for (const hw of state.homeworks) {
+      const worst = new Map<string, '미흡' | '미제출'>()
+      for (const item of hw.items ?? []) {
+        for (const ss of item.studentStatuses ?? []) {
+          if (ss.status === '미제출') worst.set(ss.studentId, '미제출')
+          else if (ss.status === '미흡' && worst.get(ss.studentId) !== '미제출') worst.set(ss.studentId, '미흡')
+        }
+      }
+      for (const [studentId, status] of worst) {
+        const s = state.students.find(st => st.id === studentId)
+        if (!s?.active) continue
+        const cls = state.classes.find(c => c.id === s.classId)
+        if (!cls) continue
+        const date = hw.recheckDates?.find(rd => rd.studentId === studentId)?.date
+          ?? getClassDate(hw.sessionNum + 2, cls.days)
+        if (!acc[date]) acc[date] = new Map()
+        const existing = acc[date].get(studentId)
+        if (existing) {
+          existing.assignmentIds.push(hw.id)
+          if (status === '미제출') existing.status = '미제출'
+        } else {
+          acc[date].set(studentId, { status, assignmentIds: [hw.id] })
+        }
+      }
+    }
+    const map: Record<string, { studentId: string; status: '미흡' | '미제출'; assignmentIds: string[] }[]> = {}
+    for (const [date, m] of Object.entries(acc)) {
+      map[date] = [...m.entries()].map(([studentId, v]) => ({ studentId, ...v }))
+    }
+    return map
+  }, [state.homeworks, state.students, state.classes])
+
+  // 숙제 재확인 완료 처리 — 해당 학생의 미흡/미제출 항목을 재확인완료로
+  const completeHomeworkRecheck = (studentId: string, assignmentIds: string[]) => {
+    for (const aid of assignmentIds) {
+      const hw = state.homeworks.find(h => h.id === aid)
+      if (!hw) continue
+      for (const item of hw.items ?? []) {
+        const st = item.studentStatuses?.find(ss => ss.studentId === studentId)?.status
+        if (st === '미흡' || st === '미제출') {
+          dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: aid, itemId: item.id, studentId, status: '재확인완료' } })
+        }
+      }
+    }
+  }
+
   // 클리닉 필요 학생 (재시험 미통과 + 숙제 미흡/미제출)
   const needsClinicMap = useMemo(() => {
     const map: Record<string, Set<string>> = {}
@@ -105,6 +158,8 @@ export default function ClinicPage() {
       const s = getStudent(r.studentId)
       if (!s) continue
       entries.push({
+        kind: 'retest',
+        key: r.id,
         retestId: r.id,
         name: s.name,
         className: getClassName(r.studentId),
@@ -112,9 +167,23 @@ export default function ClinicPage() {
         color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
       })
     }
+    for (const e of homeworkRechecksByDate[selectedDate] ?? []) {
+      const s = getStudent(e.studentId)
+      if (!s) continue
+      entries.push({
+        kind: 'homework',
+        key: `hw-${e.studentId}`,
+        studentId: e.studentId,
+        assignmentIds: e.assignmentIds,
+        name: s.name,
+        className: getClassName(e.studentId),
+        label: e.status === '미제출' ? '숙제미제출' : '숙제미흡',
+        color: e.status === '미제출' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700',
+      })
+    }
     return entries.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, retestsByDate, state.students, state.classes])
+  }, [selectedDate, retestsByDate, homeworkRechecksByDate, state.students, state.classes])
 
   const prevMonth = () => setCalYM(({ year, month }) =>
     month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
@@ -185,9 +254,18 @@ export default function ClinicPage() {
               const dateStr = fmtDate(date)
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
-              const dayRetests = (retestsByDate[dateStr] ?? []).sort((a, b) =>
-                (getStudent(a.studentId)?.name ?? '').localeCompare(getStudent(b.studentId)?.name ?? '', 'ko')
-              )
+              const dayChips = [
+                ...(retestsByDate[dateStr] ?? []).map(r => ({
+                  key: r.id,
+                  name: getStudent(r.studentId)?.name ?? '?',
+                  cls: r.type === 'vocab' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+                })),
+                ...(homeworkRechecksByDate[dateStr] ?? []).map(e => ({
+                  key: `hw-${e.studentId}`,
+                  name: getStudent(e.studentId)?.name ?? '?',
+                  cls: e.status === '미제출' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700',
+                })),
+              ].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
               const dow = date.getDay()
               return (
                 <div
@@ -205,17 +283,16 @@ export default function ClinicPage() {
                     {date.getDate()}
                   </div>
                   <div className="space-y-0.5">
-                    {dayRetests.slice(0, 3).map(r => (
+                    {dayChips.slice(0, 3).map(c => (
                       <div
-                        key={r.id}
-                        className={`text-xs truncate px-1 py-0.5 rounded font-medium leading-tight
-                          ${r.type === 'vocab' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}
+                        key={c.key}
+                        className={`text-xs truncate px-1 py-0.5 rounded font-medium leading-tight ${c.cls}`}
                       >
-                        {getStudent(r.studentId)?.name ?? '?'}
+                        {c.name}
                       </div>
                     ))}
-                    {dayRetests.length > 3 && (
-                      <div className="text-xs text-slate-400 px-0.5">+{dayRetests.length - 3}명</div>
+                    {dayChips.length > 3 && (
+                      <div className="text-xs text-slate-400 px-0.5">+{dayChips.length - 3}명</div>
                     )}
                   </div>
                 </div>
@@ -253,16 +330,23 @@ export default function ClinicPage() {
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${entry.color}`}>
                       {entry.label}
                     </span>
-                    {confirmingRetestId === entry.retestId ? null : (
+                    {entry.kind === 'homework' ? (
+                      <button
+                        onClick={() => completeHomeworkRecheck(entry.studentId!, entry.assignmentIds ?? [])}
+                        className="text-xs px-2 py-1 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 font-medium shrink-0 transition-colors"
+                      >
+                        재확인 완료
+                      </button>
+                    ) : confirmingRetestId === entry.retestId ? null : (
                       <>
                         <button
-                          onClick={() => setConfirmingRetestId(entry.retestId)}
+                          onClick={() => setConfirmingRetestId(entry.retestId!)}
                           className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium shrink-0 transition-colors"
                         >
                           완료
                         </button>
                         <button
-                          onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId, retestDate: null } })}
+                          onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId!, retestDate: null } })}
                           className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
                         >
                           미응시
@@ -270,12 +354,12 @@ export default function ClinicPage() {
                       </>
                     )}
                   </div>
-                  {confirmingRetestId === entry.retestId && (
+                  {entry.kind === 'retest' && confirmingRetestId === entry.retestId && (
                     <div className="mt-2 flex items-center gap-2 pl-9">
                       <span className="text-xs text-slate-500">재시험 완료 처리할까요?</span>
                       <button
                         onClick={() => {
-                          dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })
+                          dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId!, retestScore: null, passed: true } })
                           setConfirmingRetestId(null)
                         }}
                         className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors"

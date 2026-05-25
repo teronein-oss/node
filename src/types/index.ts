@@ -64,6 +64,7 @@ export interface HomeworkAssignment {
   weekStart: string
   description: string
   items?: HomeworkItem[]
+  recheckDates?: { studentId: string; date: string }[]   // 미흡/미제출 학생별 재확인 날짜 YYYY-MM-DD
   createdAt: string
 }
 

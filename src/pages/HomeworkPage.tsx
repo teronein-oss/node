@@ -77,6 +77,32 @@ export default function HomeworkPage() {
       ? getMWFClassDate(sessionNum - 1)
       : getClassDate(sessionNum - 1, selectedCls?.days ?? 'mon-fri')
 
+  // 재확인 기본 날짜 = 다음 수업일 (검사일 카드 회차 + 1)
+  const nextClassDate = (sessionNum: number) =>
+    getClassDate(sessionNum + 1, selectedCls?.days ?? 'mon-fri')
+
+  // 드롭다운 옵션: 기준일부터 +6일 (7개)
+  const dateRangeOptions = (baseDate: string) => {
+    const base = new Date(baseDate + 'T00:00:00')
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base)
+      d.setDate(base.getDate() + i)
+      return fmtDate(d)
+    })
+  }
+
+  // checkHw에서 미흡/미제출 학생 산출 (미제출 우선, 이름순)
+  const flaggedStudents = (checkHw: HomeworkAssignment) => {
+    const worst = new Map<string, '미흡' | '미제출'>()
+    for (const item of checkHw.items ?? []) {
+      for (const ss of item.studentStatuses ?? []) {
+        if (ss.status === '미제출') worst.set(ss.studentId, '미제출')
+        else if (ss.status === '미흡' && worst.get(ss.studentId) !== '미제출') worst.set(ss.studentId, '미흡')
+      }
+    }
+    return classStudents.filter(s => worst.has(s.id)).map(s => ({ student: s, status: worst.get(s.id)! }))
+  }
+
   // 검사일별 미제출/미흡 현황 (재확인완료 제외)
   const summary = useMemo(() => {
     const studentName = (id: string) => classStudents.find(s => s.id === id)?.name ?? '?'
@@ -428,6 +454,41 @@ export default function HomeworkPage() {
                       ) : (
                         <p className="text-xs text-slate-400">지난 수업에 출제된 숙제가 없습니다</p>
                       )}
+
+                      {/* 재확인 일정 — 미흡/미제출 학생별 날짜 */}
+                      {checkHw && (() => {
+                        const flagged = flaggedStudents(checkHw)
+                        if (flagged.length === 0) return null
+                        const fallback = nextClassDate(sessionNum)
+                        return (
+                          <div className="mt-5 pt-4 border-t border-slate-200/70">
+                            <div className="flex items-center gap-2 mb-2.5">
+                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">재확인 일정</span>
+                              <span className="text-xs text-slate-400">미흡·미제출 학생 다시 확인할 날짜</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                              {flagged.map(({ student, status }) => {
+                                const recheckDate = checkHw.recheckDates?.find(rd => rd.studentId === student.id)?.date ?? fallback
+                                return (
+                                  <div key={student.id} className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-slate-700 w-14 shrink-0 truncate">{student.name}</span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${status === '미제출' ? 'text-red-600 bg-red-50' : 'text-orange-600 bg-orange-50'}`}>{status}</span>
+                                    <select
+                                      value={recheckDate}
+                                      onChange={e => dispatch({ type: 'SET_HOMEWORK_RECHECK_DATE', payload: { assignmentId: checkHw.id, studentId: student.id, date: e.target.value } })}
+                                      className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-slate-700"
+                                    >
+                                      {[...new Set([...dateRangeOptions(date), recheckDate])].sort().map(d => (
+                                        <option key={d} value={d}>{formatDateKo(d)}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {/* 오늘 출제 */}
