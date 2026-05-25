@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download } from 'lucide-react'
-import type { Student } from '../types'
+import type { Student, HomeworkStatus } from '../types'
 import { useApp } from '../context/AppContext'
 import { getClassDate, getMWFClassDate, formatDateKo, fmtDate, getMonthClassDates, getMonthMWFSessions } from '../utils/helpers'
 import { toPng } from 'html-to-image'
@@ -102,7 +102,16 @@ export default function StudentDetail({ student, onClose }: Props) {
     .sort((a, b) => b.sessionNum - a.sessionNum)
     .map(hw => {
       const grade = grades.find(g => g.sessionNum === hw.sessionNum)
-      return { hw, status: grade?.homeworkDone ?? null }
+      // 항목별 제출 상태에서 직접 도출 (과거 데이터 포함 실시간 반영)
+      const myStatuses = (hw.items ?? []).map(item =>
+        (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
+      )
+      let status: HomeworkStatus
+      if (grade?.attendance === '결석') status = '결석'
+      else if (myStatuses.some(s => s === '미흡' || s === '미제출')) status = '미흡'
+      else if (myStatuses.some(s => s === '재확인완료')) status = '재확인완료'
+      else status = grade?.homeworkDone ?? null
+      return { hw, status }
     })
 
   const hwCounts = homeworkRows.reduce(

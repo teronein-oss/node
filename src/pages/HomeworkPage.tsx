@@ -234,13 +234,13 @@ export default function HomeworkPage() {
               </button>
               {showRecheck && (
                 <button
-                  onClick={() => setStatus(itemStatus === '재확인완료' ? null : '재확인완료')}
+                  onClick={() => { if (itemStatus !== '재확인완료') setStatus('재확인완료') }}
                   className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                     ${itemStatus === '재확인완료'
-                      ? 'text-blue-600 bg-blue-50 border-blue-200'
+                      ? 'text-blue-600 bg-blue-50 border-blue-200 cursor-default'
                       : 'text-slate-300 border-slate-200 hover:text-blue-500 hover:border-blue-300'}`}
                 >
-                  재확인
+                  {itemStatus === '재확인완료' ? '재확인완료' : '재확인'}
                 </button>
               )}
             </div>
