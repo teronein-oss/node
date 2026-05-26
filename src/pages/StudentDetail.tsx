@@ -90,6 +90,24 @@ export default function StudentDetail({ student, onClose }: Props) {
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
 
+  // 세션별 숙제 상태 도출 (항목 상태 기준, 과거 데이터 포함 실시간 반영)
+  // 미흡/미제출 없고 검사일(다음 수업)이 지났으면 제출로 간주
+  const homeworkStatusForSession = (sessionNum: number): HomeworkStatus => {
+    const grade = grades.find(g => g.sessionNum === sessionNum)
+    if (grade?.attendance === '결석') return '결석'
+    const hw = state.homeworks.find(h => h.sessionNum === sessionNum && (h.classId === student.classId || h.classId === ''))
+    const items = hw?.items ?? []
+    if (items.length > 0) {
+      const myStatuses = items.map(item =>
+        (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
+      )
+      if (myStatuses.some(s => s === '미흡' || s === '미제출')) return '미흡'
+      if (myStatuses.some(s => s === '재확인완료')) return '재확인완료'
+      if (getClassDate(sessionNum + 1, classDays) <= todayStr) return '제출'
+    }
+    return grade?.homeworkDone ?? null
+  }
+
   const homeworkRows = state.homeworks
     .filter(hw => hw.classId === student.classId || hw.classId === '')
     .filter(hw => {
@@ -100,19 +118,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     })
     .slice()
     .sort((a, b) => b.sessionNum - a.sessionNum)
-    .map(hw => {
-      const grade = grades.find(g => g.sessionNum === hw.sessionNum)
-      // 항목별 제출 상태에서 직접 도출 (과거 데이터 포함 실시간 반영)
-      const myStatuses = (hw.items ?? []).map(item =>
-        (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
-      )
-      let status: HomeworkStatus
-      if (grade?.attendance === '결석') status = '결석'
-      else if (myStatuses.some(s => s === '미흡' || s === '미제출')) status = '미흡'
-      else if (myStatuses.some(s => s === '재확인완료')) status = '재확인완료'
-      else status = grade?.homeworkDone ?? null
-      return { hw, status }
-    })
+    .map(hw => ({ hw, status: homeworkStatusForSession(hw.sessionNum) }))
 
   const hwCounts = homeworkRows.reduce(
     (acc, { status }) => {
@@ -308,10 +314,14 @@ export default function StudentDetail({ student, onClose }: Props) {
                             </td>
                           ))}
                           <td className="text-center px-4 py-2.5">
-                            {g.homeworkDone === '제출' && <span className="text-xs text-green-600 font-medium">제출</span>}
-                            {g.homeworkDone === '미흡' && <span className="text-xs text-orange-500 font-medium">미흡</span>}
-                            {g.homeworkDone === '재확인완료' && <span className="text-xs text-blue-600 font-medium">재확인완료</span>}
-                            {g.homeworkDone === null && <span className="text-slate-300 text-xs">-</span>}
+                            {(() => {
+                              const hwStatus = homeworkStatusForSession(g.sessionNum)
+                              if (hwStatus === '제출') return <span className="text-xs text-green-600 font-medium">제출</span>
+                              if (hwStatus === '미흡') return <span className="text-xs text-orange-500 font-medium">미흡</span>
+                              if (hwStatus === '재확인완료') return <span className="text-xs text-blue-600 font-medium">재확인완료</span>
+                              if (hwStatus === '결석') return <span className="text-xs text-slate-400">결석</span>
+                              return <span className="text-slate-300 text-xs">-</span>
+                            })()}
                           </td>
                           <td className="text-center px-4 py-2.5">
                             {hasRetest
