@@ -50,7 +50,7 @@ type Action =
   | { type: 'SET_HOMEWORK_RECHECK_DATE'; payload: { assignmentId: string; studentId: string; date: string | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
   | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
-  | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name: string } }
+  | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name?: string; total?: number; threshold?: number } }
   | { type: 'DELETE_SCORE_COLUMN'; payload: string }
   | { type: 'SET_THRESHOLD'; payload: { key: 'vocabThreshold' | 'dailyThreshold'; value: number } }
   | { type: 'SET_TEST_CONFIG'; payload: Partial<{ vocabMode: '점수' | '개수'; dailyMode: '점수' | '개수'; vocabTotal: number; dailyTotal: number }> }
@@ -167,6 +167,36 @@ function reducer(state: AppState, action: Action): AppState {
             // 점수가 기준 이상으로 수정됐으면 미처리 재시험 레코드 제거
             const pending = state.retests.find(
               r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === type && r.passed === null
+            )
+            if (pending) retestIdsToRemove.add(pending.id)
+          }
+        }
+
+        // 추가 항목 재시험 처리
+        for (const [colId, score] of Object.entries(g.extras)) {
+          if (score === null) continue
+          const col = state.scoreColumns.find(c => c.id === colId)
+          if (!col?.threshold || col.threshold <= 0) continue
+          if (needsRetest(score, col.threshold)) {
+            const exists = state.retests.some(
+              r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === colId
+            )
+            if (!exists) {
+              newRetests.push({
+                id: genId(),
+                studentId: g.studentId,
+                sessionNum: g.sessionNum,
+                type: colId,
+                originalScore: score,
+                retestScore: null,
+                passed: null,
+                scheduledNote: '',
+                createdAt: now,
+              })
+            }
+          } else {
+            const pending = state.retests.find(
+              r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === colId && r.passed === null
             )
             if (pending) retestIdsToRemove.add(pending.id)
           }
@@ -397,13 +427,18 @@ function reducer(state: AppState, action: Action): AppState {
         ],
       }
 
-    case 'UPDATE_SCORE_COLUMN':
+    case 'UPDATE_SCORE_COLUMN': {
+      const { id: _colId, ...colUpdates } = action.payload
+      const cleanColUpdates = Object.fromEntries(
+        Object.entries(colUpdates).filter(([, v]) => v !== undefined)
+      )
       return {
         ...state,
         scoreColumns: state.scoreColumns.map(c =>
-          c.id === action.payload.id ? { ...c, name: action.payload.name } : c
+          c.id === action.payload.id ? { ...c, ...cleanColUpdates } : c
         ),
       }
+    }
 
     case 'DELETE_SCORE_COLUMN':
       return {

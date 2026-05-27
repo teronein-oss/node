@@ -70,6 +70,8 @@ export default function GradePage() {
   const [newColName, setNewColName] = useState('')
   const [editingColId, setEditingColId] = useState<string | null>(null)
   const [editingColName, setEditingColName] = useState('')
+  const [colThreshStrs, setColThreshStrs] = useState<Record<string, string>>({})
+  const [colTotalStrs, setColTotalStrs] = useState<Record<string, string>>({})
 
   const [editingVocabName, setEditingVocabName] = useState(false)
   const [vocabNameStr, setVocabNameStr] = useState('')
@@ -125,6 +127,8 @@ export default function GradePage() {
     setDailyTotalStr((cfg?.dailyTotal ?? state.dailyTotal).toString())
     setEditingVocabName(false)
     setEditingDailyName(false)
+    setColThreshStrs({})
+    setColTotalStrs({})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession, selectedClass])
 
@@ -247,7 +251,7 @@ export default function GradePage() {
     dispatch({ type: 'DELETE_SCORE_COLUMN', payload: id })
   }
 
-  const handleRetestDateChange = (studentId: string, type: 'vocab' | 'daily', date: string, retestId?: string, originalScore?: number | null) => {
+  const handleRetestDateChange = (studentId: string, type: string, date: string, retestId?: string, originalScore?: number | null) => {
     const key = `${studentId}-${type}`
     setRetestDateSelections(prev => ({ ...prev, [key]: date }))
     if (retestId) {
@@ -579,38 +583,68 @@ export default function GradePage() {
                 </th>
 
                 {/* 추가 항목 컬럼들 */}
-                {state.scoreColumns.map(col => (
-                  <th key={col.id} className="text-center px-4 py-3 w-28">
-                    {editingColId === col.id ? (
-                      <input
-                        autoFocus
-                        value={editingColName}
-                        onChange={e => setEditingColName(e.target.value)}
-                        onBlur={() => handleSaveColName(col.id)}
-                        onKeyDown={e => e.key === 'Enter' && handleSaveColName(col.id)}
-                        className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
-                      />
-                    ) : (
-                      <div className="flex items-center justify-center gap-1">
-                        <span>{col.name}</span>
-                        <button
-                          onClick={() => { setEditingColId(col.id); setEditingColName(col.name) }}
-                          className="text-slate-300 hover:text-blue-500 transition-colors"
-                          title="이름 수정"
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCol(col.id)}
-                          className="text-slate-300 hover:text-red-500 transition-colors"
-                          title="항목 삭제"
-                        >
-                          <Trash2 size={11} />
-                        </button>
+                {state.scoreColumns.map(col => {
+                  const colTotal = col.total ?? 100
+                  const colThresh = col.threshold ?? 0
+                  const totalStr = colTotalStrs[col.id] ?? colTotal.toString()
+                  const threshStr = colThreshStrs[col.id] ?? (colThresh > 0 ? colThresh.toString() : '')
+                  return (
+                    <th key={col.id} className="text-center px-4 py-3 min-w-[10rem]">
+                      {editingColId === col.id ? (
+                        <input
+                          autoFocus
+                          value={editingColName}
+                          onChange={e => setEditingColName(e.target.value)}
+                          onBlur={() => handleSaveColName(col.id)}
+                          onKeyDown={e => e.key === 'Enter' && handleSaveColName(col.id)}
+                          className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center gap-1">
+                          <span>{col.name}</span>
+                          <button
+                            onClick={() => { setEditingColId(col.id); setEditingColName(col.name) }}
+                            className="text-slate-300 hover:text-blue-500 transition-colors"
+                            title="이름 수정"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCol(col.id)}
+                            className="text-slate-300 hover:text-red-500 transition-colors"
+                            title="항목 삭제"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                        <span>총</span>
+                        <input type="number" value={totalStr}
+                          onChange={e => {
+                            setColTotalStrs(prev => ({ ...prev, [col.id]: e.target.value }))
+                            const v = Number(e.target.value)
+                            if (v > 0) dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, total: v } })
+                          }}
+                          onBlur={() => { if (!Number(totalStr)) setColTotalStrs(prev => ({ ...prev, [col.id]: colTotal.toString() })) }}
+                          className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                        <span>점</span>
                       </div>
-                    )}
-                  </th>
-                ))}
+                      <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                        <input type="number" value={threshStr}
+                          onChange={e => {
+                            setColThreshStrs(prev => ({ ...prev, [col.id]: e.target.value }))
+                            const v = Number(e.target.value)
+                            if (v > 0 && v <= colTotal) dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, threshold: v } })
+                          }}
+                          onBlur={() => { if (!Number(threshStr)) setColThreshStrs(prev => ({ ...prev, [col.id]: colThresh > 0 ? colThresh.toString() : '' })) }}
+                          placeholder="커트라인"
+                          className="w-14 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none placeholder:text-slate-300" />
+                        <span>이상 통과</span>
+                      </div>
+                    </th>
+                  )
+                })}
 
                 {/* 상태 */}
                 <th className="text-center px-4 py-3 w-28">상태</th>
@@ -677,7 +711,10 @@ export default function GradePage() {
                 const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
                 const vocabRetestPassed = studentRetests.some(r => r.type === 'vocab' && r.passed === true)
                 const dailyRetestPassed = studentRetests.some(r => r.type === 'daily' && r.passed === true)
-                const hasPendingRetest = !isAbsent && (vocabRetest !== undefined || dailyRetest !== undefined)
+                const hasExtraRetest = !isAbsent && state.scoreColumns.some(col =>
+                  studentRetests.some(r => r.type === col.id && r.passed === null)
+                )
+                const hasPendingRetest = !isAbsent && (vocabRetest !== undefined || dailyRetest !== undefined || hasExtraRetest)
                 const allRetestsPassed = !isAbsent && studentRetests.length > 0 && studentRetests.every(r => r.passed === true)
 
                 return (
@@ -772,19 +809,47 @@ export default function GradePage() {
                     </td>
 
                     {/* 추가 항목들 */}
-                    {state.scoreColumns.map(col => (
-                      <td key={col.id} className="px-4 py-2.5">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={row.extras[col.id] ?? ''}
-                          onChange={e => updateExtra(idx, col.id, e.target.value)}
-                          placeholder="-"
-                          className="w-16 text-center border border-slate-200 rounded-lg py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 mx-auto block"
-                        />
-                      </td>
-                    ))}
+                    {state.scoreColumns.map(col => {
+                      const colTotal = col.total ?? 100
+                      const colThresh = col.threshold ?? 0
+                      const extraNum = row.extras[col.id] !== '' && row.extras[col.id] != null ? Number(row.extras[col.id]) : null
+                      const isExtraRetest = !isAbsent && colThresh > 0 && needsRetest(extraNum, colThresh)
+                      const extraRetest = studentRetests.find(r => r.type === col.id && r.passed === null)
+                      const extraRetestPassed = studentRetests.some(r => r.type === col.id && r.passed === true)
+                      return (
+                        <td key={col.id} className="px-4 py-2.5">
+                          <div className="flex flex-col items-center gap-1.5">
+                            <div className="flex items-center gap-1 justify-center">
+                              <input
+                                type="number"
+                                min={0}
+                                max={colTotal}
+                                value={row.extras[col.id] ?? ''}
+                                onChange={e => updateExtra(idx, col.id, e.target.value)}
+                                placeholder="-"
+                                className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                  ${isExtraRetest
+                                    ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                    : 'border-slate-200 focus:ring-blue-200'
+                                  }`}
+                              />
+                              {colThresh > 0 && <span className="text-slate-300 text-xs shrink-0">/{colTotal}</span>}
+                              {isExtraRetest && <AlertCircle size={14} className="text-orange-400 shrink-0" />}
+                            </div>
+                            {(isExtraRetest || extraRetest) && !extraRetestPassed && (
+                              <select
+                                value={retestDateSelections[`${row.studentId}-${col.id}`] ?? extraRetest?.retestDate ?? nextClassDate}
+                                onChange={e => handleRetestDateChange(row.studentId, col.id, e.target.value, extraRetest?.id, extraNum)}
+                                className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
+                              >
+                                <option value="">날짜 선택</option>
+                                {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                              </select>
+                            )}
+                          </div>
+                        </td>
+                      )
+                    })}
 
                     {/* 상태 */}
                     <td className="px-4 py-2.5 text-center">

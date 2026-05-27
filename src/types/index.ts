@@ -21,6 +21,8 @@ export interface Student {
 export interface ScoreColumn {
   id: string
   name: string
+  total?: number
+  threshold?: number
   createdAt: string
 }
 
@@ -41,7 +43,7 @@ export interface RetestRecord {
   id: string
   studentId: string
   sessionNum: number
-  type: 'vocab' | 'daily'
+  type: string   // 'vocab' | 'daily' | ScoreColumn.id
   originalScore: number
   retestScore: number | null
   passed: boolean | null

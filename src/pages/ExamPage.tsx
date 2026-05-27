@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
   Plus, Pencil, Trash2, Save, X, BookMarked, ChevronLeft, ChevronRight,
-  Calendar, CheckCircle,
+  Calendar, CheckCircle, Link2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { getMonthSessions, getWeekStartForSession, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate } from '../utils/helpers'
@@ -40,6 +40,9 @@ export default function ExamPage() {
   const [editingSession, setEditingSession] = useState<number | null>(null)
   const [progressForm, setProgressForm] = useState({ content: '', memo: '' })
 
+  // 업무일정 연동
+  const [syncModalOpen, setSyncModalOpen] = useState(false)
+
   const availableMonths = useMemo(() => {
     const ymSet = new Set<string>([currentYM])
     for (let i = 1; i <= 3; i++) {
@@ -75,17 +78,20 @@ export default function ExamPage() {
     if (selectedClass.days === 'mon-wed-fri') {
       return getMonthMWFSessions(year, month)
         .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
-        .filter(({ date }) => date <= todayStr)
+        .filter(({ date }) => {
+          const [dy, dm] = date.split('-').map(Number)
+          return dy === year && dm === month
+        })
         .sort((a, b) => a.date.localeCompare(b.date))
     }
     return sessionNums
       .map(sNum => ({ date: getClassDate(sNum, selectedClass.days), sessionNum: sNum }))
       .filter(({ date }) => {
         const [y, m] = date.split('-').map(Number)
-        return y === year && m === month && date <= todayStr
+        return y === year && m === month
       })
       .sort((a, b) => a.date.localeCompare(b.date))
-  }, [selectedClass, sessionNums, year, month, todayStr])
+  }, [selectedClass, sessionNums, year, month])
 
   const examInfo = (state.examInfo ?? []).find(
     e => e.classId === selectedClassId && e.semester === selectedSemester
@@ -349,8 +355,15 @@ export default function ExamPage() {
                 <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 flex-wrap">
                   <div className="flex items-center gap-2 flex-1">
                     <Calendar size={15} className="text-slate-400" />
-                    <h2 className="font-semibold text-slate-800">날짜별 진도 기록</h2>
+                    <h2 className="font-semibold text-slate-800">날짜별 진도 계획표</h2>
                   </div>
+                  <button
+                    onClick={() => setSyncModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200"
+                  >
+                    <Link2 size={12} />
+                    업무일정 연동
+                  </button>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => currentIdx > 0 && setSelectedYM(availableMonths[currentIdx - 1].ym)}
@@ -399,11 +412,19 @@ export default function ExamPage() {
                     ) : classDates.map(({ date, sessionNum: sNum }) => {
                       const progress = getProgress(sNum)
                       const isEditing = editingSession === sNum
+                      const isFuture = date > todayStr
 
                       return (
-                        <tr key={sNum} className={`group ${isEditing ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}>
-                          <td className="px-5 py-3 whitespace-nowrap font-medium text-slate-700 align-top pt-4">
-                            {formatDateKo(date)}
+                        <tr key={sNum} className={`group ${isEditing ? 'bg-blue-50/40' : isFuture ? 'bg-indigo-50/20 hover:bg-indigo-50/40' : 'hover:bg-slate-50'}`}>
+                          <td className="px-5 py-3 whitespace-nowrap align-top pt-4">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium ${isFuture ? 'text-indigo-700' : 'text-slate-700'}`}>
+                                {formatDateKo(date)}
+                              </span>
+                              {isFuture && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-500 font-medium shrink-0">계획</span>
+                              )}
+                            </div>
                           </td>
 
                           {isEditing ? (
@@ -414,7 +435,7 @@ export default function ExamPage() {
                                     type="text"
                                     value={progressForm.content}
                                     onChange={e => setProgressForm(f => ({ ...f, content: e.target.value }))}
-                                    placeholder="진도 내용 입력..."
+                                    placeholder={isFuture ? '진도 계획 입력...' : '진도 내용 입력...'}
                                     autoFocus
                                     onKeyDown={e => { if (e.key === 'Enter') handleSaveProgress(); if (e.key === 'Escape') setEditingSession(null) }}
                                     className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
@@ -450,8 +471,10 @@ export default function ExamPage() {
                             <>
                               <td className="px-4 py-3 align-top">
                                 {progress?.content
-                                  ? <span className="text-slate-700">{progress.content}</span>
-                                  : <span className="text-slate-300 text-xs">미입력</span>
+                                  ? <span className={isFuture ? 'text-indigo-700' : 'text-slate-700'}>{progress.content}</span>
+                                  : isFuture
+                                    ? <span className="text-indigo-300 text-xs">계획 미작성</span>
+                                    : <span className="text-slate-300 text-xs">미입력</span>
                                 }
                               </td>
                               <td className="px-4 py-3 align-top">
@@ -491,6 +514,92 @@ export default function ExamPage() {
             </>
           )}
         </>
+      )}
+      {/* 업무일정 연동 모달 */}
+      {syncModalOpen && selectedClass && (
+        <div
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+          onClick={e => { if (e.target === e.currentTarget) setSyncModalOpen(false) }}
+        >
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[420px] max-w-[calc(100vw-2rem)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Link2 size={16} className="text-indigo-500" />
+                <h3 className="text-base font-semibold text-slate-800">업무일정 연동</h3>
+              </div>
+              <button onClick={() => setSyncModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={16} />
+              </button>
+            </div>
+
+            {(() => {
+              const entries = classDates
+                .map(({ date, sessionNum }) => ({ date, progress: getProgress(sessionNum) }))
+                .filter(({ progress }) => !!progress?.content)
+              return entries.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-slate-400">연동할 진도 항목이 없습니다.</p>
+                  <p className="text-xs text-slate-300 mt-1">진도 내용을 먼저 입력해주세요.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500 mb-3">
+                    <span className="font-semibold text-slate-700">{selectedClass.name}</span>의
+                    진도 항목 <span className="font-semibold text-indigo-600">{entries.length}개</span>를
+                    업무일정표에 추가합니다.
+                  </p>
+                  <div className="border border-slate-100 rounded-lg overflow-hidden mb-4 max-h-60 overflow-y-auto">
+                    {entries.map(({ date, progress }) => (
+                      <div key={date} className="flex items-start gap-3 px-3 py-2.5 border-b border-slate-50 last:border-b-0 hover:bg-slate-50">
+                        <span className={`text-xs shrink-0 mt-0.5 font-medium ${date > todayStr ? 'text-indigo-500' : 'text-slate-500'}`}>
+                          {formatDateKo(date)}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-slate-700 truncate">{progress!.content}</p>
+                          {progress!.memo && <p className="text-[11px] text-slate-400 truncate">{progress!.memo}</p>}
+                        </div>
+                        {date > todayStr && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-500 font-medium shrink-0">계획</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-4">* 업무일정표에 개인 일정으로 추가됩니다. 이미 연동된 항목이 있으면 중복 추가될 수 있습니다.</p>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setSyncModalOpen(false)}
+                      className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={() => {
+                        for (const { date, progress } of entries) {
+                          if (!progress?.content) continue
+                          dispatch({
+                            type: 'ADD_SCHEDULE_EVENT',
+                            payload: {
+                              startDate: date,
+                              endDate: date,
+                              title: `[${selectedClass.name}] ${progress.content}`,
+                              type: 'personal',
+                              completed: false,
+                            },
+                          })
+                        }
+                        setSyncModalOpen(false)
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                      <Link2 size={12} />
+                      연동하기
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
       )}
     </div>
   )
