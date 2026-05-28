@@ -21,6 +21,7 @@ export interface Student {
 export interface ScoreColumn {
   id: string
   name: string
+  mode?: '점수' | '개수'
   total?: number
   threshold?: number
   createdAt: string

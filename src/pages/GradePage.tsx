@@ -584,12 +584,13 @@ export default function GradePage() {
 
                 {/* 추가 항목 컬럼들 */}
                 {state.scoreColumns.map(col => {
+                  const colMode = col.mode ?? '점수'
                   const colTotal = col.total ?? 100
                   const colThresh = col.threshold ?? 0
                   const totalStr = colTotalStrs[col.id] ?? colTotal.toString()
                   const threshStr = colThreshStrs[col.id] ?? (colThresh > 0 ? colThresh.toString() : '')
                   return (
-                    <th key={col.id} className="text-center px-4 py-3 min-w-[10rem]">
+                    <th key={col.id} className="text-center px-4 py-3 min-w-[13rem]">
                       {editingColId === col.id ? (
                         <input
                           autoFocus
@@ -618,6 +619,13 @@ export default function GradePage() {
                           </button>
                         </div>
                       )}
+                      <div className="flex items-center justify-center gap-1 mt-1">
+                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, mode: '점수' } })}
+                          className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                        <span className="text-slate-300 text-xs">|</span>
+                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, mode: '개수' } })}
+                          className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                      </div>
                       <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                         <span>총</span>
                         <input type="number" value={totalStr}
@@ -628,7 +636,7 @@ export default function GradePage() {
                           }}
                           onBlur={() => { if (!Number(totalStr)) setColTotalStrs(prev => ({ ...prev, [col.id]: colTotal.toString() })) }}
                           className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                        <span>점</span>
+                        <span>{colMode === '점수' ? '점' : '개'}</span>
                       </div>
                       <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                         <input type="number" value={threshStr}
@@ -810,6 +818,7 @@ export default function GradePage() {
 
                     {/* 추가 항목들 */}
                     {state.scoreColumns.map(col => {
+                      const colMode = col.mode ?? '점수'
                       const colTotal = col.total ?? 100
                       const colThresh = col.threshold ?? 0
                       const extraNum = row.extras[col.id] !== '' && row.extras[col.id] != null ? Number(row.extras[col.id]) : null
@@ -833,7 +842,7 @@ export default function GradePage() {
                                     : 'border-slate-200 focus:ring-blue-200'
                                   }`}
                               />
-                              {colThresh > 0 && <span className="text-slate-300 text-xs shrink-0">/{colTotal}</span>}
+                              <span className="text-slate-300 text-xs shrink-0">/{colTotal}{colMode === '개수' ? '개' : ''}</span>
                               {isExtraRetest && <AlertCircle size={14} className="text-orange-400 shrink-0" />}
                             </div>
                             {(isExtraRetest || extraRetest) && !extraRetestPassed && (
@@ -875,7 +884,11 @@ export default function GradePage() {
 
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
           * {vocabName} {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
-          {' '}{dailyName} {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만 입력 시 자동으로 재시험 대상에 추가됩니다
+          {' '}{dailyName} {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만
+          {state.scoreColumns.filter(c => (c.threshold ?? 0) > 0).map(c => (
+            <span key={c.id}>, {c.name} {c.threshold}{(c.mode ?? '점수') === '개수' ? '개' : '점'} 미만</span>
+          ))}
+          {' '}입력 시 자동으로 재시험 대상에 추가됩니다
         </div>
       </div>
     </div>

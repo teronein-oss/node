@@ -50,7 +50,7 @@ type Action =
   | { type: 'SET_HOMEWORK_RECHECK_DATE'; payload: { assignmentId: string; studentId: string; date: string | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
   | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
-  | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name?: string; total?: number; threshold?: number } }
+  | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name?: string; mode?: '점수' | '개수'; total?: number; threshold?: number } }
   | { type: 'DELETE_SCORE_COLUMN'; payload: string }
   | { type: 'SET_THRESHOLD'; payload: { key: 'vocabThreshold' | 'dailyThreshold'; value: number } }
   | { type: 'SET_TEST_CONFIG'; payload: Partial<{ vocabMode: '점수' | '개수'; dailyMode: '점수' | '개수'; vocabTotal: number; dailyTotal: number }> }
