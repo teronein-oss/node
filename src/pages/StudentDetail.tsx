@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download } from 'lucide-react'
+import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
 import type { Student, HomeworkStatus } from '../types'
 import { useApp } from '../context/AppContext'
 import { getClassDate, getMWFClassDate, formatDateKo, fmtDate, getMonthClassDates, getMonthMWFSessions } from '../utils/helpers'
@@ -42,6 +42,8 @@ export default function StudentDetail({ student, onClose }: Props) {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [transferClassId, setTransferClassId] = useState('')
   const [showTransfer, setShowTransfer] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameValue, setNameValue] = useState(student.name)
   const [fromDate, setFromDate] = useState<string>('')
   const [downloading, setDownloading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -197,7 +199,54 @@ export default function StudentDetail({ student, onClose }: Props) {
                 {student.name[0]}
               </div>
               <div>
-                <h2 className="font-bold text-slate-800 text-lg">{student.name}</h2>
+                {editingName ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={nameValue}
+                      onChange={e => setNameValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && nameValue.trim()) {
+                          dispatch({ type: 'UPDATE_STUDENT', payload: { ...student, name: nameValue.trim() } })
+                          setEditingName(false)
+                        }
+                        if (e.key === 'Escape') { setNameValue(student.name); setEditingName(false) }
+                      }}
+                      onBlur={() => {
+                        if (nameValue.trim() && nameValue.trim() !== student.name) {
+                          dispatch({ type: 'UPDATE_STUDENT', payload: { ...student, name: nameValue.trim() } })
+                        } else {
+                          setNameValue(student.name)
+                        }
+                        setEditingName(false)
+                      }}
+                      className="font-bold text-slate-800 text-lg border-b-2 border-blue-400 outline-none bg-transparent w-32"
+                    />
+                    <button
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        if (nameValue.trim()) {
+                          dispatch({ type: 'UPDATE_STUDENT', payload: { ...student, name: nameValue.trim() } })
+                        }
+                        setEditingName(false)
+                      }}
+                      className="text-blue-500 hover:text-blue-700"
+                    >
+                      <Check size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 group">
+                    <h2 className="font-bold text-slate-800 text-lg">{student.name}</h2>
+                    <button
+                      onClick={() => { setNameValue(student.name); setEditingName(true) }}
+                      className="text-slate-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                      data-no-capture="true"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  </div>
+                )}
                 <p className="text-sm text-slate-500">{className}</p>
               </div>
             </div>
