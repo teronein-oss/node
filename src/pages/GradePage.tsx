@@ -82,6 +82,7 @@ export default function GradePage() {
   const [dailyRange, setDailyRange] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
   const [retestDateSelections, setRetestDateSelections] = useState<Record<string, string>>({})
+  const [bulkRetestDate, setBulkRetestDate] = useState('')
 
   const sessionConfig = state.sessionTestConfigs.find(
     c => c.sessionNum === selectedSession && c.classId === selectedClass
@@ -129,6 +130,7 @@ export default function GradePage() {
     setEditingDailyName(false)
     setColThreshStrs({})
     setColTotalStrs({})
+    setBulkRetestDate('')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession, selectedClass])
 
@@ -279,6 +281,26 @@ export default function GradePage() {
         dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date || null } })
       }
     }
+  }
+
+  const pendingRetests = useMemo(() => {
+    const classStudentIds = new Set(
+      state.students.filter(s => s.classId === selectedClass && s.active).map(s => s.id)
+    )
+    return state.retests.filter(
+      r => r.sessionNum === selectedSession && r.passed === null && classStudentIds.has(r.studentId)
+    )
+  }, [state.retests, state.students, selectedClass, selectedSession])
+
+  const handleBulkRetestDate = () => {
+    const date = bulkRetestDate || nextClassDate
+    if (!date || pendingRetests.length === 0) return
+    const updates: Record<string, string> = {}
+    for (const r of pendingRetests) {
+      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date } })
+      updates[`${r.studentId}-${r.type}`] = date
+    }
+    setRetestDateSelections(prev => ({ ...prev, ...updates }))
   }
 
   const saveVocabName = (name: string) => {
@@ -480,6 +502,35 @@ export default function GradePage() {
             />
           </div>
         </div>
+
+        {/* 재시험 일괄 날짜 설정 */}
+        {pendingRetests.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 px-5 py-2.5 border-b border-slate-100 bg-orange-50/30">
+            <span className="flex items-center gap-1.5 text-xs text-orange-600 font-medium">
+              <AlertCircle size={13} />
+              재시험 대상자 {pendingRetests.length}명
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-slate-500 shrink-0">날짜 일괄 설정</span>
+              <select
+                value={bulkRetestDate || nextClassDate}
+                onChange={e => setBulkRetestDate(e.target.value)}
+                className="border border-orange-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-300 bg-white text-orange-700"
+              >
+                <option value="">날짜 선택</option>
+                {retestDateOptions.map(d => (
+                  <option key={d} value={d}>{formatDateKo(d)}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleBulkRetestDate}
+                className="px-3 py-1.5 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+              >
+                일괄 적용
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 성적 테이블 */}
         <div className="overflow-x-auto">
