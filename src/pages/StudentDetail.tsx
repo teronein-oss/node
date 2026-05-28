@@ -326,7 +326,11 @@ export default function StudentDetail({ student, onClose }: Props) {
                   <tbody className="divide-y divide-slate-50">
                     {grades.map(g => {
                       const hasRetest = retests.some(r => r.sessionNum === g.sessionNum)
-                      const sCfg = state.sessionTestConfigs.find(c => c.sessionNum === g.sessionNum)
+                      const sCfg = state.sessionTestConfigs.find(
+                        c => c.sessionNum === g.sessionNum && c.classId === student.classId
+                      ) ?? state.sessionTestConfigs.find(
+                        c => c.sessionNum === g.sessionNum && !c.classId
+                      )
                       const vThresh = sCfg?.vocabThreshold ?? state.vocabThreshold
                       const vTotal = sCfg?.vocabTotal ?? state.vocabTotal
                       const vMode = sCfg?.vocabMode ?? state.vocabMode
@@ -354,14 +358,24 @@ export default function StudentDetail({ student, onClose }: Props) {
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>
-                          {state.scoreColumns.map(col => (
-                            <td key={col.id} className="text-center px-4 py-2.5">
-                              {g.extras?.[col.id] !== null && g.extras?.[col.id] !== undefined
-                                ? <span className="font-medium text-slate-700">{g.extras[col.id]}점</span>
-                                : <span className="text-slate-300">-</span>
-                              }
-                            </td>
-                          ))}
+                          {state.scoreColumns.map(col => {
+                            const eScore = g.extras?.[col.id]
+                            const eTotal = col.total ?? 100
+                            const eThresh = col.threshold ?? 0
+                            const eMode = col.mode ?? '점수'
+                            const eFail = eThresh > 0 && eScore != null && eScore < eThresh
+                            return (
+                              <td key={col.id} className="text-center px-4 py-2.5">
+                                {eScore !== null && eScore !== undefined
+                                  ? <span className={`font-medium ${eFail ? 'text-orange-500' : 'text-slate-700'}`}>
+                                      {eScore}
+                                      <span className="text-slate-400 font-normal text-xs">/{eTotal}{eMode === '개수' ? '개' : '점'}</span>
+                                    </span>
+                                  : <span className="text-slate-300">-</span>
+                                }
+                              </td>
+                            )
+                          })}
                           <td className="text-center px-4 py-2.5">
                             {(() => {
                               const hwStatus = homeworkStatusForSession(g.sessionNum)
