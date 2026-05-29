@@ -292,11 +292,9 @@ export default function DashboardPage() {
 
           const hwMissSet = new Set<string>()
           const hwBadSet = new Set<string>()
-          for (const g of gradeRecords) {
-            if (g.attendance === '결석') hwMissSet.add(getStudentName(g.studentId))
-          }
 
           // 미제출(3) > 미흡(2) > 재확인완료(1) > 제출/없음(0)
+          // 결석 학생은 결석생 현황에 별도 표시되므로 숙제 현황에서는 아이템/grade 상태만 사용
           const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
           if (hwItems.length > 0) {
             // 아이템이 있으면 아이템 상태만 사용 (숙제관리와 동일 기준)
