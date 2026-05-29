@@ -295,13 +295,29 @@ export default function DashboardPage() {
           for (const g of gradeRecords) {
             if (g.attendance === '결석') hwMissSet.add(getStudentName(g.studentId))
           }
+
+          // 미제출(3) > 미흡(2) > 재확인완료(1) > 제출/없음(0)
+          const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
+          const worstMap = new Map<string, number>()
+          // 1순위: 아이템별 상태
           for (const item of hwItems) {
             for (const ss of (item.studentStatuses ?? [])) {
               if (!studentIds.has(ss.studentId)) continue
-              const name = getStudentName(ss.studentId)
-              if (ss.status === '미제출') hwMissSet.add(name)
-              else if (ss.status === '미흡') hwBadSet.add(name)
+              const rank = statusRank[ss.status] ?? 0
+              if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
             }
+          }
+          // 2순위: 아이템 상태 없는 학생은 grade.homeworkDone으로 fallback (기존 데이터)
+          for (const g of gradeRecords) {
+            if (g.attendance === '결석' || worstMap.has(g.studentId)) continue
+            const rank = statusRank[g.homeworkDone ?? ''] ?? 0
+            if (rank > 0) worstMap.set(g.studentId, rank)
+          }
+          for (const [studentId, rank] of worstMap) {
+            const name = getStudentName(studentId)
+            if (rank === 3) hwMissSet.add(name)
+            else if (rank === 2) hwBadSet.add(name)
+            // rank === 1 (재확인완료) → 표시 안 함
           }
           const hwMissNames = [...hwMissSet]
           const hwNotGoodNames = [...hwBadSet].filter(n => !hwMissSet.has(n))
