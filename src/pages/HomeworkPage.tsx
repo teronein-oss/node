@@ -91,16 +91,19 @@ export default function HomeworkPage() {
     })
   }
 
-  // checkHw에서 미흡/미제출 학생 산출 (미제출 우선, 이름순)
+  // checkHw에서 미흡/미제출 학생 산출 — 재확인완료 제외, 학생별 최악 상태 기준
   const flaggedStudents = (checkHw: HomeworkAssignment) => {
-    const worst = new Map<string, '미흡' | '미제출'>()
+    const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
+    const worstMap = new Map<string, number>()
     for (const item of checkHw.items ?? []) {
       for (const ss of item.studentStatuses ?? []) {
-        if (ss.status === '미제출') worst.set(ss.studentId, '미제출')
-        else if (ss.status === '미흡' && worst.get(ss.studentId) !== '미제출') worst.set(ss.studentId, '미흡')
+        const rank = statusRank[ss.status] ?? 0
+        if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
       }
     }
-    return classStudents.filter(s => worst.has(s.id)).map(s => ({ student: s, status: worst.get(s.id)! }))
+    return classStudents
+      .filter(s => (worstMap.get(s.id) ?? 0) >= 2)
+      .map(s => ({ student: s, status: (worstMap.get(s.id) === 3 ? '미제출' : '미흡') as '미흡' | '미제출' }))
   }
 
   // 검사일별 미제출/미흡 현황 (재확인완료 제외)

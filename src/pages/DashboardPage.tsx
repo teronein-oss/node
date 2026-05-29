@@ -298,26 +298,29 @@ export default function DashboardPage() {
 
           // 미제출(3) > 미흡(2) > 재확인완료(1) > 제출/없음(0)
           const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
-          const worstMap = new Map<string, number>()
-          // 1순위: 아이템별 상태
-          for (const item of hwItems) {
-            for (const ss of (item.studentStatuses ?? [])) {
-              if (!studentIds.has(ss.studentId)) continue
-              const rank = statusRank[ss.status] ?? 0
-              if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
+          if (hwItems.length > 0) {
+            // 아이템이 있으면 아이템 상태만 사용 (숙제관리와 동일 기준)
+            const worstMap = new Map<string, number>()
+            for (const item of hwItems) {
+              for (const ss of (item.studentStatuses ?? [])) {
+                if (!studentIds.has(ss.studentId)) continue
+                const rank = statusRank[ss.status] ?? 0
+                if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
+              }
             }
-          }
-          // 2순위: 아이템 상태 없는 학생은 grade.homeworkDone으로 fallback (기존 데이터)
-          for (const g of gradeRecords) {
-            if (g.attendance === '결석' || worstMap.has(g.studentId)) continue
-            const rank = statusRank[g.homeworkDone ?? ''] ?? 0
-            if (rank > 0) worstMap.set(g.studentId, rank)
-          }
-          for (const [studentId, rank] of worstMap) {
-            const name = getStudentName(studentId)
-            if (rank === 3) hwMissSet.add(name)
-            else if (rank === 2) hwBadSet.add(name)
-            // rank === 1 (재확인완료) → 표시 안 함
+            for (const [studentId, rank] of worstMap) {
+              const name = getStudentName(studentId)
+              if (rank === 3) hwMissSet.add(name)
+              else if (rank === 2) hwBadSet.add(name)
+              // rank === 1 (재확인완료) → 표시 안 함
+            }
+          } else {
+            // 아이템 없는 경우(기존 데이터)만 grade.homeworkDone fallback
+            for (const g of gradeRecords) {
+              if (g.attendance === '결석') continue
+              const name = getStudentName(g.studentId)
+              if (g.homeworkDone === '미흡') hwBadSet.add(name)
+            }
           }
           const hwMissNames = [...hwMissSet]
           const hwNotGoodNames = [...hwBadSet].filter(n => !hwMissSet.has(n))
