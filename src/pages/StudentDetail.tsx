@@ -92,8 +92,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
 
-  // 세션별 숙제 상태 도출 (항목 상태 기준, 과거 데이터 포함 실시간 반영)
-  // 미흡/미제출 없고 검사일(다음 수업)이 지났으면 제출로 간주
+  // 날짜별 성적 테이블의 숙제 컬럼용 (출제 세션 기준)
   const homeworkStatusForSession = (sessionNum: number): HomeworkStatus => {
     const grade = grades.find(g => g.sessionNum === sessionNum)
     if (grade?.attendance === '결석') return '결석'
@@ -110,21 +109,49 @@ export default function StudentDetail({ student, onClose }: Props) {
     return grade?.homeworkDone ?? null
   }
 
+  // 숙제현황 테이블용 (검사 세션 기준 — 세션 N에서 세션 N-1 숙제를 검사)
+  type DetailedHwStatus = HomeworkStatus | '미제출'
+  const homeworkStatusForCheckSession = (checkSessionNum: number): DetailedHwStatus => {
+    const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSessionNum)
+    if (checkGrade?.attendance === '결석') return '결석'
+    const hw = state.homeworks.find(h => h.sessionNum === checkSessionNum - 1 && (h.classId === student.classId || h.classId === ''))
+    const items = hw?.items ?? []
+    if (items.length > 0) {
+      const rankMap: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
+      const worstRank = Math.max(...items.map(item => {
+        const s = (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
+        return rankMap[s ?? ''] ?? 0
+      }))
+      if (worstRank === 3) return '미제출'
+      if (worstRank === 2) return '미흡'
+      if (worstRank === 1) return '재확인완료'
+      if (getClassDate(checkSessionNum, classDays) <= todayStr) return '제출'
+      return null
+    }
+    const assignGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSessionNum - 1)
+    return assignGrade?.homeworkDone ?? checkGrade?.homeworkDone ?? null
+  }
+
   const homeworkRows = state.homeworks
     .filter(hw => hw.classId === student.classId || hw.classId === '')
     .filter(hw => {
-      const date = getClassDate(hw.sessionNum, classDays)
-      if (date > todayStr) return false
-      if (fromDate && date < fromDate) return false
+      const checkDate = getClassDate(hw.sessionNum + 1, classDays)
+      if (checkDate > todayStr) return false
+      if (fromDate && checkDate < fromDate) return false
       return true
     })
     .slice()
     .sort((a, b) => b.sessionNum - a.sessionNum)
-    .map(hw => ({ hw, status: homeworkStatusForSession(hw.sessionNum) }))
+    .map(hw => ({
+      hw,
+      checkDate: getClassDate(hw.sessionNum + 1, classDays),
+      status: homeworkStatusForCheckSession(hw.sessionNum + 1),
+    }))
 
   const hwCounts = homeworkRows.reduce(
     (acc, { status }) => {
       if (status === '제출') acc.submitted++
+      else if (status === '미제출') acc.missing++
       else if (status === '미흡') acc.incomplete++
       else if (status === '결석') acc.absent++
       return acc
@@ -414,6 +441,11 @@ export default function StudentDetail({ student, onClose }: Props) {
                       제출 {hwCounts.submitted}회
                     </span>
                   )}
+                  {hwCounts.missing > 0 && (
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-red-50 text-red-600 font-medium">
+                      미제출 {hwCounts.missing}회
+                    </span>
+                  )}
                   {hwCounts.incomplete > 0 && (
                     <span className="text-xs px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 font-medium">
                       미흡 {hwCounts.incomplete}회
@@ -429,16 +461,16 @@ export default function StudentDetail({ student, onClose }: Props) {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50 text-xs text-slate-500">
-                        <th className="text-left px-4 py-2.5 w-32">날짜</th>
+                        <th className="text-left px-4 py-2.5 w-32">검사일</th>
                         <th className="text-left px-4 py-2.5">숙제 내용</th>
                         <th className="text-center px-4 py-2.5 w-24">상태</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {homeworkRows.map(({ hw, status }) => (
+                      {homeworkRows.map(({ hw, checkDate, status }) => (
                         <tr key={hw.id} className="hover:bg-slate-50">
                           <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-700">
-                            {formatDateKo(getClassDate(hw.sessionNum, classDays))}
+                            {formatDateKo(checkDate)}
                           </td>
                           <td className="px-4 py-2.5 text-slate-600">
                             {(hw.items?.length ?? 0) > 0 ? (
@@ -458,6 +490,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                           </td>
                           <td className="px-4 py-2.5 text-center">
                             {status === '제출' && <span className="text-xs text-green-600 font-medium">제출</span>}
+                            {status === '미제출' && <span className="text-xs text-red-500 font-medium">미제출</span>}
                             {status === '미흡' && <span className="text-xs text-orange-500 font-medium">미흡</span>}
                             {status === '재확인완료' && <span className="text-xs text-blue-600 font-medium">재확인완료</span>}
                             {status === '결석' && <span className="text-xs text-slate-400">결석</span>}
