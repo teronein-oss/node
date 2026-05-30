@@ -9,6 +9,12 @@ function ScheduleGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { isAdmin, viewingUid } = useAuth()
+  if (!isAdmin || viewingUid) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 const DashboardPage = lazy(() => import('../pages/DashboardPage'))
 const GradePage = lazy(() => import('../pages/GradePage'))
 const StudentPage = lazy(() => import('../pages/StudentPage'))
@@ -64,8 +70,8 @@ export const router = createBrowserRouter([
       { path: 'exam', element: <Lazy><ExamPage /></Lazy> },
       { path: 'clinic', element: <Lazy><ClinicPage /></Lazy> },
       { path: 'schedule', element: <ScheduleGuard><Lazy><SchedulePage /></Lazy></ScheduleGuard> },
-      { path: 'admin', element: <Lazy><AdminPage /></Lazy> },
-      { path: 'admin/manage', element: <Lazy><AdminManagePage /></Lazy> },
+      { path: 'admin', element: <AdminGuard><Lazy><AdminPage /></Lazy></AdminGuard> },
+      { path: 'admin/manage', element: <AdminGuard><Lazy><AdminManagePage /></Lazy></AdminGuard> },
     ],
   },
 ])
