@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, ListTodo, Trash2, UserX } from 'lucide-react'
+import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, Trash2, UserX } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { ScheduleEvent } from '../types'
@@ -207,12 +207,6 @@ export default function DashboardPage() {
   const currentYM = `${todayYear}-${todayMonth}`
 
   const ownEvents = state.scheduleEvents ?? []
-  const personalEvents = useMemo(
-    () => ownEvents.filter(e => e.type === 'personal').sort((a, b) => a.startDate.localeCompare(b.startDate)),
-    [ownEvents]
-  )
-  // 관리자 본인 대시보드: 자신의 'all' 이벤트 사용 (globalScheduleEvents는 비어 있음)
-  // 관리자가 다른 사람 뷰잉 중이거나 비관리자: globalScheduleEvents 사용
   const allEvents = useMemo(
     () => (isAdmin && !viewingUid
       ? ownEvents.filter(e => e.type === 'all')
@@ -220,7 +214,7 @@ export default function DashboardPage() {
     ).sort((a: { startDate: string }, b: { startDate: string }) => a.startDate.localeCompare(b.startDate)),
     [isAdmin, viewingUid, ownEvents, globalScheduleEvents]
   )
-  const scheduleEvents = useMemo(() => [...personalEvents, ...allEvents], [personalEvents, allEvents])
+  const scheduleEvents = allEvents
 
   // 월 목록
   const availableMonths = useMemo(() => {
@@ -412,15 +406,6 @@ export default function DashboardPage() {
             icon={Megaphone}
             iconColor="text-amber-500"
             events={allEvents}
-            onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
-            onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
-            readOnly={isJogyo}
-          />
-          <SchedulePanel
-            title="To Do List"
-            icon={ListTodo}
-            iconColor="text-blue-500"
-            events={personalEvents}
             onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
             onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
             readOnly={isJogyo}
