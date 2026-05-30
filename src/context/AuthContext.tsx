@@ -137,17 +137,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             status: 'approved',
             createdAt: (existing?.data() as RegistrationInfo | undefined)?.createdAt ?? new Date().toISOString(),
           }, { merge: true })
-          // 기존 승인된 선생님들을 approvedTeachers에 자동 동기화
-          const teacherMap: Record<string, string> = {}
+          // 승인된 선생님 + 관리자를 approvedTeachers에 동기화 (조교 전환 드롭다운에서 관리자도 표시되도록)
+          const teacherMap: Record<string, string> = {
+            [fbUser.uid]: adminDisplayName,
+          }
           snap.docs.forEach(d => {
             const reg = d.data() as RegistrationInfo
             if (reg.role === '선생님' && reg.status === 'approved') {
               teacherMap[reg.uid] = reg.displayName
             }
           })
-          if (Object.keys(teacherMap).length > 0) {
-            setDoc(doc(db, 'config', 'sharedData'), { approvedTeachers: teacherMap }, { merge: true })
-          }
+          setDoc(doc(db, 'config', 'sharedData'), { approvedTeachers: teacherMap }, { merge: true })
         })
         return
       }
