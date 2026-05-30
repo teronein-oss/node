@@ -23,6 +23,7 @@ export interface RegistrationInfo {
   status: 'pending' | 'approved' | 'rejected'
   createdAt: string
   assignedTeacherUid?: string | null
+  assignedTeacherUids?: string[]
 }
 
 export interface UserProfile {
@@ -47,12 +48,17 @@ interface AuthContextValue {
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   approvedTeachers: Array<{ uid: string; displayName: string }>
+  jogyoTeacherUids: string[]
+  jogyoTeachers: Array<{ uid: string; displayName: string }>
+  switchTeacher: (uid: string) => void
   submitRegistration: (name: string, role: string, assignedTeacherUid?: string | null) => Promise<void>
   // Admin
   approveUser: (uid: string) => Promise<void>
   rejectUser: (uid: string) => Promise<void>
   deleteRegistration: (uid: string) => Promise<void>
   assignTeacher: (jogyoUid: string, teacherUid: string | null) => Promise<void>
+  addTeacherToJogyo: (jogyoUid: string, teacherUid: string) => Promise<void>
+  removeTeacherFromJogyo: (jogyoUid: string, teacherUid: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -71,7 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
   const [viewingUserRole, setViewingUserRole] = useState<string | null>(null)
   const [approvedTeachers, setApprovedTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
+  const [jogyoTeacherUids, setJogyoTeacherUids] = useState<string[]>([])
 
+  const jogyoTeachers = approvedTeachers.filter(t => jogyoTeacherUids.includes(t.uid))
+
+  const switchTeacher = (uid: string) => setAdminUid(uid)
 
   const setViewingUid = (uid: string | null, name?: string, role?: string) => {
     setViewingUidState(uid)
@@ -152,7 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: data.displayName, role: data.role })
             setRegistrationStatus('approved')
             if (data.role === '조교') {
-              setAdminUid(data.assignedTeacherUid ?? null)
+              const uids = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
+              setJogyoTeacherUids(uids)
+              setAdminUid(prev => (prev && uids.includes(prev)) ? prev : (uids[0] ?? null))
             }
           } else if (data.status === 'rejected') {
             setUser(null)
@@ -264,12 +276,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await updateDoc(doc(db, 'registrations', jogyoUid), { assignedTeacherUid: teacherUid })
   }
 
+  const addTeacherToJogyo = async (jogyoUid: string, teacherUid: string) => {
+    const snap = await getDoc(doc(db, 'registrations', jogyoUid))
+    if (!snap.exists()) return
+    const data = snap.data() as RegistrationInfo
+    const existing = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
+    const next = [...new Set([...existing, teacherUid])]
+    await updateDoc(doc(db, 'registrations', jogyoUid), { assignedTeacherUids: next, assignedTeacherUid: next[0] ?? null })
+  }
+
+  const removeTeacherFromJogyo = async (jogyoUid: string, teacherUid: string) => {
+    const snap = await getDoc(doc(db, 'registrations', jogyoUid))
+    if (!snap.exists()) return
+    const data = snap.data() as RegistrationInfo
+    const existing = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
+    const next = existing.filter(u => u !== teacherUid)
+    await updateDoc(doc(db, 'registrations', jogyoUid), { assignedTeacherUids: next, assignedTeacherUid: next[0] ?? null })
+  }
+
   return (
     <AuthContext.Provider value={{
       firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, setViewingUid,
-      approvedTeachers,
+      approvedTeachers, jogyoTeacherUids, jogyoTeachers, switchTeacher,
       signInWithGoogle, signOut, submitRegistration,
-      approveUser, rejectUser, deleteRegistration, assignTeacher,
+      approveUser, rejectUser, deleteRegistration, assignTeacher, addTeacherToJogyo, removeTeacherFromJogyo,
     }}>
       {children}
     </AuthContext.Provider>

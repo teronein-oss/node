@@ -28,7 +28,7 @@ function AdminTabs() {
 }
 
 export default function AdminPage() {
-  const { approveUser, rejectUser, deleteRegistration, setViewingUid, assignTeacher } = useAuth()
+  const { approveUser, rejectUser, deleteRegistration, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo } = useAuth()
   const [registrations, setRegistrations] = useState<RegistrationInfo[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -51,7 +51,11 @@ export default function AdminPage() {
 
   const teachers = approved.filter(r => r.role === '선생님' || r.role === '관리자')
   const jogyoList = approved.filter(r => r.role === '조교')
-  const unassignedJogyo = jogyoList.filter(r => !r.assignedTeacherUid)
+
+  const getJogyoUids = (r: RegistrationInfo) =>
+    r.assignedTeacherUids ?? (r.assignedTeacherUid ? [r.assignedTeacherUid] : [])
+
+  const unassignedJogyo = jogyoList.filter(r => getJogyoUids(r).length === 0)
 
   const handleApprove = async (uid: string) => {
     await approveUser(uid)
@@ -69,12 +73,10 @@ export default function AdminPage() {
     await load()
   }
 
-  // 선생님/관리자: 해당 uid로 대시보드 보기
-  // 조교: 담당 선생님 uid로 대시보드 보기 (조교 본인 데이터 없음)
-  const handleView = (reg: RegistrationInfo) => {
-    if (reg.role === '조교' && reg.assignedTeacherUid) {
-      // 조교는 담당 선생님 데이터를 사용하지만, 메뉴는 조교 기준으로 필터링
-      setViewingUid(reg.assignedTeacherUid, `${reg.displayName} 조교 뷰`, '조교')
+  const handleView = (reg: RegistrationInfo, teacherUid?: string) => {
+    if (reg.role === '조교') {
+      const uid = teacherUid ?? getJogyoUids(reg)[0]
+      if (uid) setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교')
     } else {
       setViewingUid(reg.uid, reg.displayName, reg.role)
     }
@@ -152,7 +154,8 @@ export default function AdminPage() {
         ) : (
           <div className="space-y-3">
             {teachers.map(teacher => {
-              const assignedJogyo = jogyoList.filter(j => j.assignedTeacherUid === teacher.uid)
+              const assignedJogyo = jogyoList.filter(j => getJogyoUids(j).includes(teacher.uid))
+              const unassignedToThisTeacher = jogyoList.filter(j => !getJogyoUids(j).includes(teacher.uid))
               return (
                 <div key={teacher.uid} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                   {/* 선생님 행 */}
@@ -188,7 +191,7 @@ export default function AdminPage() {
                   </div>
 
                   {/* 소속 조교 */}
-                  {assignedJogyo.length > 0 && (
+                  {(assignedJogyo.length > 0 || unassignedToThisTeacher.length > 0) && (
                     <div className="border-t border-slate-100 bg-slate-50/60">
                       {assignedJogyo.map(jogyo => (
                         <div key={jogyo.uid} className="px-4 py-2.5 flex items-center justify-between border-b border-slate-100 last:border-b-0">
@@ -204,7 +207,7 @@ export default function AdminPage() {
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <button
-                              onClick={() => handleView(jogyo)}
+                              onClick={() => handleView(jogyo, teacher.uid)}
                               className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
                               title={`${teacher.displayName} 선생님 대시보드로 연결`}
                             >
@@ -212,10 +215,12 @@ export default function AdminPage() {
                             </button>
                             <button
                               onClick={async () => {
-                                await assignTeacher(jogyo.uid, null)
-                                setRegistrations(prev => prev.map(r =>
-                                  r.uid === jogyo.uid ? { ...r, assignedTeacherUid: null } : r
-                                ))
+                                await removeTeacherFromJogyo(jogyo.uid, teacher.uid)
+                                setRegistrations(prev => prev.map(r => {
+                                  if (r.uid !== jogyo.uid) return r
+                                  const next = getJogyoUids(r).filter(u => u !== teacher.uid)
+                                  return { ...r, assignedTeacherUids: next, assignedTeacherUid: next[0] ?? null }
+                                }))
                               }}
                               className="text-[11px] px-2 py-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             >
@@ -230,6 +235,30 @@ export default function AdminPage() {
                           </div>
                         </div>
                       ))}
+                      {/* 이 선생님에게 조교 추가 배정 */}
+                      {unassignedToThisTeacher.length > 0 && (
+                        <div className="px-4 py-2 border-t border-slate-100">
+                          <select
+                            className="border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                            value=""
+                            onChange={async (e) => {
+                              const jogyoUid = e.target.value
+                              if (!jogyoUid) return
+                              await addTeacherToJogyo(jogyoUid, teacher.uid)
+                              setRegistrations(prev => prev.map(r => {
+                                if (r.uid !== jogyoUid) return r
+                                const next = [...new Set([...getJogyoUids(r), teacher.uid])]
+                                return { ...r, assignedTeacherUids: next, assignedTeacherUid: next[0] ?? null }
+                              }))
+                            }}
+                          >
+                            <option value="">조교 추가 배정...</option>
+                            {unassignedToThisTeacher.map(j => (
+                              <option key={j.uid} value={j.uid}>{j.displayName}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -262,10 +291,12 @@ export default function AdminPage() {
                       onChange={async (e) => {
                         const teacherUid = e.target.value || null
                         if (!teacherUid) return
-                        await assignTeacher(jogyo.uid, teacherUid)
-                        setRegistrations(prev => prev.map(r =>
-                          r.uid === jogyo.uid ? { ...r, assignedTeacherUid: teacherUid } : r
-                        ))
+                        await addTeacherToJogyo(jogyo.uid, teacherUid)
+                        setRegistrations(prev => prev.map(r => {
+                          if (r.uid !== jogyo.uid) return r
+                          const next = [...new Set([...getJogyoUids(r), teacherUid])]
+                          return { ...r, assignedTeacherUids: next, assignedTeacherUid: next[0] ?? null }
+                        }))
                       }}
                     >
                       <option value="">담당 선생님 배정...</option>

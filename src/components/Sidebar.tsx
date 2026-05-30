@@ -18,11 +18,12 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, isAdmin, viewingUid, viewingUserRole, signOut } = useAuth()
+  const { user, isAdmin, adminUid, viewingUid, viewingUserRole, signOut, jogyoTeachers, switchTeacher } = useAuth()
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
   const isJogyo = effectiveRole === '조교'
   const visibleNavItems = NAV_ITEMS.filter(item => !(isJogyo && item.to === '/schedule'))
+  const showTeacherSwitcher = !viewingUid && user?.role === '조교' && jogyoTeachers.length > 1
 
   return (
     <>
@@ -100,6 +101,28 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </>
           )}
         </nav>
+
+        {/* 조교 담당 선생님 전환 */}
+        {showTeacherSwitcher && (
+          <div className="px-3 pb-3 border-t border-slate-700 pt-3">
+            <p className="text-[11px] text-slate-500 px-1 mb-1.5 uppercase tracking-wide">담당 선생님</p>
+            <div className="flex flex-col gap-1">
+              {jogyoTeachers.map(t => (
+                <button
+                  key={t.uid}
+                  onClick={() => { switchTeacher(t.uid); onClose() }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium text-left transition-colors
+                    ${adminUid === t.uid
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
+                    }`}
+                >
+                  {t.displayName}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 사용자 정보 + 로그아웃 */}
         <div className="px-4 py-4 border-t border-slate-700 space-y-3">
