@@ -18,13 +18,21 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, isAdmin, adminUid, viewingUid, viewingUserRole, signOut, jogyoTeachers, switchTeacher } = useAuth()
+  const { user, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingJogyoTeachers, signOut, jogyoTeachers, switchTeacher, setViewingUid } = useAuth()
   const navigate = useNavigate()
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
   const isJogyo = effectiveRole === '조교'
   const visibleNavItems = NAV_ITEMS.filter(item => !(isJogyo && item.to === '/schedule'))
-  const showTeacherSwitcher = !viewingUid && user?.role === '조교' && jogyoTeachers.length > 1
+
+  // 실제 조교 본인: 담당 선생님 2명 이상
+  const isOwnJogyoSwitch = !viewingUid && user?.role === '조교' && jogyoTeachers.length > 1
+  // 관리자가 조교 뷰로 진입한 경우: 해당 조교가 2개 이상 선생님 배정
+  const isAdminJogyoSwitch = !!viewingUid && viewingUserRole === '조교' && viewingJogyoTeachers.length > 1
+  const showTeacherSwitcher = isOwnJogyoSwitch || isAdminJogyoSwitch
+
+  const switcherTeachers = isAdminJogyoSwitch ? viewingJogyoTeachers : jogyoTeachers
+  const switcherCurrentUid = isAdminJogyoSwitch ? viewingUid : adminUid
 
   return (
     <>
@@ -122,15 +130,19 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             <div>
               <p className="text-[11px] text-slate-500 mb-1 px-1">담당 선생님</p>
               <select
-                value={adminUid ?? ''}
+                value={switcherCurrentUid ?? ''}
                 onChange={(e) => {
-                  switchTeacher(e.target.value)
+                  if (isAdminJogyoSwitch) {
+                    setViewingUid(e.target.value, viewingUserName ?? undefined, '조교', viewingJogyoTeachers)
+                  } else {
+                    switchTeacher(e.target.value)
+                  }
                   navigate('/')
                   onClose()
                 }}
                 className="w-full bg-slate-700 text-white text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 border border-slate-600 cursor-pointer"
               >
-                {jogyoTeachers.map(t => (
+                {switcherTeachers.map(t => (
                   <option key={t.uid} value={t.uid}>{t.displayName}</option>
                 ))}
               </select>

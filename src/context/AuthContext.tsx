@@ -44,7 +44,8 @@ interface AuthContextValue {
   viewingUid: string | null
   viewingUserName: string | null
   viewingUserRole: string | null
-  setViewingUid: (uid: string | null, name?: string, role?: string) => void
+  viewingJogyoTeachers: Array<{ uid: string; displayName: string }>
+  setViewingUid: (uid: string | null, name?: string, role?: string, jogyoTeachers?: Array<{ uid: string; displayName: string }>) => void
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   approvedTeachers: Array<{ uid: string; displayName: string }>
@@ -78,15 +79,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewingUserRole, setViewingUserRole] = useState<string | null>(null)
   const [approvedTeachers, setApprovedTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
   const [jogyoTeacherUids, setJogyoTeacherUids] = useState<string[]>([])
+  const [viewingJogyoTeachers, setViewingJogyoTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
 
   const jogyoTeachers = approvedTeachers.filter(t => jogyoTeacherUids.includes(t.uid))
 
   const switchTeacher = (uid: string) => setAdminUid(uid)
 
-  const setViewingUid = (uid: string | null, name?: string, role?: string) => {
+  const setViewingUid = (uid: string | null, name?: string, role?: string, jogyoTeacherList?: Array<{ uid: string; displayName: string }>) => {
     setViewingUidState(uid)
     setViewingUserName(uid ? (name ?? null) : null)
     setViewingUserRole(uid ? (role ?? null) : null)
+    setViewingJogyoTeachers(uid && role === '조교' ? (jogyoTeacherList ?? []) : [])
   }
   const regUnsubRef = useRef<(() => void) | null>(null)
 
@@ -296,7 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, setViewingUid,
+      firebaseUser, user, registrationStatus, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingJogyoTeachers, setViewingUid,
       approvedTeachers, jogyoTeacherUids, jogyoTeachers, switchTeacher,
       signInWithGoogle, signOut, submitRegistration,
       approveUser, rejectUser, deleteRegistration, assignTeacher, addTeacherToJogyo, removeTeacherFromJogyo,

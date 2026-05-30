@@ -76,7 +76,10 @@ export default function AdminPage() {
   const handleView = (reg: RegistrationInfo, teacherUid?: string) => {
     if (reg.role === '조교') {
       const uid = teacherUid ?? getJogyoUids(reg)[0]
-      if (uid) setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교')
+      if (uid) {
+        const jogyoTeacherList = teachers.filter(t => getJogyoUids(reg).includes(t.uid))
+        setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교', jogyoTeacherList)
+      }
     } else {
       setViewingUid(reg.uid, reg.displayName, reg.role)
     }
