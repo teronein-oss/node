@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, School, CalendarDays, LogOut, Shield, Stethoscope } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const { user, isAdmin, adminUid, viewingUid, viewingUserRole, signOut, jogyoTeachers, switchTeacher } = useAuth()
+  const navigate = useNavigate()
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
   const isJogyo = effectiveRole === '조교'
@@ -102,28 +103,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           )}
         </nav>
 
-        {/* 조교 담당 선생님 전환 */}
-        {showTeacherSwitcher && (
-          <div className="px-3 pb-3 border-t border-slate-700 pt-3">
-            <p className="text-[11px] text-slate-500 px-1 mb-1.5 uppercase tracking-wide">담당 선생님</p>
-            <div className="flex flex-col gap-1">
-              {jogyoTeachers.map(t => (
-                <button
-                  key={t.uid}
-                  onClick={() => { switchTeacher(t.uid); onClose() }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium text-left transition-colors
-                    ${adminUid === t.uid
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                    }`}
-                >
-                  {t.displayName}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* 사용자 정보 + 로그아웃 */}
         <div className="px-4 py-4 border-t border-slate-700 space-y-3">
           {user && (
@@ -137,6 +116,27 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               </div>
             </div>
           )}
+
+          {/* 조교 담당 선생님 전환 드롭다운 */}
+          {showTeacherSwitcher && (
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1 px-1">담당 선생님</p>
+              <select
+                value={adminUid ?? ''}
+                onChange={(e) => {
+                  switchTeacher(e.target.value)
+                  navigate('/')
+                  onClose()
+                }}
+                className="w-full bg-slate-700 text-white text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 border border-slate-600 cursor-pointer"
+              >
+                {jogyoTeachers.map(t => (
+                  <option key={t.uid} value={t.uid}>{t.displayName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             onClick={signOut}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm"
