@@ -119,24 +119,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(adminUser)
 
       if (adminUser) {
-        setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: fbUser.displayName ?? '관리자', role: '관리자' })
+        const adminDisplayName = fbUser.displayName ?? '고승환'
+        setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: adminDisplayName, role: '관리자' })
         setAdminUid(fbUser.uid)
         setRegistrationStatus('approved')
         // 조교가 admin UID를 읽을 수 있도록 config에 기록
         setDoc(doc(db, 'config', 'sharedData'), { adminUid: fbUser.uid }, { merge: true })
-        // 관리자 계정을 registrations에 자동 등록 (없을 경우에만)
+        // 관리자 계정을 registrations에 항상 최신 이름으로 동기화
         const adminRef = doc(db, 'registrations', fbUser.uid)
         getDocs(collection(db, 'registrations')).then(snap => {
-          if (!snap.docs.find(d => d.id === fbUser.uid)) {
-            setDoc(adminRef, {
-              uid: fbUser.uid,
-              email: fbUser.email ?? '',
-              displayName: fbUser.displayName ?? '관리자',
-              role: '관리자',
-              status: 'approved',
-              createdAt: new Date().toISOString(),
-            } satisfies RegistrationInfo)
-          }
+          const existing = snap.docs.find(d => d.id === fbUser.uid)
+          setDoc(adminRef, {
+            uid: fbUser.uid,
+            email: fbUser.email ?? '',
+            displayName: adminDisplayName,
+            role: '관리자',
+            status: 'approved',
+            createdAt: (existing?.data() as RegistrationInfo | undefined)?.createdAt ?? new Date().toISOString(),
+          }, { merge: true })
           // 기존 승인된 선생님들을 approvedTeachers에 자동 동기화
           const teacherMap: Record<string, string> = {}
           snap.docs.forEach(d => {
