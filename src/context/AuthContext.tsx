@@ -79,9 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewingUserRole, setViewingUserRole] = useState<string | null>(null)
   const [approvedTeachers, setApprovedTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
   const [jogyoTeacherUids, setJogyoTeacherUids] = useState<string[]>([])
+  const [jogyoTeachers, setJogyoTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
   const [viewingJogyoTeachers, setViewingJogyoTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
 
-  const jogyoTeachers = approvedTeachers.filter(t => jogyoTeacherUids.includes(t.uid))
 
   const switchTeacher = (uid: string) => setAdminUid(uid)
 
@@ -109,6 +109,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setViewingUidState(null)
         setViewingUserName(null)
         setViewingUserRole(null)
+        setJogyoTeacherUids([])
+        setJogyoTeachers([])
         setRegistrationStatus('none')
         return
       }
@@ -168,6 +170,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const uids = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
               setJogyoTeacherUids(uids)
               setAdminUid(prev => (prev && uids.includes(prev)) ? prev : (uids[0] ?? null))
+              // registrations에서 선생님 이름 직접 조회 (approvedTeachers 맵 의존 제거)
+              if (uids.length > 0) {
+                Promise.all(uids.map(uid => getDoc(doc(db, 'registrations', uid)))).then(snaps => {
+                  setJogyoTeachers(
+                    snaps
+                      .filter(s => s.exists())
+                      .map(s => ({ uid: s.id, displayName: (s.data() as RegistrationInfo).displayName }))
+                  )
+                })
+              } else {
+                setJogyoTeachers([])
+              }
             }
           } else if (data.status === 'rejected') {
             setUser(null)
