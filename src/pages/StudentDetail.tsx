@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
-import type { Student, HomeworkStatus } from '../types'
+import type { Student, HomeworkStatus, ScoreColumn } from '../types'
 import { useApp } from '../context/AppContext'
 import { getClassDate, getMWFClassDate, formatDateKo, fmtDate, getMonthClassDates, getMonthMWFSessions } from '../utils/helpers'
 import { toPng } from 'html-to-image'
@@ -91,6 +91,25 @@ export default function StudentDetail({ student, onClose }: Props) {
       return true
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
+
+  // 이 학생의 성적에 실제로 데이터가 있는 추가 항목 컬럼 (세션별 설정 기반)
+  const allSessionCols = useMemo<ScoreColumn[]>(() => {
+    const colMap = new Map<string, ScoreColumn>()
+    for (const cfg of state.sessionTestConfigs) {
+      for (const col of cfg.scoreColumns ?? []) {
+        if (!colMap.has(col.id)) colMap.set(col.id, col)
+      }
+    }
+    for (const g of grades) {
+      for (const colId of Object.keys(g.extras ?? {})) {
+        if (!colMap.has(colId)) {
+          const globalCol = state.scoreColumns.find(c => c.id === colId)
+          if (globalCol) colMap.set(colId, globalCol)
+        }
+      }
+    }
+    return [...colMap.values()].filter(col => grades.some(g => g.extras?.[col.id] != null))
+  }, [state.sessionTestConfigs, state.scoreColumns, grades])
 
   // 날짜별 성적 테이블의 숙제 컬럼용 (출제 세션 기준)
   const homeworkStatusForSession = (sessionNum: number): HomeworkStatus => {
@@ -343,7 +362,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                       <th className="text-left px-4 py-2.5">날짜</th>
                       <th className="text-center px-4 py-2.5">단어시험</th>
                       <th className="text-center px-4 py-2.5">Daily Test</th>
-                      {state.scoreColumns.map(col => (
+                      {allSessionCols.map(col => (
                         <th key={col.id} className="text-center px-4 py-2.5">{col.name}</th>
                       ))}
                       <th className="text-center px-4 py-2.5">숙제</th>
@@ -385,7 +404,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>
-                          {state.scoreColumns.map(col => {
+                          {allSessionCols.map(col => {
                             const eScore = g.extras?.[col.id]
                             const eTotal = col.total ?? 100
                             const eThresh = col.threshold ?? 0

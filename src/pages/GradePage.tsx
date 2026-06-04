@@ -89,6 +89,8 @@ export default function GradePage() {
   ) ?? state.sessionTestConfigs.find(
     c => c.sessionNum === selectedSession && !c.classId
   )
+  // 이 날짜(세션)에만 속한 추가 항목 컬럼
+  const sessionCols = sessionConfig?.scoreColumns ?? []
   const vocabMode = sessionConfig?.vocabMode ?? state.vocabMode
   const vocabTotal = sessionConfig?.vocabTotal ?? state.vocabTotal
   const vocabThreshold = sessionConfig?.vocabThreshold ?? state.vocabThreshold
@@ -147,6 +149,12 @@ export default function GradePage() {
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 
     isDirtyRef.current = false
+    const curSessionCols = (state.sessionTestConfigs.find(
+      c => c.sessionNum === selectedSession && c.classId === selectedClass
+    ) ?? state.sessionTestConfigs.find(
+      c => c.sessionNum === selectedSession && !c.classId
+    ))?.scoreColumns ?? []
+
     const newRows = students.map(s => {
       const existing = state.grades.find(
         g => g.studentId === s.id && g.sessionNum === selectedSession
@@ -157,7 +165,7 @@ export default function GradePage() {
         vocabScore: existing?.vocabScore?.toString() ?? '',
         dailyScore: existing?.dailyTestScore?.toString() ?? '',
         extras: Object.fromEntries(
-          state.scoreColumns.map(col => [
+          curSessionCols.map(col => [
             col.id,
             existing?.extras?.[col.id]?.toString() ?? '',
           ])
@@ -170,7 +178,7 @@ export default function GradePage() {
     setConfirmClear(false)
     setRetestDateSelections({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClass, selectedSession, state.students, state.scoreColumns])
+  }, [selectedClass, selectedSession, state.students, state.sessionTestConfigs])
 
   const buildPayload = (currentRows: GradeRow[], sessionNum: number) => {
     const weekStart = selectedCls?.days === 'mon-wed-fri'
@@ -183,7 +191,7 @@ export default function GradePage() {
       vocabScore: r.vocabScore !== '' ? Number(r.vocabScore) : null,
       dailyTestScore: r.dailyScore !== '' ? Number(r.dailyScore) : null,
       extras: Object.fromEntries(
-        state.scoreColumns.map(col => [
+        sessionCols.map(col => [
           col.id,
           r.extras[col.id] !== '' ? Number(r.extras[col.id]) : null,
         ])
@@ -236,21 +244,21 @@ export default function GradePage() {
 
   const handleAddCol = () => {
     if (!newColName.trim()) return
-    dispatch({ type: 'ADD_SCORE_COLUMN', payload: { name: newColName.trim() } })
+    dispatch({ type: 'ADD_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, name: newColName.trim() } })
     setNewColName('')
     setShowAddCol(false)
   }
 
   const handleSaveColName = (id: string) => {
     if (editingColName.trim()) {
-      dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id, name: editingColName.trim() } })
+      dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id, name: editingColName.trim() } })
     }
     setEditingColId(null)
     setEditingColName('')
   }
 
   const handleDeleteCol = (id: string) => {
-    dispatch({ type: 'DELETE_SCORE_COLUMN', payload: id })
+    dispatch({ type: 'DELETE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id } })
   }
 
   const handleRetestDateChange = (studentId: string, type: string, date: string, retestId?: string, originalScore?: number | null) => {
@@ -634,7 +642,7 @@ export default function GradePage() {
                 </th>
 
                 {/* 추가 항목 컬럼들 */}
-                {state.scoreColumns.map(col => {
+                {sessionCols.map(col => {
                   const colMode = col.mode ?? '점수'
                   const colTotal = col.total ?? 100
                   const colThresh = col.threshold ?? 0
@@ -671,10 +679,10 @@ export default function GradePage() {
                         </div>
                       )}
                       <div className="flex items-center justify-center gap-1 mt-1">
-                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, mode: '점수' } })}
+                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, mode: '점수' } })}
                           className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                         <span className="text-slate-300 text-xs">|</span>
-                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, mode: '개수' } })}
+                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, mode: '개수' } })}
                           className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
                       </div>
                       <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
@@ -683,7 +691,7 @@ export default function GradePage() {
                           onChange={e => {
                             setColTotalStrs(prev => ({ ...prev, [col.id]: e.target.value }))
                             const v = Number(e.target.value)
-                            if (v > 0) dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, total: v } })
+                            if (v > 0) dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, total: v } })
                           }}
                           onBlur={() => { if (!Number(totalStr)) setColTotalStrs(prev => ({ ...prev, [col.id]: colTotal.toString() })) }}
                           className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
@@ -694,7 +702,7 @@ export default function GradePage() {
                           onChange={e => {
                             setColThreshStrs(prev => ({ ...prev, [col.id]: e.target.value }))
                             const v = Number(e.target.value)
-                            if (v > 0 && v <= colTotal) dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { id: col.id, threshold: v } })
+                            if (v > 0 && v <= colTotal) dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, threshold: v } })
                           }}
                           onBlur={() => { if (!Number(threshStr)) setColThreshStrs(prev => ({ ...prev, [col.id]: colThresh > 0 ? colThresh.toString() : '' })) }}
                           placeholder="커트라인"
@@ -752,7 +760,7 @@ export default function GradePage() {
             <tbody className="divide-y divide-slate-50">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5 + state.scoreColumns.length} className="text-center py-10 text-slate-400">
+                  <td colSpan={5 + sessionCols.length} className="text-center py-10 text-slate-400">
                     이 반에 등록된 학생이 없습니다
                   </td>
                 </tr>
@@ -770,7 +778,7 @@ export default function GradePage() {
                 const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
                 const vocabRetestPassed = studentRetests.some(r => r.type === 'vocab' && r.passed === true)
                 const dailyRetestPassed = studentRetests.some(r => r.type === 'daily' && r.passed === true)
-                const hasExtraRetest = !isAbsent && state.scoreColumns.some(col =>
+                const hasExtraRetest = !isAbsent && sessionCols.some(col =>
                   studentRetests.some(r => r.type === col.id && r.passed === null)
                 )
                 const hasPendingRetest = !isAbsent && (vocabRetest !== undefined || dailyRetest !== undefined || hasExtraRetest)
@@ -868,7 +876,7 @@ export default function GradePage() {
                     </td>
 
                     {/* 추가 항목들 */}
-                    {state.scoreColumns.map(col => {
+                    {sessionCols.map(col => {
                       const colMode = col.mode ?? '점수'
                       const colTotal = col.total ?? 100
                       const colThresh = col.threshold ?? 0
@@ -936,7 +944,7 @@ export default function GradePage() {
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
           * {vocabName} {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
           {' '}{dailyName} {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만
-          {state.scoreColumns.filter(c => (c.threshold ?? 0) > 0).map(c => (
+          {sessionCols.filter(c => (c.threshold ?? 0) > 0).map(c => (
             <span key={c.id}>, {c.name} {c.threshold}{(c.mode ?? '점수') === '개수' ? '개' : '점'} 미만</span>
           ))}
           {' '}입력 시 자동으로 재시험 대상에 추가됩니다

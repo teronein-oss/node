@@ -103,6 +103,7 @@ export interface SessionTestConfig {
   dailyThreshold: number
   vocabName?: string
   dailyName?: string
+  scoreColumns?: ScoreColumn[]
 }
 
 export interface ExamInfo {

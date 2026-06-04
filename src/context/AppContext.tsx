@@ -49,9 +49,9 @@ type Action =
   | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | '재확인완료' | null } }
   | { type: 'SET_HOMEWORK_RECHECK_DATE'; payload: { assignmentId: string; studentId: string; date: string | null } }
   | { type: 'UPDATE_HOMEWORK_STATUS'; payload: { studentId: string; sessionNum: number; status: HomeworkStatus } }
-  | { type: 'ADD_SCORE_COLUMN'; payload: { name: string } }
-  | { type: 'UPDATE_SCORE_COLUMN'; payload: { id: string; name?: string; mode?: '점수' | '개수'; total?: number; threshold?: number } }
-  | { type: 'DELETE_SCORE_COLUMN'; payload: string }
+  | { type: 'ADD_SCORE_COLUMN'; payload: { sessionNum: number; classId: string; name: string } }
+  | { type: 'UPDATE_SCORE_COLUMN'; payload: { sessionNum: number; classId: string; id: string; name?: string; mode?: '점수' | '개수'; total?: number; threshold?: number } }
+  | { type: 'DELETE_SCORE_COLUMN'; payload: { sessionNum: number; classId: string; id: string } }
   | { type: 'SET_THRESHOLD'; payload: { key: 'vocabThreshold' | 'dailyThreshold'; value: number } }
   | { type: 'SET_TEST_CONFIG'; payload: Partial<{ vocabMode: '점수' | '개수'; dailyMode: '점수' | '개수'; vocabTotal: number; dailyTotal: number }> }
   | { type: 'SAVE_SCOPE'; payload: Omit<SessionScope, 'id' | 'createdAt'> }
@@ -175,7 +175,8 @@ function reducer(state: AppState, action: Action): AppState {
         // 추가 항목 재시험 처리
         for (const [colId, score] of Object.entries(g.extras)) {
           if (score === null) continue
-          const col = state.scoreColumns.find(c => c.id === colId)
+          const sessionColsForGrade = sessionCfg?.scoreColumns ?? []
+          const col = sessionColsForGrade.find(c => c.id === colId) ?? state.scoreColumns.find(c => c.id === colId)
           if (!col?.threshold || col.threshold <= 0) continue
           if (needsRetest(score, col.threshold)) {
             const exists = state.retests.some(
@@ -418,33 +419,71 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       }
 
-    case 'ADD_SCORE_COLUMN':
-      return {
-        ...state,
-        scoreColumns: [
-          ...state.scoreColumns,
-          { id: genId(), name: action.payload.name, createdAt: new Date().toISOString() },
-        ],
+    case 'ADD_SCORE_COLUMN': {
+      const { sessionNum, classId, name } = action.payload
+      const newCol: ScoreColumn = { id: genId(), name, createdAt: new Date().toISOString() }
+      const matches = (c: SessionTestConfig) => c.sessionNum === sessionNum && c.classId === classId
+      const existing = state.sessionTestConfigs.find(matches)
+      if (existing) {
+        return {
+          ...state,
+          sessionTestConfigs: state.sessionTestConfigs.map(c =>
+            matches(c) ? { ...c, scoreColumns: [...(c.scoreColumns ?? []), newCol] } : c
+          ),
+        }
       }
-
-    case 'UPDATE_SCORE_COLUMN': {
-      const { id: _colId, ...colUpdates } = action.payload
-      const cleanColUpdates = Object.fromEntries(
-        Object.entries(colUpdates).filter(([, v]) => v !== undefined)
-      )
+      const legacy = state.sessionTestConfigs.find(c => c.sessionNum === sessionNum && !c.classId)
       return {
         ...state,
-        scoreColumns: state.scoreColumns.map(c =>
-          c.id === action.payload.id ? { ...c, ...cleanColUpdates } : c
-        ),
+        sessionTestConfigs: [
+          ...state.sessionTestConfigs,
+          {
+            sessionNum, classId,
+            vocabMode: legacy?.vocabMode ?? state.vocabMode,
+            vocabTotal: legacy?.vocabTotal ?? state.vocabTotal,
+            vocabThreshold: legacy?.vocabThreshold ?? state.vocabThreshold,
+            dailyMode: legacy?.dailyMode ?? state.dailyMode,
+            dailyTotal: legacy?.dailyTotal ?? state.dailyTotal,
+            dailyThreshold: legacy?.dailyThreshold ?? state.dailyThreshold,
+            scoreColumns: [newCol],
+          },
+        ],
       }
     }
 
-    case 'DELETE_SCORE_COLUMN':
-      return {
-        ...state,
-        scoreColumns: state.scoreColumns.filter(c => c.id !== action.payload),
+    case 'UPDATE_SCORE_COLUMN': {
+      const { sessionNum, classId, id, ...colUpdates } = action.payload
+      const cleanColUpdates = Object.fromEntries(
+        Object.entries(colUpdates).filter(([, v]) => v !== undefined)
+      )
+      const matches = (c: SessionTestConfig) => c.sessionNum === sessionNum && c.classId === classId
+      const existing = state.sessionTestConfigs.find(matches)
+      if (existing?.scoreColumns?.some(c => c.id === id)) {
+        return {
+          ...state,
+          sessionTestConfigs: state.sessionTestConfigs.map(c =>
+            matches(c) ? { ...c, scoreColumns: (c.scoreColumns ?? []).map(col => col.id === id ? { ...col, ...cleanColUpdates } : col) } : c
+          ),
+        }
       }
+      // fallback: global scoreColumns (기존 데이터)
+      return { ...state, scoreColumns: state.scoreColumns.map(c => c.id === id ? { ...c, ...cleanColUpdates } : c) }
+    }
+
+    case 'DELETE_SCORE_COLUMN': {
+      const { sessionNum, classId, id } = action.payload
+      const matches = (c: SessionTestConfig) => c.sessionNum === sessionNum && c.classId === classId
+      const existing = state.sessionTestConfigs.find(matches)
+      if (existing?.scoreColumns?.some(c => c.id === id)) {
+        return {
+          ...state,
+          sessionTestConfigs: state.sessionTestConfigs.map(c =>
+            matches(c) ? { ...c, scoreColumns: (c.scoreColumns ?? []).filter(col => col.id !== id) } : c
+          ),
+        }
+      }
+      return { ...state, scoreColumns: state.scoreColumns.filter(c => c.id !== id) }
+    }
 
     case 'SET_THRESHOLD':
       return { ...state, [action.payload.key]: action.payload.value }
