@@ -79,8 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [viewingUserRole, setViewingUserRole] = useState<string | null>(null)
   const [approvedTeachers, setApprovedTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
   const [jogyoTeacherUids, setJogyoTeacherUids] = useState<string[]>([])
-  const [jogyoTeachers, setJogyoTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
   const [viewingJogyoTeachers, setViewingJogyoTeachers] = useState<Array<{ uid: string; displayName: string }>>([])
+
+  // 조교 담당 선생님 목록: 조교도 읽을 수 있는 approvedTeachers 맵에서 파생.
+  // 배정된 uid 순서를 유지하고, 맵에 이름이 아직 없으면 해당 항목은 건너뛴다.
+  const jogyoTeachers = jogyoTeacherUids
+    .map(uid => {
+      const found = approvedTeachers.find(t => t.uid === uid)
+      return found ? { uid, displayName: found.displayName } : null
+    })
+    .filter((t): t is { uid: string; displayName: string } => t !== null)
 
 
   const switchTeacher = (uid: string) => setAdminUid(uid)
@@ -110,7 +118,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setViewingUserName(null)
         setViewingUserRole(null)
         setJogyoTeacherUids([])
-        setJogyoTeachers([])
         setRegistrationStatus('none')
         return
       }
@@ -170,18 +177,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const uids = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
               setJogyoTeacherUids(uids)
               setAdminUid(prev => (prev && uids.includes(prev)) ? prev : (uids[0] ?? null))
-              // registrations에서 선생님 이름 직접 조회 (approvedTeachers 맵 의존 제거)
-              if (uids.length > 0) {
-                Promise.all(uids.map(uid => getDoc(doc(db, 'registrations', uid)))).then(snaps => {
-                  setJogyoTeachers(
-                    snaps
-                      .filter(s => s.exists())
-                      .map(s => ({ uid: s.id, displayName: (s.data() as RegistrationInfo).displayName }))
-                  )
-                })
-              } else {
-                setJogyoTeachers([])
-              }
+              // 선생님 이름은 조교도 읽을 수 있는 config/sharedData의 approvedTeachers 맵에서
+              // 파생 계산한다 (registrations 직접 조회는 보안 규칙상 조교에게 거부됨)
             }
           } else if (data.status === 'rejected') {
             setUser(null)

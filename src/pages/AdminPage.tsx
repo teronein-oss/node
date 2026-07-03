@@ -196,7 +196,9 @@ export default function AdminPage() {
                   {/* 소속 조교 */}
                   {(assignedJogyo.length > 0 || unassignedToThisTeacher.length > 0) && (
                     <div className="border-t border-slate-100 bg-slate-50/60">
-                      {assignedJogyo.map(jogyo => (
+                      {assignedJogyo.map(jogyo => {
+                        const otherTeachers = teachers.filter(t => !getJogyoUids(jogyo).includes(t.uid))
+                        return (
                         <div key={jogyo.uid} className="px-4 py-2.5 flex items-center justify-between border-b border-slate-100 last:border-b-0">
                           <div className="flex items-center gap-2 pl-4">
                             <span className="text-slate-300 text-xs">└</span>
@@ -206,6 +208,28 @@ export default function AdminPage() {
                                 <span className="ml-1.5 text-slate-400">(조교)</span>
                               </p>
                               <p className="text-[11px] text-slate-400">{jogyo.email}</p>
+                              {/* 다른 선생님 추가(중복) 배정 */}
+                              {otherTeachers.length > 0 && (
+                                <select
+                                  className="mt-1.5 border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                                  value=""
+                                  onChange={async (e) => {
+                                    const teacherUid = e.target.value
+                                    if (!teacherUid) return
+                                    await addTeacherToJogyo(jogyo.uid, teacherUid)
+                                    setRegistrations(prev => prev.map(r => {
+                                      if (r.uid !== jogyo.uid) return r
+                                      const next = [...new Set([...getJogyoUids(r), teacherUid])]
+                                      return { ...r, assignedTeacherUids: next, assignedTeacherUid: next[0] ?? null }
+                                    }))
+                                  }}
+                                >
+                                  <option value="">+ 선생님 추가 배정...</option>
+                                  {otherTeachers.map(t => (
+                                    <option key={t.uid} value={t.uid}>{t.displayName}</option>
+                                  ))}
+                                </select>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -237,7 +261,8 @@ export default function AdminPage() {
                             </button>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                       {/* 이 선생님에게 조교 추가 배정 */}
                       {unassignedToThisTeacher.length > 0 && (
                         <div className="px-4 py-2 border-t border-slate-100">
