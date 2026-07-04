@@ -59,7 +59,6 @@ interface ClassBlock {
   key: string
   label: string
   level: string
-  teacherName?: string
   rows: DashboardRow[]
   isEmpty: boolean
 }
@@ -191,6 +190,11 @@ export default function StudentDashboardPage() {
     return map
   }, [approvedTeachers, user])
 
+  const syncedRosters = useMemo(
+    () => rosters.filter(roster => teacherNameMap.has(roster.uid)),
+    [rosters, teacherNameMap]
+  )
+
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'sharedStudentRosters'), (snap) => {
       setRosters(snap.docs.map(d => ({ uid: d.id, ...(d.data() as Omit<SharedRoster, 'uid'>) })))
@@ -229,7 +233,7 @@ export default function StudentDashboardPage() {
 
   const rows = useMemo(() => {
     const built: DashboardRow[] = []
-    for (const roster of rosters) {
+    for (const roster of syncedRosters) {
       for (const cls of roster.classes ?? []) {
         const parsed = parseClassName(cls.name)
         const students = (roster.students ?? [])
@@ -257,11 +261,11 @@ export default function StudentDashboardPage() {
       a.teacherName.localeCompare(b.teacherName, 'ko') ||
       a.student.name.localeCompare(b.student.name, 'ko')
     )
-  }, [rosters, sheetRows, teacherNameMap])
+  }, [syncedRosters, sheetRows, teacherNameMap])
 
   const registeredClasses = useMemo(() => {
     const built: RegisteredClass[] = []
-    for (const roster of rosters) {
+    for (const roster of syncedRosters) {
       for (const cls of roster.classes ?? []) {
         const parsed = parseClassName(cls.name)
         built.push({
@@ -280,7 +284,7 @@ export default function StudentDashboardPage() {
       a.className.localeCompare(b.className, 'ko') ||
       a.teacherName.localeCompare(b.teacherName, 'ko')
     )
-  }, [rosters, teacherNameMap])
+  }, [syncedRosters, teacherNameMap])
 
   const schoolGroups = useMemo(() => {
     const map = new Map<string, SchoolGroup>()
@@ -321,29 +325,15 @@ export default function StudentDashboardPage() {
 
   const classBlocks = useMemo<ClassBlock[]>(() => {
     if (!currentSchool) return []
-    const levelBlocks: ClassBlock[] = levelOptions.flatMap(level => {
-      const classesForLevel = visibleClasses.filter(cls => cls.level === level)
-      if (classesForLevel.length === 0) {
-        return [{
-          key: `${currentSchool}-${level}-empty`,
-          label: formatClassLabel(currentSchool, level),
-          level,
-          teacherName: '',
-          rows: [] as DashboardRow[],
-          isEmpty: true,
-        }]
+    const levelBlocks: ClassBlock[] = levelOptions.map(level => {
+      const blockRows = visibleRows.filter(r => r.level === level)
+      return {
+        key: `${currentSchool}-${level}`,
+        label: formatClassLabel(currentSchool, level),
+        level,
+        rows: blockRows,
+        isEmpty: blockRows.length === 0,
       }
-      return classesForLevel.map(cls => {
-        const blockRows = visibleRows.filter(r => r.teacherUid === cls.teacherUid && r.classId === cls.classId)
-        return {
-          key: `${cls.teacherUid}-${cls.classId}`,
-          label: formatClassLabel(cls.schoolKey, cls.level),
-          level,
-          teacherName: cls.teacherName,
-          rows: blockRows,
-          isEmpty: blockRows.length === 0,
-        }
-      })
     })
     const unparsedBlocks: ClassBlock[] = visibleClasses
       .filter(cls => !cls.level)
@@ -353,7 +343,6 @@ export default function StudentDashboardPage() {
           key: `${cls.teacherUid}-${cls.classId}`,
           label: cls.className,
           level: '',
-          teacherName: cls.teacherName,
           rows: blockRows,
           isEmpty: blockRows.length === 0,
         }
@@ -449,7 +438,7 @@ export default function StudentDashboardPage() {
                   block.isEmpty ? (
                     <tr key={block.key} className="border-t-2 border-slate-800 bg-slate-50/50">
                       <td className="sticky left-0 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 font-semibold text-slate-500">{block.label}</td>
-                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-400">{block.teacherName ?? ''}</td>
+                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
                       <td className="sticky left-52 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
                       <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
                       {Array.from({ length: 19 }, (_, i) => (

@@ -89,6 +89,7 @@ export default function AdminPage() {
   const handleResetData = async (uid: string, name: string) => {
     if (!confirm(`"${name}" 계정의 모든 데이터(반, 학생, 성적 등)를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return
     await deleteDoc(doc(db, 'appData', uid))
+    await deleteDoc(doc(db, 'sharedStudentRosters', uid))
   }
 
   if (loading) {
