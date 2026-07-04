@@ -48,6 +48,32 @@ interface DashboardRow {
   sheet: SheetRowData
 }
 
+interface SchoolGroup {
+  key: string
+  schoolName: string
+  grade: string
+  label: string
+}
+
+interface ClassBlock {
+  key: string
+  label: string
+  level: string
+  rows: DashboardRow[]
+  isEmpty: boolean
+}
+
+interface RegisteredClass {
+  teacherUid: string
+  teacherName: string
+  classId: string
+  className: string
+  schoolKey: string
+  schoolName: string
+  grade: string
+  level: string
+}
+
 const LEVEL_ORDER = ['S1', 'S2', 'A1', 'A2', 'A3']
 const TEXTBOOK_OPTIONS = ['', '없음', '(고2)특급VOCA', '(고2)ASAP VOCA', '능률VOCA', '워드마스터']
 const STATUS_OPTIONS = ['', '완료', '예정', '필요', '보류']
@@ -55,7 +81,7 @@ const GRADE_OPTIONS = ['', '1등급', '2등급', '3등급', '4등급', '5등급'
 
 function parseClassName(name: string) {
   const trimmed = name.trim()
-  const match = trimmed.match(/^(.+?)(\d+)\s+(S\d+|A\d+)$/)
+  const match = trimmed.match(/^(.+?)(\d+)[\s_]+(S\d+|A\d+)$/)
   if (!match) {
     return { schoolName: trimmed, grade: '', level: '', schoolKey: trimmed }
   }
@@ -70,6 +96,10 @@ function parseClassName(name: string) {
 function levelRank(level: string) {
   const idx = LEVEL_ORDER.indexOf(level)
   return idx === -1 ? LEVEL_ORDER.length : idx
+}
+
+function formatClassLabel(schoolKey: string, level: string) {
+  return level ? `${schoolKey} ${level}` : schoolKey
 }
 
 function buildRowId(teacherUid: string, studentId: string) {
@@ -218,9 +248,76 @@ export default function StudentDashboardPage() {
     )
   }, [rosters, sheetRows, teacherNameMap])
 
-  const schoolKeys = useMemo(() => [...new Set(rows.map(r => r.schoolKey))], [rows])
-  const currentSchool = activeSchool && schoolKeys.includes(activeSchool) ? activeSchool : (schoolKeys[0] ?? '')
+  const registeredClasses = useMemo(() => {
+    const built: RegisteredClass[] = []
+    for (const roster of rosters) {
+      for (const cls of roster.classes ?? []) {
+        const parsed = parseClassName(cls.name)
+        built.push({
+          teacherUid: roster.uid,
+          teacherName: teacherNameMap.get(roster.uid) ?? '이름 미확인',
+          classId: cls.id,
+          className: cls.name,
+          ...parsed,
+        })
+      }
+    }
+    return built.sort((a, b) =>
+      a.schoolName.localeCompare(b.schoolName, 'ko') ||
+      a.grade.localeCompare(b.grade, 'ko') ||
+      levelRank(a.level) - levelRank(b.level) ||
+      a.className.localeCompare(b.className, 'ko') ||
+      a.teacherName.localeCompare(b.teacherName, 'ko')
+    )
+  }, [rosters, teacherNameMap])
+
+  const schoolGroups = useMemo(() => {
+    const map = new Map<string, SchoolGroup>()
+    for (const cls of registeredClasses) {
+      if (!map.has(cls.schoolKey)) {
+        map.set(cls.schoolKey, {
+          key: cls.schoolKey,
+          schoolName: cls.schoolName,
+          grade: cls.grade,
+          label: cls.schoolKey,
+        })
+      }
+    }
+    return [...map.values()].sort((a, b) =>
+      a.schoolName.localeCompare(b.schoolName, 'ko') ||
+      a.grade.localeCompare(b.grade, 'ko') ||
+      a.label.localeCompare(b.label, 'ko')
+    )
+  }, [registeredClasses])
+
+  const currentSchool = activeSchool && schoolGroups.some(s => s.key === activeSchool)
+    ? activeSchool
+    : (schoolGroups[0]?.key ?? '')
+  const currentGroup = schoolGroups.find(s => s.key === currentSchool)
   const visibleRows = rows.filter(r => r.schoolKey === currentSchool)
+  const visibleClasses = registeredClasses.filter(c => c.schoolKey === currentSchool)
+  const levelOptions = useMemo(() => {
+    const existing = new Set([
+      ...visibleClasses.map(c => c.level).filter(Boolean),
+      ...visibleRows.map(r => r.level).filter(Boolean),
+    ])
+    const extras = [...existing].filter(level => !LEVEL_ORDER.includes(level)).sort()
+    return [...LEVEL_ORDER, ...extras]
+  }, [visibleClasses, visibleRows])
+
+  const classBlocks = useMemo<ClassBlock[]>(() => {
+    if (!currentSchool) return []
+    return levelOptions.map(level => {
+      const blockRows = visibleRows.filter(r => r.level === level)
+      return {
+        key: `${currentSchool}-${level}`,
+        label: formatClassLabel(currentSchool, level),
+        level,
+        rows: blockRows,
+        isEmpty: blockRows.length === 0,
+      }
+    })
+  }, [currentSchool, levelOptions, visibleRows])
 
   const updateRow = async (rowId: string, patch: SheetRowData) => {
     const prev = sheetRows[rowId] ?? {}
@@ -247,28 +344,34 @@ export default function StudentDashboardPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {schoolKeys.length === 0 ? (
+        {schoolGroups.length === 0 ? (
           <span className="rounded-full bg-white px-4 py-2 text-sm text-slate-400 border border-slate-200">학교 탭 없음</span>
-        ) : schoolKeys.map(key => (
+        ) : schoolGroups.map(group => (
           <button
-            key={key}
-            onClick={() => setActiveSchool(key)}
+            key={group.key}
+            onClick={() => setActiveSchool(group.key)}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors
-              ${currentSchool === key ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'}`}
+              ${currentSchool === group.key ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'}`}
           >
-            {key}
+            {group.label}
           </button>
         ))}
       </div>
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        {currentGroup && (
+          <div className="border-b border-slate-200 bg-white px-5 py-4">
+            <div className="text-lg font-bold text-slate-800">{currentGroup.label}</div>
+            <div className="mt-1 text-xs text-slate-400">S1 · S2 · A1 · A2 · A3 순서로 정렬</div>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-20 text-sm text-slate-400">
             <Loader2 size={18} className="animate-spin" />
             학생 명단을 불러오는 중...
           </div>
-        ) : visibleRows.length === 0 ? (
-          <div className="py-20 text-center text-sm text-slate-400">표시할 학생이 없습니다</div>
+        ) : classBlocks.length === 0 ? (
+          <div className="py-20 text-center text-sm text-slate-400">표시할 학교·반이 없습니다</div>
         ) : (
           <div className="overflow-auto">
             <table className="min-w-[1900px] w-full border-collapse text-sm">
@@ -300,39 +403,49 @@ export default function StudentDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row, idx) => {
-                  const prev = visibleRows[idx - 1]
-                  const startsGroup = !prev || prev.classId !== row.classId || prev.teacherUid !== row.teacherUid
-                  const classRows = visibleRows.filter(r => r.classId === row.classId && r.teacherUid === row.teacherUid)
-                  const number = classRows.findIndex(r => r.rowId === row.rowId) + 1
-                  return (
-                    <tr key={row.rowId} className={`${startsGroup ? 'border-t-2 border-slate-800' : 'border-t border-slate-200'} hover:bg-blue-50/30`}>
-                      <td className="sticky left-0 z-10 border-r border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800">{row.className}</td>
-                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{row.teacherName}</td>
-                      <td className="sticky left-52 z-10 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
-                      <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
-                      <td className="border-r border-slate-200 px-2 py-1"><SelectCell value={row.sheet.prevVocab} options={TEXTBOOK_OPTIONS} onSave={value => updateRow(row.rowId, { prevVocab: value })} /></td>
-                      <td className="border-r border-slate-200 bg-amber-50/60 px-2 py-1"><SelectCell value={row.sheet.currentVocab} options={TEXTBOOK_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { currentVocab: value })} /></td>
-                      <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.vocabProgress} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { vocabProgress: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstMidScore} onSave={value => updateRow(row.rowId, { firstMidScore: value })} /></td>
-                      <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstMidConsulted: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstFinalScore} onSave={value => updateRow(row.rowId, { firstFinalScore: value })} /></td>
-                      <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstFinalConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstFinalConsulted: value })} /></td>
-                      <td className="border-r border-slate-200 bg-emerald-50/70 px-2 py-1"><TextCell value={row.sheet.scoreGrowth} onSave={value => updateRow(row.rowId, { scoreGrowth: value })} /></td>
-                      <td className="border-r-2 border-slate-800 bg-yellow-50/70 px-2 py-1"><SelectCell value={row.sheet.firstGrade} options={GRADE_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { firstGrade: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.secondMidScore} onSave={value => updateRow(row.rowId, { secondMidScore: value })} /></td>
-                      <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.secondMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { secondMidConsulted: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.secondFinalScore} onSave={value => updateRow(row.rowId, { secondFinalScore: value })} /></td>
-                      <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.secondFinalConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { secondFinalConsulted: value })} /></td>
-                      <td className="border-r-2 border-slate-800 bg-yellow-50/70 px-2 py-1"><SelectCell value={row.sheet.secondGrade} options={GRADE_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { secondGrade: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockMarch} onSave={value => updateRow(row.rowId, { mockMarch: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockJune} onSave={value => updateRow(row.rowId, { mockJune: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockSeptember} onSave={value => updateRow(row.rowId, { mockSeptember: value })} /></td>
-                      <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockOctober} onSave={value => updateRow(row.rowId, { mockOctober: value })} /></td>
-                      <td className="px-2 py-1"><TextCell value={row.sheet.memo} align="left" placeholder="메모" onSave={value => updateRow(row.rowId, { memo: value })} /></td>
+                {classBlocks.map(block => (
+                  block.isEmpty ? (
+                    <tr key={block.key} className="border-t-2 border-slate-800 bg-slate-50/50">
+                      <td className="sticky left-0 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 font-semibold text-slate-500">{block.label}</td>
+                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
+                      <td className="sticky left-52 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
+                      <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
+                      {Array.from({ length: 19 }, (_, i) => (
+                        <td key={`${block.key}-empty-${i}`} className="border-r border-slate-100 bg-slate-50/60 px-2 py-4" />
+                      ))}
                     </tr>
-                  )
-                })}
+                  ) : block.rows.map((row, idx) => {
+                    const startsGroup = idx === 0
+                    const number = idx + 1
+                    return (
+                      <tr key={row.rowId} className={`${startsGroup ? 'border-t-2 border-slate-800' : 'border-t border-slate-200'} hover:bg-blue-50/30`}>
+                        <td className="sticky left-0 z-10 border-r border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800">{startsGroup ? block.label : ''}</td>
+                        <td className="sticky left-28 z-10 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{row.teacherName}</td>
+                        <td className="sticky left-52 z-10 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
+                        <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
+                        <td className="border-r border-slate-200 px-2 py-1"><SelectCell value={row.sheet.prevVocab} options={TEXTBOOK_OPTIONS} onSave={value => updateRow(row.rowId, { prevVocab: value })} /></td>
+                        <td className="border-r border-slate-200 bg-amber-50/60 px-2 py-1"><SelectCell value={row.sheet.currentVocab} options={TEXTBOOK_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { currentVocab: value })} /></td>
+                        <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.vocabProgress} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { vocabProgress: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstMidScore} onSave={value => updateRow(row.rowId, { firstMidScore: value })} /></td>
+                        <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstMidConsulted: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstFinalScore} onSave={value => updateRow(row.rowId, { firstFinalScore: value })} /></td>
+                        <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstFinalConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstFinalConsulted: value })} /></td>
+                        <td className="border-r border-slate-200 bg-emerald-50/70 px-2 py-1"><TextCell value={row.sheet.scoreGrowth} onSave={value => updateRow(row.rowId, { scoreGrowth: value })} /></td>
+                        <td className="border-r-2 border-slate-800 bg-yellow-50/70 px-2 py-1"><SelectCell value={row.sheet.firstGrade} options={GRADE_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { firstGrade: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.secondMidScore} onSave={value => updateRow(row.rowId, { secondMidScore: value })} /></td>
+                        <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.secondMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { secondMidConsulted: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.secondFinalScore} onSave={value => updateRow(row.rowId, { secondFinalScore: value })} /></td>
+                        <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.secondFinalConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { secondFinalConsulted: value })} /></td>
+                        <td className="border-r-2 border-slate-800 bg-yellow-50/70 px-2 py-1"><SelectCell value={row.sheet.secondGrade} options={GRADE_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { secondGrade: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockMarch} onSave={value => updateRow(row.rowId, { mockMarch: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockJune} onSave={value => updateRow(row.rowId, { mockJune: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockSeptember} onSave={value => updateRow(row.rowId, { mockSeptember: value })} /></td>
+                        <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockOctober} onSave={value => updateRow(row.rowId, { mockOctober: value })} /></td>
+                        <td className="px-2 py-1"><TextCell value={row.sheet.memo} align="left" placeholder="메모" onSave={value => updateRow(row.rowId, { memo: value })} /></td>
+                      </tr>
+                    )
+                  })
+                ))}
               </tbody>
             </table>
           </div>
