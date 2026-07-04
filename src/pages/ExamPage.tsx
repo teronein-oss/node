@@ -4,7 +4,8 @@ import {
   Calendar, CheckCircle, Link2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { getMonthSessions, getWeekStartForSession, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate } from '../utils/helpers'
+import { fmtDate, formatDateKo } from '../utils/helpers'
+import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 
 const SEMESTERS = ['1학기 중간', '1학기 기말', '2학기 중간', '2학기 기말'] as const
 type Semester = typeof SEMESTERS[number]
@@ -16,7 +17,8 @@ export default function ExamPage() {
   const { state, dispatch, selectedYM, setSelectedYM } = useApp()
 
   const today = new Date()
-  const currentYM = `${today.getFullYear()}-${today.getMonth() + 1}`
+  const todayStr = fmtDate(today)
+  const currentYM = getCurrentYM(today)
 
   // 학기 선택 — localStorage에서 복원
   const [selectedSemester, setSelectedSemester] = useState<Semester>(() => {
@@ -26,10 +28,7 @@ export default function ExamPage() {
   const [semesterSaved, setSemesterSaved] = useState(false)
 
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
-    const dow = new Date().getDay()
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
-    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
-    return matched?.id ?? state.classes[0]?.id ?? ''
+    return getDefaultClassIdForToday(state.classes, state.classes[0]?.id ?? '')
   })
 
   // 시험 정보 수정 폼
@@ -44,54 +43,27 @@ export default function ExamPage() {
   const [syncModalOpen, setSyncModalOpen] = useState(false)
 
   const availableMonths = useMemo(() => {
-    const ymSet = new Set<string>([currentYM])
-    for (let i = 1; i <= 3; i++) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
-      ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
-    }
-    const next = new Date(today.getFullYear(), today.getMonth() + 1, 1)
-    ymSet.add(`${next.getFullYear()}-${next.getMonth() + 1}`)
-    for (const p of (state.weeklyProgress ?? [])) {
-      const ws = getWeekStartForSession(p.sessionNum)
-      const d = new Date(ws + 'T00:00:00')
-      const thu = new Date(d); thu.setDate(d.getDate() + 3)
-      ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
-    }
-    return [...ymSet].sort().map(ym => {
-      const [y, m] = ym.split('-').map(Number)
-      return { ym, year: y, month: m, label: `${y}년 ${m}월` }
+    return buildMonthOptions({
+      weeklyProgress: state.weeklyProgress ?? [],
+      includeNextMonth: true,
+      sort: 'asc',
+      today,
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.weeklyProgress, currentYM])
 
   const [year, month] = selectedYM.split('-').map(Number)
-  const sessionNums = getMonthSessions(year, month, 12)
   const currentIdx = availableMonths.findIndex(m => m.ym === selectedYM)
 
   const selectedClass = state.classes.find(c => c.id === selectedClassId)
 
-  // 선택된 반의 수업 날짜 목록 (월/금 또는 화/목)
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-
   const classDates = useMemo(() => {
-    if (!selectedClass) return []
-    if (selectedClass.days === 'mon-wed-fri') {
-      return getMonthMWFSessions(year, month)
-        .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
-        .filter(({ date }) => {
-          const [dy, dm] = date.split('-').map(Number)
-          return dy === year && dm === month
-        })
-        .sort((a, b) => a.date.localeCompare(b.date))
-    }
-    return sessionNums
-      .map(sNum => ({ date: getClassDate(sNum, selectedClass.days), sessionNum: sNum }))
-      .filter(({ date }) => {
-        const [y, m] = date.split('-').map(Number)
-        return y === year && m === month
-      })
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [selectedClass, sessionNums, year, month])
+    return getClassDatesForMonth({
+      classInfo: selectedClass,
+      year,
+      month,
+      filterMWFToCalendarMonth: true,
+    })
+  }, [selectedClass, year, month])
 
   const examInfo = (state.examInfo ?? []).find(
     e => e.classId === selectedClassId && e.semester === selectedSemester

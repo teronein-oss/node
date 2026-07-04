@@ -2,8 +2,9 @@ import { useState, useMemo } from 'react'
 import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, Trash2, UserX } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import type { ScheduleEvent } from '../types'
-import { getMonthSessions, getWeekStartForSession, formatDateKo, fmtDate, getClassDate, getMonthMWFSessions } from '../utils/helpers'
+import type { Class, ScheduleEvent } from '../types'
+import { getMonthSessions, getWeekStart, getWeekStartForSession, formatDateKo, fmtDate, getClassDate, getMonthMWFSessions } from '../utils/helpers'
+import { buildMonthOptions, getClassDatesForMonth, getCurrentYM } from '../utils/academic'
 
 // ─── 달력 헬퍼 ────────────────────────────────────────────────────────────────
 function buildCalDays(year: number, month: number): (Date | null)[] {
@@ -36,6 +37,38 @@ function diffDays(start: string, end: string): number {
 const ACADEMY_HOLIDAYS: Record<string, string> = {
   '2025-05-05': '어린이날',
   '2026-05-05': '어린이날',
+}
+
+const WEEK_DAYS = ['월', '화', '수', '목', '금', '토'] as const
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return fmtDate(d)
+}
+
+function getMonthKey(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${d.getFullYear()}-${d.getMonth() + 1}`
+}
+
+function getClassDateMapForWeek(classInfo: Class, weekDates: string[]) {
+  const months = new Map<string, { year: number; month: number }>()
+  for (const date of weekDates) {
+    const d = new Date(date + 'T00:00:00')
+    months.set(getMonthKey(date), { year: d.getFullYear(), month: d.getMonth() + 1 })
+  }
+
+  const entries = [...months.values()].flatMap(({ year, month }) =>
+    getClassDatesForMonth({
+      classInfo,
+      year,
+      month,
+      includeFuture: true,
+      filterMWFToCalendarMonth: true,
+    })
+  )
+  return new Map(entries.map(entry => [entry.date, entry.sessionNum]))
 }
 
 // ─── 일정 패널 ────────────────────────────────────────────────────────────────
@@ -190,12 +223,7 @@ export default function DashboardPage() {
   const { user, isAdmin, viewingUid } = useAuth()
   const isJogyo = user?.role === '조교'
   const { weekStart } = getCurrentSession()
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const dow = new Date().getDay() // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
-    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
-    return matched?.id ?? state.classes[0]?.id ?? 'all'
-  })
+  const [selectedWeekStart, setSelectedWeekStart] = useState(() => getWeekStart())
 
   const today = new Date()
   const todayYear = today.getFullYear()
@@ -204,7 +232,7 @@ export default function DashboardPage() {
   const todayStr = fmtDate(today)
 
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
-  const currentYM = `${todayYear}-${todayMonth}`
+  const currentYM = getCurrentYM(today)
 
   const ownEvents = state.scheduleEvents ?? []
   const allEvents = useMemo(
@@ -218,24 +246,11 @@ export default function DashboardPage() {
 
   // 월 목록
   const availableMonths = useMemo(() => {
-    const ymSet = new Set<string>([currentYM])
-    for (let i = 1; i <= 3; i++) {
-      const d = new Date(todayYear, todayMonth - 1 - i, 1)
-      ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
-    }
-    for (const g of state.grades) {
-      const d = new Date(g.weekStart + 'T00:00:00')
-      const thu = new Date(d); thu.setDate(d.getDate() + 3)
-      ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
-    }
-    for (const h of state.homeworks) {
-      const d = new Date(h.weekStart + 'T00:00:00')
-      const thu = new Date(d); thu.setDate(d.getDate() + 3)
-      ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
-    }
-    return [...ymSet].sort().map(ym => {
-      const [y, m] = ym.split('-').map(Number)
-      return { ym, year: y, month: m }
+    return buildMonthOptions({
+      grades: state.grades,
+      homeworks: state.homeworks,
+      sort: 'asc',
+      today,
     })
   }, [state.grades, state.homeworks, currentYM])
 
@@ -245,6 +260,60 @@ export default function DashboardPage() {
 
   // 학생 이름 조회
   const getStudentName = (id: string) => state.students.find(s => s.id === id)?.name ?? '?'
+
+  const weekDates = useMemo(
+    () => WEEK_DAYS.map((label, idx) => {
+      const date = addDays(selectedWeekStart, idx)
+      return { label, date, display: formatDateKo(date) }
+    }),
+    [selectedWeekStart]
+  )
+
+  const weeklyRetestRows = useMemo(() => {
+    return state.classes.map(cls => {
+      const studentIds = new Set(state.students.filter(s => s.active && s.classId === cls.id).map(s => s.id))
+      const dateMap = getClassDateMapForWeek(cls, weekDates.map(d => d.date))
+      const days = weekDates.map(day => {
+        const sessionNum = dateMap.get(day.date)
+        if (!sessionNum) {
+          return {
+            ...day,
+            sessionNum: null,
+            vocabNames: [],
+            dailyNames: [],
+            isClassDay: false,
+          }
+        }
+        const retests = state.retests.filter(
+          r => r.sessionNum === sessionNum && r.passed === null && studentIds.has(r.studentId)
+        )
+        return {
+          ...day,
+          sessionNum,
+          vocabNames: retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId)),
+          dailyNames: retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId)),
+          isClassDay: true,
+        }
+      })
+      return {
+        classId: cls.id,
+        className: cls.name,
+        classDays: cls.days,
+        days,
+        total: days.reduce((sum, day) => sum + day.vocabNames.length + day.dailyNames.length, 0),
+      }
+    })
+  }, [state.classes, state.students, state.retests, weekDates])
+
+  const weekTotal = weeklyRetestRows.reduce((sum, row) => sum + row.total, 0)
+  const selectedWeekEnd = weekDates[weekDates.length - 1]?.date ?? selectedWeekStart
+  const isCurrentWeek = selectedWeekStart === getWeekStart()
+
+  const goWeek = (offset: number) => {
+    const nextWeekStart = addDays(selectedWeekStart, offset * 7)
+    setSelectedWeekStart(nextWeekStart)
+    setSelectedYM(getMonthKey(nextWeekStart))
+  }
 
   // 해당 월 세션 목록 (넉넉하게 12개)
   const monthSessions = useMemo(
@@ -355,19 +424,11 @@ export default function DashboardPage() {
 
   // 현재 탭에 따라 표시할 행들 (오늘 이후 날짜 제외)
   const displayRows = useMemo(() => {
-    const rows = activeTab === 'all'
-      ? state.classes
-          .flatMap(cls => buildRows(cls.id))
-          .sort((a, b) => a.date.localeCompare(b.date) || a.classId.localeCompare(b.classId))
-      : buildRows(activeTab)
+    const rows = state.classes
+      .flatMap(cls => buildRows(cls.id))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.classId.localeCompare(b.classId))
     return rows.filter(r => r.date <= todayStr)
-  }, [activeTab, buildRows, state.classes, todayStr])
-
-  // 현황 테이블: 오늘 이전은 데이터 있는 행만
-  const gradeRows = useMemo(
-    () => displayRows.filter(r => r.date >= todayStr || r.hasGradeData),
-    [displayRows, todayStr]
-  )
+  }, [buildRows, state.classes, todayStr])
 
   // 숙제현황 테이블: 오늘 이전은 데이터 있는 행만
   const hwRows = useMemo(
@@ -381,12 +442,7 @@ export default function DashboardPage() {
     [displayRows]
   )
 
-  const isAllTab = activeTab === 'all'
-
-  const handleDeleteRow = (row: ReturnType<typeof buildRows>[number]) => {
-    if (!confirm(`${formatDateKo(row.date)} ${row.className} 범위를 대시보드에서 삭제하시겠습니까?`)) return
-    dispatch({ type: 'DELETE_SCOPE', payload: { sessionNum: row.sessionNum, classId: row.classId } })
-  }
+  const isAllTab = true
 
   const handleDeleteHw = (row: ReturnType<typeof buildRows>[number]) => {
     const hw = state.homeworks.find(h => h.sessionNum === row.sessionNum - 1 && (h.classId === row.classId || h.classId === ''))
@@ -445,87 +501,93 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 반별 탭 */}
-      <div className="flex gap-2 flex-wrap">
-        {[...state.classes, { id: 'all', name: '전체' }].map(cls => (
-          <button
-            key={cls.id}
-            onClick={() => setActiveTab(cls.id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors
-              ${activeTab === cls.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'
-              }`}
-          >
-            {cls.name}
-          </button>
-        ))}
-      </div>
-
-      {/* 월별 현황 테이블 */}
+      {/* 주간 미통과 현황 */}
       <section className="bg-white rounded-xl shadow-sm border border-slate-100">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">{selectedYear}년 {selectedMonth}월 현황</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="font-semibold text-slate-800">주간 미통과 현황</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              {formatDateKo(selectedWeekStart)} ~ {formatDateKo(selectedWeekEnd)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${weekTotal > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+              이번 주 미통과 {weekTotal}명
+            </span>
+            <button
+              onClick={() => goWeek(-1)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              onClick={() => {
+                setSelectedWeekStart(getWeekStart())
+                setSelectedYM(currentYM)
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
+                ${isCurrentWeek ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
+            >
+              이번 주
+            </button>
+            <button
+              onClick={() => goWeek(1)}
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[940px] table-fixed text-sm">
             <thead>
               <tr className="text-xs text-slate-500 bg-slate-50">
-                <th className="text-left px-5 py-3 w-36">날짜</th>
-                {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
-                <th className="text-left px-4 py-3 w-32">단어</th>
-                <th className="text-left px-4 py-3 w-40">단어 재시험</th>
-                <th className="text-left px-4 py-3 w-32">Daily</th>
-                <th className="text-left px-4 py-3 w-40">Daily 재시험</th>
-                <th className="w-10" />
+                <th className="text-left px-4 py-3 w-32">반</th>
+                {weekDates.map(day => (
+                  <th
+                    key={day.date}
+                    className={`text-left px-3 py-3 ${day.date === todayStr ? 'bg-yellow-50 text-yellow-700' : ''}`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold">{day.label}</span>
+                      <span className="font-normal">{day.date.slice(5).replace('-', '.')}</span>
+                      {day.date === todayStr && (
+                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
+                      )}
+                    </div>
+                  </th>
+                ))}
+                <th className="text-right px-4 py-3 w-20">합계</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {gradeRows.length === 0 ? (
-                <tr>
-                  <td colSpan={isAllTab ? 6 : 5} className="px-5 py-8 text-center text-sm text-slate-300">
-                    해당 월 수업 일정이 없습니다
-                  </td>
-                </tr>
-              ) : gradeRows.map(row => (
-                <tr
-                  key={`${row.classId}-${row.date}`}
-                  className={`group hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
-                >
-                  <td className="px-5 py-3 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-700">{formatDateKo(row.date)}</span>
-                      {row.date === todayStr && (
-                        <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
-                      )}
+              {weeklyRetestRows.map(row => (
+                <tr key={row.classId} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 align-top">
+                    <div className="font-semibold text-slate-800">{row.className}</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      {row.classDays === 'mon-fri' ? '월·금'
+                        : row.classDays === 'tue-thu' ? '화·목'
+                        : row.classDays === 'wed-sat' ? '수·토'
+                        : '월·수·금'}
                     </div>
                   </td>
-                  {isAllTab && (
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 font-medium">{row.className}</span>
+                  {row.days.map(day => (
+                    <td
+                      key={`${row.classId}-${day.date}`}
+                      className={`px-3 py-3 align-top ${day.date === todayStr ? 'bg-yellow-50/40' : ''}`}
+                    >
+                      <WeeklyRetestCell
+                        isClassDay={day.isClassDay}
+                        vocabNames={day.vocabNames}
+                        dailyNames={day.dailyNames}
+                      />
                     </td>
-                  )}
-                  <td className="px-4 py-3 text-sm align-top">
-                    {row.vocabRange
-                      ? <span className="text-slate-700 break-words">{row.vocabRange}</span>
-                      : <span className="text-slate-300 text-xs">미입력</span>}
-                  </td>
-                  <td className="px-4 py-3 align-top"><NameTags names={row.vocabNames} color="purple" limit={3} /></td>
-                  <td className="px-4 py-3 text-sm align-top">
-                    {row.dailyRange
-                      ? <span className="text-slate-700 break-words">{row.dailyRange}</span>
-                      : <span className="text-slate-300 text-xs">미입력</span>}
-                  </td>
-                  <td className="px-4 py-3 align-top"><NameTags names={row.dailyNames} color="blue" limit={3} /></td>
-                  <td className="px-2 py-3 align-top">
-                    {!isJogyo && (
-                      <button
-                        onClick={() => handleDeleteRow(row)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                  ))}
+                  <td className="px-4 py-3 align-top text-right">
+                    <span className={`inline-flex min-w-8 justify-center rounded-full px-2 py-1 text-xs font-semibold ${row.total > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'}`}>
+                      {row.total}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -673,6 +735,79 @@ export default function DashboardPage() {
           </table>
         </div>
       </section>
+    </div>
+  )
+}
+
+function WeeklyRetestCell({
+  isClassDay,
+  vocabNames,
+  dailyNames,
+}: {
+  isClassDay: boolean
+  vocabNames: string[]
+  dailyNames: string[]
+}) {
+  if (!isClassDay) {
+    return (
+      <div className="min-h-24 rounded-lg border border-dashed border-slate-100 bg-slate-50/50 px-2 py-3 text-center text-xs text-slate-300">
+        수업 없음
+      </div>
+    )
+  }
+
+  const hasRetests = vocabNames.length > 0 || dailyNames.length > 0
+
+  return (
+    <div className={`min-h-24 rounded-lg border px-2.5 py-2.5 ${hasRetests ? 'border-rose-100 bg-rose-50/30' : 'border-emerald-100 bg-emerald-50/30'}`}>
+      <div className="space-y-2">
+        <RetestLine label="단어" names={vocabNames} color="purple" />
+        <RetestLine label="Daily" names={dailyNames} color="blue" />
+      </div>
+    </div>
+  )
+}
+
+function RetestLine({
+  label,
+  names,
+  color,
+}: {
+  label: string
+  names: string[]
+  color: 'purple' | 'blue'
+}) {
+  const dotStyles = {
+    purple: 'bg-purple-500',
+    blue: 'bg-blue-500',
+  }
+  const tagStyles = {
+    purple: 'bg-purple-100 text-purple-700',
+    blue: 'bg-blue-100 text-blue-700',
+  }
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+          <span className={`h-1.5 w-1.5 rounded-full ${dotStyles[color]}`} />
+          {label}
+        </span>
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${names.length > 0 ? tagStyles[color] : 'bg-slate-100 text-slate-400'}`}>
+          {names.length}
+        </span>
+      </div>
+      {names.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {names.map(name => (
+            <span key={name} className={`rounded px-1.5 py-0.5 text-[11px] font-medium leading-4 ${tagStyles[color]}`}>
+              {name}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="text-[11px] text-emerald-600">미통과 없음</div>
+      )}
     </div>
   )
 }

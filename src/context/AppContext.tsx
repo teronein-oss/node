@@ -1,13 +1,12 @@
-import { createContext, useContext, useReducer, useEffect, useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { createContext, useContext, useReducer, useEffect, useState, useMemo, type ReactNode } from 'react'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions } from '../utils/helpers'
+import { useAppPersistence } from './useAppPersistence'
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
-interface AppState {
+export interface AppState {
   classes: Class[]
   students: Student[]
   grades: GradeRecord[]
@@ -32,7 +31,7 @@ interface AppState {
 
 // ─── Actions ────────────────────────────────────────────────────────────────
 
-type Action =
+export type Action =
   | { type: 'LOAD'; payload: AppState }
   | { type: 'ADD_CLASS'; payload: Omit<Class, 'id'> }
   | { type: 'RENAME_CLASS'; payload: { id: string; name: string } }
@@ -640,7 +639,7 @@ function reducer(state: AppState, action: Action): AppState {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const LEGACY_STORAGE_KEY = 'academy-dashboard-v3'
+export const LEGACY_STORAGE_KEY = 'academy-dashboard-v3'
 
 const DEFAULT_STATE: AppState = {
   classes: [],
@@ -665,7 +664,7 @@ const DEFAULT_STATE: AppState = {
   sessionTestConfigs: [],
 }
 
-function normalizeState(parsed: AppState): AppState {
+export function normalizeState(parsed: AppState): AppState {
   return {
     ...parsed,
     students: parsed.students ?? [],
@@ -742,7 +741,7 @@ function normalizeState(parsed: AppState): AppState {
 
 // ─── Context ────────────────────────────────────────────────────────────────
 
-const SCHEDULE_ACTION_TYPES = new Set<Action['type']>([
+export const SCHEDULE_ACTION_TYPES = new Set<Action['type']>([
   'ADD_SCHEDULE_EVENT', 'UPDATE_SCHEDULE_EVENT', 'DELETE_SCHEDULE_EVENT',
   'COMPLETE_SCHEDULE_EVENT', 'TOGGLE_SCHEDULE_EVENT',
 ])
@@ -773,73 +772,18 @@ export function AppProvider({ children, uid, isAdmin = false }: { children: Reac
   const [loading, setLoading] = useState(true)
   const [globalScheduleEvents, setGlobalScheduleEvents] = useState<ScheduleEvent[]>([])
   const [visibleCount, setVisibleCount] = useState(8)
-  const firestoreDoc = useMemo(() => doc(db, 'appData', uid), [uid])
-  const stateRef = useRef(state)
-  stateRef.current = state
-  const loadingRef = useRef(true)
-  loadingRef.current = loading
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingWriteCount = useRef(0)
-
-  // 비관리자: config/sharedData 구독해서 전체 공지 일정 수신
-  useEffect(() => {
-    if (isAdmin) return
-    const sharedRef = doc(db, 'config', 'sharedData')
-    return onSnapshot(sharedRef, (snap) => {
-      if (snap.exists()) {
-        const raw = ((snap.data().globalScheduleEvents ?? []) as Record<string, unknown>[])
-        setGlobalScheduleEvents(raw.map(ev => ({
-          id: ev['id'] as string,
-          startDate: ev['startDate'] as string,
-          endDate: ev['endDate'] as string,
-          title: ev['title'] as string,
-          type: 'all' as const,
-          time: ev['time'] as string | undefined,
-          completed: (ev['completed'] as boolean | undefined) ?? false,
-          createdAt: ev['createdAt'] as string,
-        })))
-      } else {
-        setGlobalScheduleEvents([])
-      }
-    })
-  }, [isAdmin])
-
-  // 관리자 데이터 로드 완료 시 전체 공지 일정을 config/sharedData에 즉시 1회 동기화
-  useEffect(() => {
-    if (!isAdmin || loading) return
-    const globalEvents = (state.scheduleEvents ?? []).filter(e => e.type === 'all')
-    setDoc(doc(db, 'config', 'sharedData'), { globalScheduleEvents: JSON.parse(JSON.stringify(globalEvents)) }, { merge: true })
-      .catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
-  // loading이 false로 바뀌는 시점(최초 1회)에만 실행
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, loading])
-
-  // dispatch: LOAD 액션은 Firestore 저장 건너뜀, 나머지는 300ms 디바운스 저장
-  const dispatch = useCallback((action: Action) => {
-    baseDispatch(action)
-    if (action.type === 'LOAD' || loadingRef.current) return
-    if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      saveTimer.current = null
-      pendingWriteCount.current++
-      const sanitized = JSON.parse(JSON.stringify(stateRef.current))
-      setDoc(firestoreDoc, sanitized)
-        .then(() => {
-          console.log('✅ Firestore 저장:', firestoreDoc.path)
-          // 관리자가 일정을 변경한 경우 전체 공지 일정을 config/sharedData에 동기화
-          if (isAdmin && SCHEDULE_ACTION_TYPES.has(action.type)) {
-            const globalEvents = (stateRef.current.scheduleEvents ?? []).filter(e => e.type === 'all')
-            setDoc(doc(db, 'config', 'sharedData'), { globalScheduleEvents: JSON.parse(JSON.stringify(globalEvents)) }, { merge: true })
-              .then(() => console.log('✅ 전체 일정 동기화 완료'))
-              .catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
-          }
-        })
-        .catch((err) => {
-          pendingWriteCount.current--
-          console.error('❌ Firestore 저장 실패:', err?.code, err?.message)
-        })
-    }, 300)
-  }, [firestoreDoc, isAdmin])
+  const dispatch = useAppPersistence({
+    uid,
+    isAdmin,
+    state,
+    loading,
+    baseDispatch,
+    setLoading,
+    setGlobalScheduleEvents,
+    normalizeState,
+    legacyStorageKey: LEGACY_STORAGE_KEY,
+    scheduleActionTypes: SCHEDULE_ACTION_TYPES,
+  })
 
   const currentYM = useMemo(() => {
     const today = new Date()
@@ -858,45 +802,6 @@ export function AppProvider({ children, uid, isAdmin = false }: { children: Reac
     const sessions = getMonthSessions(y, m, 8)
     return sessions.includes(cur) ? cur : (sessions[0] ?? 1)
   })
-
-  // Firestore 실시간 구독 (읽기 전용 — 저장은 dispatch 래퍼가 담당)
-  useEffect(() => {
-    const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
-      if (snap.exists()) {
-        if (pendingWriteCount.current > 0) {
-          // 우리가 직접 저장한 onSnapshot 반응 — in-memory 상태를 덮어쓰지 않음
-          pendingWriteCount.current--
-        } else {
-          const normalized = normalizeState(snap.data() as AppState)
-          baseDispatch({ type: 'LOAD', payload: normalized })
-          // 관리자 계정 로드 시 기존 전체 공지 일정도 즉시 동기화
-          if (isAdmin) {
-            const globalEvents = (normalized.scheduleEvents ?? []).filter(e => e.type === 'all')
-            setDoc(doc(db, 'config', 'sharedData'), { globalScheduleEvents: JSON.parse(JSON.stringify(globalEvents)) }, { merge: true })
-              .then(() => console.log('✅ 기존 전체 일정 동기화 완료'))
-              .catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
-          }
-        }
-      } else {
-        try {
-          const saved = localStorage.getItem(LEGACY_STORAGE_KEY)
-          if (saved) {
-            const parsed = normalizeState(JSON.parse(saved) as AppState)
-            setDoc(firestoreDoc, JSON.parse(JSON.stringify(parsed)))
-              .then(() => localStorage.removeItem(LEGACY_STORAGE_KEY))
-              .catch((err) => console.error('마이그레이션 실패:', err?.code))
-            baseDispatch({ type: 'LOAD', payload: parsed })
-          }
-        } catch { /* ignore */ }
-      }
-      setLoading(false)
-    }, (err) => {
-      console.error('Firestore 오류:', err?.code, err?.message)
-      setLoading(false)
-    })
-    return unsubscribe
-  }, [firestoreDoc, isAdmin])
-
 
   // 월 변경 시 선택 회차 + 표시 개수 초기화
   useEffect(() => {

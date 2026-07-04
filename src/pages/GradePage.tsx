@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { needsRetest, getWeekStartForSession, getClassDate, formatDateKo, getMonthMWFSessions, getMWFClassDate, getWeekStartForMWFSession, fmtDate, getMonthClassDates } from '../utils/helpers'
+import { needsRetest, getWeekStartForSession, getClassDate, formatDateKo, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
+import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import { Pencil, Trash2, X } from 'lucide-react'
 
 interface GradeRow {
@@ -17,50 +18,29 @@ export default function GradePage() {
   const { state, dispatch, getScope, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
 
   const today = new Date()
-  const todayStr = fmtDate(today)
-  const currentYear = today.getFullYear()
-  const currentMonth = today.getMonth() + 1
-  const currentYM = `${currentYear}-${currentMonth}`
+  const currentYM = getCurrentYM(today)
 
   const availableMonths = useMemo(() => {
-    const ymSet = new Set<string>([currentYM])
-    for (let i = 1; i <= 3; i++) {
-      const d = new Date(currentYear, currentMonth - 1 - i, 1)
-      ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
-    }
-    for (const g of state.grades) {
-      const d = new Date(g.weekStart + 'T00:00:00')
-      const thu = new Date(d); thu.setDate(d.getDate() + 3)
-      ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
-    }
-    return [...ymSet].sort().reverse().map(ym => {
-      const [y, m] = ym.split('-').map(Number)
-      return { ym, year: y, month: m, label: `${y}년 ${m}월` }
-    })
+    return buildMonthOptions({ grades: state.grades, today })
   }, [state.grades, currentYM])
 
   const selectedMonthInfo = availableMonths.find(m => m.ym === selectedYM) ?? availableMonths[0]
 
   const [selectedClass, setSelectedClass] = useState(() => {
-    const dow = new Date().getDay()
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
-    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
-    return matched?.id ?? state.classes[0]?.id ?? ''
+    return getDefaultClassIdForToday(state.classes, state.classes[0]?.id ?? '')
   })
 
   const selectedCls = state.classes.find(c => c.id === selectedClass)
   const classDates = useMemo(() => {
-    if (!selectedCls || !selectedMonthInfo) return []
-    if (selectedCls.days === 'mon-wed-fri') {
-      return getMonthMWFSessions(selectedMonthInfo.year, selectedMonthInfo.month)
-        .map(sNum => ({ date: getMWFClassDate(sNum), sessionNum: sNum }))
-        .filter(({ date }) => date <= todayStr)
-        .sort((a, b) => a.date.localeCompare(b.date))
-    }
-    return getMonthClassDates(selectedMonthInfo.year, selectedMonthInfo.month, selectedCls.days as 'mon-fri' | 'tue-thu' | 'wed-sat')
-      .filter(({ date }) => date <= todayStr)
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [selectedCls, selectedMonthInfo, todayStr])
+    if (!selectedMonthInfo) return []
+    return getClassDatesForMonth({
+      classInfo: selectedCls,
+      year: selectedMonthInfo.year,
+      month: selectedMonthInfo.month,
+      includeFuture: false,
+      today,
+    })
+  }, [selectedCls, selectedMonthInfo])
 
   const [rows, setRows] = useState<GradeRow[]>([])
   const [saved, setSaved] = useState(false)

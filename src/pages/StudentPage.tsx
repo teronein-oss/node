@@ -2,7 +2,8 @@ import { useState, useMemo, useRef } from 'react'
 import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck, Pencil } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { Student, FilterType, Class } from '../types'
-import { getMonthSessions, getWeekStartForSession } from '../utils/helpers'
+import { getMonthSessions } from '../utils/helpers'
+import { buildMonthOptions, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import StudentDetail from './StudentDetail'
 
 const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
@@ -17,10 +18,7 @@ export default function StudentPage() {
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState(() => {
-    const dow = new Date().getDay()
-    const todayDays = (dow === 1 || dow === 5) ? 'mon-fri' : (dow === 2 || dow === 4) ? 'tue-thu' : dow === 3 ? 'mon-wed-fri' : null
-    const matched = todayDays ? state.classes.find(c => c.days === todayDays) : null
-    return matched?.id ?? 'all'
+    return getDefaultClassIdForToday(state.classes, 'all')
   })
   const [statusFilter, setStatusFilter] = useState<FilterType>('all')
   const [selected, setSelected] = useState<Student | null>(null)
@@ -40,31 +38,11 @@ export default function StudentPage() {
 
   // 현재 월 계산 (목요일 기준)
   const curDate = new Date()
-  const currentYM = `${curDate.getFullYear()}-${curDate.getMonth() + 1}`
+  const currentYM = getCurrentYM(curDate)
 
   // 선택 가능한 월 목록 (성적 있는 월 + 현재 월)
   const availableMonths = useMemo(() => {
-    const ymSet = new Set<string>([currentYM])
-    // 최근 3개월 항상 포함
-    const curDate2 = new Date()
-    for (let i = 1; i <= 3; i++) {
-      const d = new Date(curDate2.getFullYear(), curDate2.getMonth() - i, 1)
-      ymSet.add(`${d.getFullYear()}-${d.getMonth() + 1}`)
-    }
-    for (const g of state.grades) {
-      const ws = getWeekStartForSession(g.sessionNum)
-      const d = new Date(ws + 'T00:00:00')
-      const thu = new Date(d)
-      thu.setDate(d.getDate() + 3)
-      ymSet.add(`${thu.getFullYear()}-${thu.getMonth() + 1}`)
-    }
-    return [...ymSet]
-      .sort()
-      .reverse()
-      .map(ym => {
-        const [y, m] = ym.split('-').map(Number)
-        return { ym, year: y, month: m, label: `${y}년 ${m}월` }
-      })
+    return buildMonthOptions({ grades: state.grades, today: curDate })
   }, [state.grades, currentYM])
 
   // selectedYM / setSelectedYM come from global context (shared across pages)
