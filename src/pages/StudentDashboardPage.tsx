@@ -487,7 +487,7 @@ export default function StudentDashboardPage() {
                     return (
                       <tr key={row.rowId} className={`${startsGroup ? 'border-t-2 border-slate-800' : 'border-t border-slate-200'} hover:bg-blue-50/30`}>
                         <td className="sticky left-0 z-20 border-r border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800">{startsGroup ? block.label : ''}</td>
-                        <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{row.teacherName}</td>
+                        <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{startsGroup ? row.teacherName : ''}</td>
                         <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
                         <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
                         <td className="border-r border-slate-200 px-2 py-1"><SelectCell value={row.sheet.prevVocab} options={TEXTBOOK_OPTIONS} onSave={value => updateRow(row.rowId, { prevVocab: value })} /></td>
