@@ -116,6 +116,21 @@ function buildRowId(teacherUid: string, studentId: string) {
   return `${teacherUid}_${studentId}`
 }
 
+function parseScore(value?: string) {
+  if (!value) return null
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return null
+  const score = Number(normalized)
+  return Number.isFinite(score) ? score : null
+}
+
+function getScoreDelta(midScore?: string, finalScore?: string) {
+  const mid = parseScore(midScore)
+  const final = parseScore(finalScore)
+  if (mid === null || final === null) return null
+  return Number((final - mid).toFixed(1))
+}
+
 function SelectCell({
   value,
   options,
@@ -174,6 +189,27 @@ function TextCell({
       placeholder={placeholder}
       className={`w-full rounded-md border border-transparent bg-white px-2 py-1 text-xs text-slate-700 outline-none transition-colors placeholder:text-slate-300 hover:border-slate-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 ${align === 'center' ? 'text-center' : 'text-left'}`}
     />
+  )
+}
+
+function ScoreDeltaCell({ midScore, finalScore }: { midScore?: string; finalScore?: string }) {
+  const delta = getScoreDelta(midScore, finalScore)
+  if (delta === null) {
+    return (
+      <div className="h-8 rounded-md bg-white text-center text-xs text-slate-300" />
+    )
+  }
+  if (delta === 0) {
+    return (
+      <div className="flex h-8 items-center justify-center rounded-md bg-white text-xs font-semibold text-slate-400">0</div>
+    )
+  }
+  const improved = delta > 0
+  return (
+    <div className={`flex h-8 items-center justify-center rounded-md bg-white text-xs font-bold ${improved ? 'text-red-500' : 'text-blue-600'}`}>
+      <span className="mr-1">{improved ? '▲' : '▼'}</span>
+      {Math.abs(delta).toFixed(1)}
+    </div>
   )
 }
 
@@ -405,42 +441,42 @@ export default function StudentDashboardPage() {
           <div className="py-20 text-center text-sm text-slate-400">표시할 학교·반이 없습니다</div>
         ) : (
           <div className="overflow-auto">
-            <table className="min-w-[1900px] w-full border-collapse text-sm">
+            <table className="min-w-[2400px] w-full table-fixed border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-50 text-xs text-slate-700">
-                  <th className="sticky left-0 z-20 w-28 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left">반</th>
-                  <th className="sticky left-28 z-20 w-24 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left">선생님</th>
-                  <th className="sticky left-52 z-20 w-16 border-r border-slate-300 bg-slate-50 px-3 py-3 text-center">번호</th>
-                  <th className="sticky left-[17rem] z-20 w-28 border-r-2 border-slate-800 bg-slate-50 px-3 py-3 text-left">이름</th>
+                  <th className="sticky left-0 z-30 w-36 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">반</th>
+                  <th className="sticky left-[9rem] z-30 w-32 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">선생님</th>
+                  <th className="sticky left-[17rem] z-30 w-16 border-r border-slate-300 bg-slate-50 px-3 py-3 text-center whitespace-nowrap">번호</th>
+                  <th className="sticky left-[21rem] z-30 w-32 border-r-2 border-slate-800 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">이름</th>
                   <th className="w-44 border-r border-slate-200 bg-slate-100 px-3 py-3">1~2월 단어장</th>
                   <th className="w-44 border-r border-slate-200 bg-amber-100 px-3 py-3">3월 이후 단어장</th>
-                  <th className="w-28 border-r border-slate-200 bg-rose-100 px-3 py-3">청상담</th>
-                  <th className="w-24 border-r border-slate-200 bg-emerald-50 px-3 py-3">1학기 중간</th>
-                  <th className="w-28 border-r border-slate-200 bg-rose-100 px-3 py-3">중간 상담</th>
-                  <th className="w-24 border-r border-slate-200 px-3 py-3">1학기 기말</th>
-                  <th className="w-28 border-r border-slate-200 bg-rose-100 px-3 py-3">기말 상담</th>
-                  <th className="w-24 border-r border-slate-200 bg-emerald-100 px-3 py-3">점수 등락폭</th>
-                  <th className="w-28 border-r-2 border-slate-800 bg-yellow-100 px-3 py-3">1학기 등급</th>
-                  <th className="w-24 border-r border-slate-200 px-3 py-3">2학기 중간</th>
-                  <th className="w-28 border-r border-slate-200 bg-rose-100 px-3 py-3">중간 상담</th>
-                  <th className="w-24 border-r border-slate-200 px-3 py-3">2학기 기말</th>
-                  <th className="w-28 border-r border-slate-200 bg-rose-100 px-3 py-3">기말 상담</th>
-                  <th className="w-28 border-r-2 border-slate-800 bg-yellow-100 px-3 py-3">2학기 등급</th>
-                  <th className="w-28 border-r border-slate-200 px-3 py-3">3월 모의</th>
-                  <th className="w-28 border-r border-slate-200 px-3 py-3">6월 모의</th>
-                  <th className="w-28 border-r border-slate-200 px-3 py-3">9월 모의</th>
-                  <th className="w-28 border-r border-slate-200 px-3 py-3">10월 모의</th>
-                  <th className="w-56 px-3 py-3 text-left">메모</th>
+                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">첫상담</th>
+                  <th className="w-32 border-r border-slate-200 bg-emerald-50 px-3 py-3 whitespace-nowrap">1학기 중간</th>
+                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">중간 상담</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">1학기 기말</th>
+                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">기말 상담</th>
+                  <th className="w-32 border-r border-slate-200 bg-emerald-100 px-3 py-3 whitespace-nowrap">점수 등락폭</th>
+                  <th className="w-32 border-r-2 border-slate-800 bg-yellow-100 px-3 py-3 whitespace-nowrap">1학기 등급</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">2학기 중간</th>
+                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">중간 상담</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">2학기 기말</th>
+                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">기말 상담</th>
+                  <th className="w-32 border-r-2 border-slate-800 bg-yellow-100 px-3 py-3 whitespace-nowrap">2학기 등급</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">3월 모의</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">6월 모의</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">9월 모의</th>
+                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">10월 모의</th>
+                  <th className="w-56 px-3 py-3 text-left whitespace-nowrap">메모</th>
                 </tr>
               </thead>
               <tbody>
                 {classBlocks.map(block => (
                   block.isEmpty ? (
                     <tr key={block.key} className="border-t-2 border-slate-800 bg-slate-50/50">
-                      <td className="sticky left-0 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 font-semibold text-slate-500">{block.label}</td>
-                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
-                      <td className="sticky left-52 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
-                      <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
+                      <td className="sticky left-0 z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 font-semibold text-slate-500">{block.label}</td>
+                      <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
+                      <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
+                      <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
                       {Array.from({ length: 19 }, (_, i) => (
                         <td key={`${block.key}-empty-${i}`} className="border-r border-slate-100 bg-slate-50/60 px-2 py-4" />
                       ))}
@@ -450,10 +486,10 @@ export default function StudentDashboardPage() {
                     const number = idx + 1
                     return (
                       <tr key={row.rowId} className={`${startsGroup ? 'border-t-2 border-slate-800' : 'border-t border-slate-200'} hover:bg-blue-50/30`}>
-                        <td className="sticky left-0 z-10 border-r border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800">{startsGroup ? block.label : ''}</td>
-                        <td className="sticky left-28 z-10 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{row.teacherName}</td>
-                        <td className="sticky left-52 z-10 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
-                        <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
+                        <td className="sticky left-0 z-20 border-r border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800">{startsGroup ? block.label : ''}</td>
+                        <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{row.teacherName}</td>
+                        <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
+                        <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
                         <td className="border-r border-slate-200 px-2 py-1"><SelectCell value={row.sheet.prevVocab} options={TEXTBOOK_OPTIONS} onSave={value => updateRow(row.rowId, { prevVocab: value })} /></td>
                         <td className="border-r border-slate-200 bg-amber-50/60 px-2 py-1"><SelectCell value={row.sheet.currentVocab} options={TEXTBOOK_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { currentVocab: value })} /></td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.vocabProgress} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { vocabProgress: value })} /></td>
@@ -461,7 +497,7 @@ export default function StudentDashboardPage() {
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstMidConsulted: value })} /></td>
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstFinalScore} onSave={value => updateRow(row.rowId, { firstFinalScore: value })} /></td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstFinalConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstFinalConsulted: value })} /></td>
-                        <td className="border-r border-slate-200 bg-emerald-50/70 px-2 py-1"><TextCell value={row.sheet.scoreGrowth} onSave={value => updateRow(row.rowId, { scoreGrowth: value })} /></td>
+                        <td className="border-r border-slate-200 bg-emerald-50/70 px-2 py-1"><ScoreDeltaCell midScore={row.sheet.firstMidScore} finalScore={row.sheet.firstFinalScore} /></td>
                         <td className="border-r-2 border-slate-800 bg-yellow-50/70 px-2 py-1"><SelectCell value={row.sheet.firstGrade} options={GRADE_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { firstGrade: value })} /></td>
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.secondMidScore} onSave={value => updateRow(row.rowId, { secondMidScore: value })} /></td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.secondMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { secondMidConsulted: value })} /></td>
