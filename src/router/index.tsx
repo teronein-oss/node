@@ -18,6 +18,7 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 const DashboardPage = lazy(() => import('../pages/DashboardPage'))
 const GradePage = lazy(() => import('../pages/GradePage'))
 const StudentPage = lazy(() => import('../pages/StudentPage'))
+const StudentDashboardPage = lazy(() => import('../pages/StudentDashboardPage'))
 const HomeworkPage = lazy(() => import('../pages/HomeworkPage'))
 const ExamPage = lazy(() => import('../pages/ExamPage'))
 const SchedulePage = lazy(() => import('../pages/SchedulePage'))
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Lazy><DashboardPage /></Lazy> },
       { path: 'grades', element: <Lazy><GradePage /></Lazy> },
       { path: 'students', element: <Lazy><StudentPage /></Lazy> },
+      { path: 'student-dashboard', element: <Lazy><StudentDashboardPage /></Lazy> },
       { path: 'homework', element: <Lazy><HomeworkPage /></Lazy> },
       { path: 'exam', element: <Lazy><ExamPage /></Lazy> },
       { path: 'clinic', element: <Lazy><ClinicPage /></Lazy> },

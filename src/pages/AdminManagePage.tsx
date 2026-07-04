@@ -89,6 +89,12 @@ export default function AdminManagePage() {
     setSavingMsg('저장 중...')
     saveTimer.current = setTimeout(async () => {
       await setDoc(doc(db, 'appData', selectedUid), { ...appDataRef, classes: newClasses, students: newStudents })
+      await setDoc(doc(db, 'sharedStudentRosters', selectedUid), {
+        uid: selectedUid,
+        classes: newClasses,
+        students: newStudents,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true })
       setSavingMsg('저장됨')
       setTimeout(() => setSavingMsg(null), 1500)
     }, 400)

@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, School, CalendarDays, LogOut, Shield, Stethoscope } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, School, CalendarDays, LogOut, Shield, Stethoscope, TableProperties } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface SidebarProps {
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/grades', icon: BookOpen, label: '성적관리' },
   { to: '/homework', icon: ClipboardList, label: '숙제관리' },
   { to: '/students', icon: Users, label: '학생관리' },
+  { to: '/student-dashboard', icon: TableProperties, label: '학생 대시보드' },
   { to: '/exam', icon: School, label: '내신관리' },
   { to: '/clinic', icon: Stethoscope, label: '보충/클리닉' },
   { to: '/schedule', icon: CalendarDays, label: '업무 일정표' },

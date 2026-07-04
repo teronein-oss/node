@@ -147,5 +147,15 @@ export function useAppPersistence({
     return unsubscribe
   }, [baseDispatch, firestoreDoc, isAdmin, legacyStorageKey, normalizeState, setLoading])
 
+  useEffect(() => {
+    if (loading) return
+    setDoc(doc(db, 'sharedStudentRosters', uid), {
+      uid,
+      classes: toFirestoreData(state.classes ?? []),
+      students: toFirestoreData(state.students ?? []),
+      updatedAt: new Date().toISOString(),
+    }, { merge: true }).catch(err => console.error('공유 학생 명단 동기화 실패:', err?.code))
+  }, [uid, loading, state.classes, state.students])
+
   return dispatch
 }
