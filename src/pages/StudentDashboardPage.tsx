@@ -59,6 +59,7 @@ interface ClassBlock {
   key: string
   label: string
   level: string
+  teacherName?: string
   rows: DashboardRow[]
   isEmpty: boolean
 }
@@ -74,14 +75,17 @@ interface RegisteredClass {
   level: string
 }
 
-const LEVEL_ORDER = ['S1', 'S2', 'A1', 'A2', 'A3']
+const HIGH_LEVEL_ORDER = ['S1', 'S2', 'A1', 'A2', 'A3']
+const MIDDLE_LEVEL_ORDER = ['A', 'B', 'A1', 'A2', 'B1', 'B2']
+const ELEMENTARY_LEVEL_ORDER = ['A1', 'A2', 'A3', 'A4', 'S1', 'S2']
+const LEVEL_SORT_ORDER = ['S1', 'S2', 'A', 'B', 'A1', 'A2', 'A3', 'A4', 'B1', 'B2']
 const TEXTBOOK_OPTIONS = ['', '없음', '(고2)특급VOCA', '(고2)ASAP VOCA', '능률VOCA', '워드마스터']
 const STATUS_OPTIONS = ['', '완료', '예정', '필요', '보류']
 const GRADE_OPTIONS = ['', '1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급']
 
 function parseClassName(name: string) {
   const trimmed = name.trim()
-  const match = trimmed.match(/^(.+?)(\d+)[\s_]+(S\d+|A\d+)$/)
+  const match = trimmed.match(/^(.+?)(\d+)[\s_]+([A-Za-z가-힣]+\d*)$/)
   if (!match) {
     return { schoolName: trimmed, grade: '', level: '', schoolKey: trimmed }
   }
@@ -94,12 +98,19 @@ function parseClassName(name: string) {
 }
 
 function levelRank(level: string) {
-  const idx = LEVEL_ORDER.indexOf(level)
-  return idx === -1 ? LEVEL_ORDER.length : idx
+  const idx = LEVEL_SORT_ORDER.indexOf(level)
+  return idx === -1 ? LEVEL_SORT_ORDER.length : idx
 }
 
 function formatClassLabel(schoolKey: string, level: string) {
   return level ? `${schoolKey} ${level}` : schoolKey
+}
+
+function getDefaultLevels(group?: SchoolGroup) {
+  if (!group) return HIGH_LEVEL_ORDER
+  if (group.schoolName.startsWith('중')) return MIDDLE_LEVEL_ORDER
+  if (group.schoolName.startsWith('초')) return ELEMENTARY_LEVEL_ORDER
+  return HIGH_LEVEL_ORDER
 }
 
 function buildRowId(teacherUid: string, studentId: string) {
@@ -301,23 +312,54 @@ export default function StudentDashboardPage() {
       ...visibleClasses.map(c => c.level).filter(Boolean),
       ...visibleRows.map(r => r.level).filter(Boolean),
     ])
-    const extras = [...existing].filter(level => !LEVEL_ORDER.includes(level)).sort()
-    return [...LEVEL_ORDER, ...extras]
-  }, [visibleClasses, visibleRows])
+    const defaults = getDefaultLevels(currentGroup)
+    const extras = [...existing]
+      .filter(level => !defaults.includes(level))
+      .sort((a, b) => levelRank(a) - levelRank(b) || a.localeCompare(b, 'ko'))
+    return [...defaults, ...extras]
+  }, [currentGroup, visibleClasses, visibleRows])
 
   const classBlocks = useMemo<ClassBlock[]>(() => {
     if (!currentSchool) return []
-    return levelOptions.map(level => {
-      const blockRows = visibleRows.filter(r => r.level === level)
-      return {
-        key: `${currentSchool}-${level}`,
-        label: formatClassLabel(currentSchool, level),
-        level,
-        rows: blockRows,
-        isEmpty: blockRows.length === 0,
+    const levelBlocks: ClassBlock[] = levelOptions.flatMap(level => {
+      const classesForLevel = visibleClasses.filter(cls => cls.level === level)
+      if (classesForLevel.length === 0) {
+        return [{
+          key: `${currentSchool}-${level}-empty`,
+          label: formatClassLabel(currentSchool, level),
+          level,
+          teacherName: '',
+          rows: [] as DashboardRow[],
+          isEmpty: true,
+        }]
       }
+      return classesForLevel.map(cls => {
+        const blockRows = visibleRows.filter(r => r.teacherUid === cls.teacherUid && r.classId === cls.classId)
+        return {
+          key: `${cls.teacherUid}-${cls.classId}`,
+          label: formatClassLabel(cls.schoolKey, cls.level),
+          level,
+          teacherName: cls.teacherName,
+          rows: blockRows,
+          isEmpty: blockRows.length === 0,
+        }
+      })
     })
-  }, [currentSchool, levelOptions, visibleRows])
+    const unparsedBlocks: ClassBlock[] = visibleClasses
+      .filter(cls => !cls.level)
+      .map(cls => {
+        const blockRows = visibleRows.filter(r => r.teacherUid === cls.teacherUid && r.classId === cls.classId)
+        return {
+          key: `${cls.teacherUid}-${cls.classId}`,
+          label: cls.className,
+          level: '',
+          teacherName: cls.teacherName,
+          rows: blockRows,
+          isEmpty: blockRows.length === 0,
+        }
+      })
+    return [...levelBlocks, ...unparsedBlocks]
+  }, [currentSchool, levelOptions, visibleClasses, visibleRows])
 
   const updateRow = async (rowId: string, patch: SheetRowData) => {
     const prev = sheetRows[rowId] ?? {}
@@ -362,7 +404,7 @@ export default function StudentDashboardPage() {
         {currentGroup && (
           <div className="border-b border-slate-200 bg-white px-5 py-4">
             <div className="text-lg font-bold text-slate-800">{currentGroup.label}</div>
-            <div className="mt-1 text-xs text-slate-400">S1 · S2 · A1 · A2 · A3 순서로 정렬</div>
+            <div className="mt-1 text-xs text-slate-400">{levelOptions.join(' · ')} 순서로 정렬</div>
           </div>
         )}
         {loading ? (
@@ -407,7 +449,7 @@ export default function StudentDashboardPage() {
                   block.isEmpty ? (
                     <tr key={block.key} className="border-t-2 border-slate-800 bg-slate-50/50">
                       <td className="sticky left-0 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 font-semibold text-slate-500">{block.label}</td>
-                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
+                      <td className="sticky left-28 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-400">{block.teacherName ?? ''}</td>
                       <td className="sticky left-52 z-10 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
                       <td className="sticky left-[17rem] z-10 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
                       {Array.from({ length: 19 }, (_, i) => (
