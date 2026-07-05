@@ -73,68 +73,92 @@ function getClassDateMapForWeek(classInfo: Class, weekDates: string[]) {
 
 // ─── 일정 패널 ────────────────────────────────────────────────────────────────
 function SchedulePanel({
-  title, icon: Icon, iconColor, events, onToggle, onRemove, readOnly,
+  title, icon: Icon, iconColor, events, todayStr, onToggle, onRemove, readOnly,
 }: {
   title: string
   icon: React.ElementType
   iconColor: string
   events: ScheduleEvent[]
+  todayStr: string
   onToggle: (id: string) => void
   onRemove: (id: string) => void
   readOnly?: boolean
 }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const activeEvents = useMemo(
+    () => events
+      .filter(e => e.endDate >= todayStr)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title, 'ko')),
+    [events, todayStr]
+  )
+  const todayCount = activeEvents.filter(e => e.startDate <= todayStr && e.endDate >= todayStr).length
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+      <button
+        type="button"
+        onClick={() => setIsOpen(open => !open)}
+        className="flex w-full items-center gap-2 px-5 py-3 border-b border-slate-100 text-left hover:bg-slate-50 transition-colors"
+      >
         <Icon size={15} className={iconColor} />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">{title}</h2>
-      </div>
-      <ul className="divide-y divide-slate-50">
-        {events.length === 0 && (
-          <li className="px-5 py-3 text-xs text-slate-400 text-center">등록된 항목이 없습니다</li>
-        )}
-        {events.map(e => {
-          const span = diffDays(e.startDate, e.endDate)
-          return (
-            <li key={e.id} className="flex items-start gap-2 px-5 py-2.5 hover:bg-slate-50 group">
-              <div className="flex-1 min-w-0 pt-0.5">
-                <p className={`text-sm break-words ${e.completed ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                  {e.title}
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {span > 0 ? `${e.startDate} ~ ${e.endDate} (${span + 1}일)` : e.startDate}
-                </p>
-              </div>
-              {!readOnly && (
-                <button
-                  onClick={() => onToggle(e.id)}
-                  className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0
-                    ${e.completed
-                      ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
-                      : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
-                    }`}
-                >
-                  <CheckCircle size={11} />
-                  {e.completed ? '완료됨' : '완료'}
-                </button>
-              )}
-              {readOnly && e.completed && (
-                <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border bg-green-50 text-green-600 border-green-200 shrink-0">
-                  <CheckCircle size={11} />완료됨
-                </span>
-              )}
-              {!readOnly && (
-                <button
-                  onClick={() => onRemove(e.id)}
-                  className="text-slate-300 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100 pt-0.5"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${todayCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+          오늘 {todayCount}
+        </span>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+          전체 {activeEvents.length}
+        </span>
+        {isOpen ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronDown size={15} className="text-slate-400" />}
+      </button>
+      {isOpen && (
+        <ul className="divide-y divide-slate-50">
+          {activeEvents.length === 0 && (
+            <li className="px-5 py-3 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
+          )}
+          {activeEvents.map(e => {
+            const span = diffDays(e.startDate, e.endDate)
+            const isToday = e.startDate <= todayStr && e.endDate >= todayStr
+            return (
+              <li key={e.id} className={`flex items-start gap-2 px-5 py-2.5 group ${isToday ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <p className={`text-sm break-words ${e.completed ? 'line-through text-slate-400' : isToday ? 'font-semibold text-red-700' : 'text-slate-700'}`}>
+                    {e.title}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${isToday ? 'text-red-500' : 'text-slate-400'}`}>
+                    {span > 0 ? `${e.startDate} ~ ${e.endDate} (${span + 1}일)` : e.startDate}
+                  </p>
+                </div>
+                {!readOnly && (
+                  <button
+                    onClick={() => onToggle(e.id)}
+                    className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0
+                      ${e.completed
+                        ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                        : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+                      }`}
+                  >
+                    <CheckCircle size={11} />
+                    {e.completed ? '완료됨' : '완료'}
+                  </button>
+                )}
+                {readOnly && e.completed && (
+                  <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border bg-green-50 text-green-600 border-green-200 shrink-0">
+                    <CheckCircle size={11} />완료됨
+                  </span>
+                )}
+                {!readOnly && (
+                  <button
+                    onClick={() => onRemove(e.id)}
+                    className="text-slate-300 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100 pt-0.5"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </div>
   )
 }
@@ -213,6 +237,93 @@ function MiniCalendar({ year, month, scheduleEvents }: {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+interface TodayTaskRow {
+  classId: string
+  className: string
+  vocabNames: string[]
+  dailyNames: string[]
+  homeworkTargetNames: string[]
+  homeworkBadNames: string[]
+  homeworkMissingNames: string[]
+  homeworkDescription: string
+}
+
+function TodayFocusPanel({ rows }: { rows: TodayTaskRow[] }) {
+  const vocabTotal = rows.reduce((sum, row) => sum + row.vocabNames.length, 0)
+  const dailyTotal = rows.reduce((sum, row) => sum + row.dailyNames.length, 0)
+  const homeworkTotal = rows.reduce((sum, row) => sum + row.homeworkTargetNames.length, 0)
+  const total = vocabTotal + dailyTotal + homeworkTotal
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+        <CheckCircle size={15} className="text-blue-500" />
+        <h2 className="font-semibold text-slate-800 text-sm flex-1">오늘 확인</h2>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${total > 0 ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+          대상 {total}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-4 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {rows.map(row => (
+            <div key={row.classId} className="px-5 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-slate-700">{row.className}</span>
+                {row.homeworkDescription && (
+                  <span className="truncate text-xs text-slate-400">{row.homeworkDescription}</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <TodayTaskGroup label="단어 재시험" names={row.vocabNames} color="purple" />
+                <TodayTaskGroup label="Daily 재시험" names={row.dailyNames} color="blue" />
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-500">숙제검사</span>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${row.homeworkTargetNames.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
+                      {row.homeworkTargetNames.length}
+                    </span>
+                  </div>
+                  <NameTags names={row.homeworkTargetNames} color="orange" limit={4} />
+                  {(row.homeworkBadNames.length > 0 || row.homeworkMissingNames.length > 0) && (
+                    <div className="mt-2 space-y-1">
+                      <HomeworkStatusLine label="미흡" names={row.homeworkBadNames} color="orange" />
+                      <HomeworkStatusLine label="미제출" names={row.homeworkMissingNames} color="red" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TodayTaskGroup({
+  label,
+  names,
+  color,
+}: {
+  label: string
+  names: string[]
+  color: 'purple' | 'blue'
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-slate-500">{label}</span>
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${names.length > 0 ? color === 'purple' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
+          {names.length}
+        </span>
+      </div>
+      <NameTags names={names} color={color} limit={4} />
     </div>
   )
 }
@@ -381,6 +492,67 @@ export default function DashboardPage() {
   const selectedWeekEnd = weekDates[weekDates.length - 1]?.date ?? selectedWeekStart
   const isCurrentWeek = selectedWeekStart === getWeekStart()
 
+  const todayTaskRows = useMemo<TodayTaskRow[]>(() => {
+    const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
+
+    return state.classes
+      .map(cls => {
+        const sessionNum = getClassDateMapForWeek(cls, [todayStr]).get(todayStr)
+        if (!sessionNum) return null
+
+        const activeStudents = state.students
+          .filter(s => s.active && s.classId === cls.id)
+          .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+        const studentIds = new Set(activeStudents.map(s => s.id))
+        const retests = state.retests.filter(
+          r => r.sessionNum === sessionNum && r.passed === null && studentIds.has(r.studentId)
+        )
+        const vocabNames = retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId))
+        const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
+        const hw = state.homeworks.find(
+          h => h.sessionNum === sessionNum - 1 && (h.classId === cls.id || h.classId === '')
+        )
+        const homeworkTargetNames = hw ? activeStudents.map(s => s.name) : []
+        const homeworkBadSet = new Set<string>()
+        const homeworkMissingSet = new Set<string>()
+
+        if (hw?.items?.length) {
+          const worstMap = new Map<string, number>()
+          for (const item of hw.items) {
+            for (const ss of (item.studentStatuses ?? [])) {
+              if (!studentIds.has(ss.studentId)) continue
+              const rank = statusRank[ss.status] ?? 0
+              if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
+            }
+          }
+          for (const [studentId, rank] of worstMap) {
+            const name = getStudentName(studentId)
+            if (rank === 3) homeworkMissingSet.add(name)
+            else if (rank === 2) homeworkBadSet.add(name)
+          }
+        } else if (hw) {
+          for (const g of state.grades.filter(g => g.sessionNum === sessionNum && studentIds.has(g.studentId))) {
+            if (g.attendance === '결석') continue
+            if (g.homeworkDone === '미흡') homeworkBadSet.add(getStudentName(g.studentId))
+          }
+        }
+
+        const row: TodayTaskRow = {
+          classId: cls.id,
+          className: cls.name,
+          vocabNames,
+          dailyNames,
+          homeworkTargetNames,
+          homeworkBadNames: [...homeworkBadSet].filter(name => !homeworkMissingSet.has(name)),
+          homeworkMissingNames: [...homeworkMissingSet],
+          homeworkDescription: hw?.description || (hw?.items ?? []).map(item => item.text).join(', '),
+        }
+        const hasTargets = row.vocabNames.length > 0 || row.dailyNames.length > 0 || row.homeworkTargetNames.length > 0
+        return hasTargets ? row : null
+      })
+      .filter((row): row is TodayTaskRow => row !== null)
+  }, [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr])
+
   const goWeek = (offset: number) => {
     const nextWeekStart = addDays(selectedWeekStart, offset * 7)
     setSelectedWeekStart(nextWeekStart)
@@ -521,10 +693,12 @@ export default function DashboardPage() {
             icon={Megaphone}
             iconColor="text-amber-500"
             events={allEvents}
+            todayStr={todayStr}
             onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
             onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
             readOnly={isJogyo}
           />
+          <TodayFocusPanel rows={todayTaskRows} />
         </div>
         <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
       </div>
