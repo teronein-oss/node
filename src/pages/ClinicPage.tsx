@@ -125,8 +125,7 @@ export default function ClinicPage() {
     }
   }
 
-  const completeEntry = (entry: DayEntry) => {
-    if (!confirm('완료 하겠습니까?')) return
+  const completeEntryWithoutConfirm = (entry: DayEntry) => {
     if (entry.kind === 'retest' && entry.retestId) {
       dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })
       setConfirmingRetestId(null)
@@ -135,6 +134,17 @@ export default function ClinicPage() {
     if (entry.kind === 'homework' && entry.studentId) {
       completeHomeworkRecheck(entry.studentId, entry.assignmentIds ?? [])
     }
+  }
+
+  const completeEntry = (entry: DayEntry) => {
+    if (!confirm('완료 하겠습니까?')) return
+    completeEntryWithoutConfirm(entry)
+  }
+
+  const completeAllOverdue = () => {
+    if (overdueEntries.length === 0) return
+    if (!confirm(`미완료 ${overdueEntries.length}건을 모두 완료 처리하겠습니까?`)) return
+    overdueEntries.forEach(completeEntryWithoutConfirm)
   }
 
   const calDays = useMemo(() => buildCalDays(calYM.year, calYM.month), [calYM])
@@ -396,11 +406,20 @@ export default function ClinicPage() {
             <div className="px-4 py-3 border-b border-slate-100">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-slate-800">미완료 목록</h2>
-                {overdueEntries.length > 0 && (
-                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">
-                    {overdueEntries.length}건
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {overdueEntries.length > 0 && (
+                    <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">
+                      {overdueEntries.length}건
+                    </span>
+                  )}
+                  <button
+                    onClick={completeAllOverdue}
+                    disabled={overdueEntries.length === 0}
+                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium disabled:opacity-40 disabled:hover:bg-blue-50 transition-colors"
+                  >
+                    전체 완료
+                  </button>
+                </div>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">날짜가 지났지만 완료 처리되지 않은 항목</p>
             </div>
