@@ -21,6 +21,7 @@ interface DayEntry {
   className: string
   label: string
   color: string
+  scheduledDate?: string
   retestId?: string
   studentId?: string
   assignmentIds?: string[]
@@ -124,29 +125,17 @@ export default function ClinicPage() {
     }
   }
 
-  // 클리닉 필요 학생 (재시험 미통과 + 숙제 미흡/미제출)
-  const needsClinicMap = useMemo(() => {
-    const map: Record<string, Set<string>> = {}
-    for (const r of state.retests) {
-      if (r.passed !== null) continue
-      const s = state.students.find(st => st.id === r.studentId)
-      if (!s?.active) continue
-      if (!map[r.studentId]) map[r.studentId] = new Set()
-      map[r.studentId].add(r.type === 'vocab' ? '단어재시험' : 'Daily재시험')
+  const completeEntry = (entry: DayEntry) => {
+    if (!confirm('완료 하겠습니까?')) return
+    if (entry.kind === 'retest' && entry.retestId) {
+      dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })
+      setConfirmingRetestId(null)
+      return
     }
-    for (const hw of state.homeworks) {
-      for (const item of hw.items ?? []) {
-        for (const ss of item.studentStatuses ?? []) {
-          if (ss.status !== '미흡' && ss.status !== '미제출') continue
-          const s = state.students.find(st => st.id === ss.studentId)
-          if (!s?.active) continue
-          if (!map[ss.studentId]) map[ss.studentId] = new Set()
-          map[ss.studentId].add(ss.status === '미흡' ? '숙제미흡' : '숙제미제출')
-        }
-      }
+    if (entry.kind === 'homework' && entry.studentId) {
+      completeHomeworkRecheck(entry.studentId, entry.assignmentIds ?? [])
     }
-    return map
-  }, [state.retests, state.homeworks, state.students])
+  }
 
   const calDays = useMemo(() => buildCalDays(calYM.year, calYM.month), [calYM])
 
@@ -165,6 +154,7 @@ export default function ClinicPage() {
         className: getClassName(r.studentId),
         label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
         color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
+        scheduledDate: selectedDate,
       })
     }
     for (const e of homeworkRechecksByDate[selectedDate] ?? []) {
@@ -179,6 +169,7 @@ export default function ClinicPage() {
         className: getClassName(e.studentId),
         label: e.status === '미제출' ? '숙제미제출' : '숙제미흡',
         color: e.status === '미제출' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700',
+        scheduledDate: selectedDate,
       })
     }
     return entries.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
@@ -192,28 +183,50 @@ export default function ClinicPage() {
     month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
   )
 
-  // 클리닉 필요 학생 목록 (이름 가나다순)
-  const clinicStudentList = useMemo(() =>
-    Object.entries(needsClinicMap)
-      .map(([studentId, reasonSet]) => ({ studentId, reasons: [...reasonSet] }))
-      .filter(({ studentId }) => {
-        const s = state.students.find(st => st.id === studentId)
-        return s?.active
-      })
-      .sort((a, b) => {
-        const na = state.students.find(s => s.id === a.studentId)?.name ?? ''
-        const nb = state.students.find(s => s.id === b.studentId)?.name ?? ''
-        return na.localeCompare(nb, 'ko')
-      }),
-    [needsClinicMap, state.students]
-  )
-
-  const REASON_COLORS: Record<string, string> = {
-    '단어재시험':  'bg-purple-100 text-purple-700',
-    'Daily재시험': 'bg-blue-100 text-blue-700',
-    '숙제미흡':    'bg-orange-100 text-orange-700',
-    '숙제미제출':  'bg-red-100 text-red-700',
-  }
+  // 날짜가 지난 미완료 목록
+  const overdueEntries = useMemo((): DayEntry[] => {
+    const entries: DayEntry[] = []
+    for (const [date, retests] of Object.entries(retestsByDate)) {
+      if (date >= todayStr) continue
+      for (const r of retests) {
+        const s = getStudent(r.studentId)
+        if (!s?.active) continue
+        entries.push({
+          kind: 'retest',
+          key: `overdue-${r.id}`,
+          retestId: r.id,
+          name: s.name,
+          className: getClassName(r.studentId),
+          label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
+          color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
+          scheduledDate: date,
+        })
+      }
+    }
+    for (const [date, entriesForDate] of Object.entries(homeworkRechecksByDate)) {
+      if (date >= todayStr) continue
+      for (const e of entriesForDate) {
+        const s = getStudent(e.studentId)
+        if (!s?.active) continue
+        entries.push({
+          kind: 'homework',
+          key: `overdue-hw-${date}-${e.studentId}`,
+          studentId: e.studentId,
+          assignmentIds: e.assignmentIds,
+          name: s.name,
+          className: getClassName(e.studentId),
+          label: e.status === '미제출' ? '숙제미제출' : '숙제미흡',
+          color: e.status === '미제출' ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-700',
+          scheduledDate: date,
+        })
+      }
+    }
+    return entries.sort((a, b) =>
+      (a.scheduledDate ?? '').localeCompare(b.scheduledDate ?? '') ||
+      a.name.localeCompare(b.name, 'ko')
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retestsByDate, homeworkRechecksByDate, state.students, state.classes, todayStr])
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -332,7 +345,7 @@ export default function ClinicPage() {
                     </span>
                     {entry.kind === 'homework' ? (
                       <button
-                        onClick={() => completeHomeworkRecheck(entry.studentId!, entry.assignmentIds ?? [])}
+                        onClick={() => completeEntry(entry)}
                         className="text-xs px-2 py-1 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 font-medium shrink-0 transition-colors"
                       >
                         재확인 완료
@@ -359,8 +372,7 @@ export default function ClinicPage() {
                       <span className="text-xs text-slate-500">재시험 완료 처리할까요?</span>
                       <button
                         onClick={() => {
-                          dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId!, retestScore: null, passed: true } })
-                          setConfirmingRetestId(null)
+                          completeEntry(entry)
                         }}
                         className="text-xs px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors"
                       >
@@ -379,53 +391,53 @@ export default function ClinicPage() {
             </div>
           </div>
 
-          {/* 클리닉 필요 학생 */}
+          {/* 미완료 목록 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100">
-              <h2 className="text-sm font-semibold text-slate-800">클리닉 필요 학생</h2>
-              <p className="text-xs text-slate-400 mt-0.5">재시험 미통과 / 숙제 미흡·미제출</p>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-slate-800">미완료 목록</h2>
+                {overdueEntries.length > 0 && (
+                  <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-medium">
+                    {overdueEntries.length}건
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">날짜가 지났지만 완료 처리되지 않은 항목</p>
             </div>
             <div className="divide-y divide-slate-50 max-h-96 overflow-y-auto">
-              {clinicStudentList.length === 0 ? (
-                <p className="px-4 py-8 text-xs text-slate-400 text-center">클리닉 필요 학생이 없습니다</p>
-              ) : clinicStudentList.map(({ studentId, reasons }) => {
-                const student = getStudent(studentId)
-                // 해당 학생의 미처리 재시험 중 retestDate가 설정된 것 찾기
-                const scheduledRetests = state.retests.filter(
-                  r => r.studentId === studentId && r.passed === null && r.retestDate
-                )
-                return (
-                  <div key={studentId} className="px-4 py-3">
-                    <div className="flex items-start gap-2 flex-wrap">
-                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0 mt-0.5">
-                        {student?.name[0]}
+              {overdueEntries.length === 0 ? (
+                <p className="px-4 py-8 text-xs text-slate-400 text-center">미완료 항목이 없습니다</p>
+              ) : overdueEntries.map(entry => (
+                <div key={entry.key} className="px-4 py-3 hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 text-xs font-bold shrink-0">
+                      {entry.name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-800">{entry.name}</span>
+                        <span className="text-xs text-slate-400">{entry.className}</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm font-semibold text-slate-800">{student?.name}</span>
-                          <span className="text-xs text-slate-400">{getClassName(studentId)}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {reasons.map(r => (
-                            <span key={r} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${REASON_COLORS[r] ?? 'bg-slate-100 text-slate-600'}`}>
-                              {r}
-                            </span>
-                          ))}
-                        </div>
-                        {scheduledRetests.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap gap-1">
-                            {scheduledRetests.map(r => (
-                              <span key={r.id} className="text-xs text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                                {r.type === 'vocab' ? '단어' : 'Daily'} → {formatDateKo(r.retestDate!)}
-                              </span>
-                            ))}
-                          </div>
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${entry.color}`}>
+                          {entry.label}
+                        </span>
+                        {entry.scheduledDate && (
+                          <span className="text-xs text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                            {formatDateKo(entry.scheduledDate)}
+                          </span>
                         )}
                       </div>
                     </div>
+                    <button
+                      onClick={() => completeEntry(entry)}
+                      className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium shrink-0 transition-colors"
+                    >
+                      완료
+                    </button>
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
