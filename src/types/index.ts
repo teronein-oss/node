@@ -11,11 +11,21 @@ export interface NoticeItem {
   deadline?: string  // YYYY-MM-DD
 }
 
+export type WithdrawalReason =
+  | '방학 휴원'
+  | '성적불만'
+  | '개인학습'
+  | '관리부족'
+  | '성적상승 후 퇴원'
+  | '알 수 없음'
+
 export interface Student {
   id: string
   name: string
   classId: string
   active: boolean
+  withdrawalReason?: WithdrawalReason
+  withdrawnAt?: string
 }
 
 export interface ScoreColumn {

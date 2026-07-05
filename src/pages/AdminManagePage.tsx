@@ -6,7 +6,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X, Users, GraduationCap, Loader2, Clock, Settings } from 'lucide-react'
 import { genId } from '../utils/helpers'
 import { displayName } from '../utils/displayName'
-import type { Class } from '../types'
+import type { Class, WithdrawalReason } from '../types'
 
 const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
   { value: 'mon-fri', label: '월·금' },
@@ -17,7 +17,14 @@ const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
 
 interface TeacherInfo { uid: string; displayName: string; role: string }
 interface ClassData { id: string; name: string; days: string }
-interface StudentData { id: string; name: string; classId: string; active: boolean }
+interface StudentData {
+  id: string
+  name: string
+  classId: string
+  active: boolean
+  withdrawalReason?: WithdrawalReason
+  withdrawnAt?: string
+}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AppData = Record<string, any>
 

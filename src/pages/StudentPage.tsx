@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck, Pencil } from 'lucide-react'
+import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck, Pencil, RotateCcw, Users } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { Student, FilterType, Class } from '../types'
 import { getMonthSessions } from '../utils/helpers'
@@ -23,6 +23,9 @@ export default function StudentPage() {
   const [statusFilter, setStatusFilter] = useState<FilterType>('all')
   const [selected, setSelected] = useState<Student | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showWithdrawn, setShowWithdrawn] = useState(false)
+  const [returningStudentId, setReturningStudentId] = useState<string | null>(null)
+  const [returnClassId, setReturnClassId] = useState(state.classes[0]?.id ?? '')
 
   // 새 학생 추가 폼
   const [newName, setNewName] = useState('')
@@ -76,6 +79,15 @@ export default function StudentPage() {
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 
+  const withdrawnStudents = state.students
+    .filter(s => !s.active)
+    .sort((a, b) => {
+      const aDate = a.withdrawnAt ?? ''
+      const bDate = b.withdrawnAt ?? ''
+      if (aDate !== bDate) return bDate.localeCompare(aDate)
+      return a.name.localeCompare(b.name, 'ko')
+    })
+
   const handleAddStudent = () => {
     if (!newName.trim()) return
     dispatch({
@@ -119,6 +131,37 @@ export default function StudentPage() {
   const getClassName = (classId: string) =>
     state.classes.find(c => c.id === classId)?.name ?? ''
 
+  const formatWithdrawnDate = (date?: string) => {
+    if (!date) return ''
+    const parsed = new Date(date)
+    if (Number.isNaN(parsed.getTime())) return ''
+    return `${parsed.getFullYear()}.${String(parsed.getMonth() + 1).padStart(2, '0')}.${String(parsed.getDate()).padStart(2, '0')}`
+  }
+
+  const startReturnStudent = (student: Student) => {
+    setReturningStudentId(student.id)
+    setReturnClassId(student.classId || state.classes[0]?.id || '')
+  }
+
+  const cancelReturnStudent = () => {
+    setReturningStudentId(null)
+    setReturnClassId(state.classes[0]?.id ?? '')
+  }
+
+  const handleReturnStudent = (student: Student) => {
+    if (!returnClassId) return
+    const className = getClassName(returnClassId)
+    if (!confirm(`${student.name} 학생을 ${className} 반으로 복귀시키겠습니까?`)) return
+    const restoredStudent: Student = {
+      id: student.id,
+      name: student.name,
+      classId: returnClassId,
+      active: true,
+    }
+    dispatch({ type: 'UPDATE_STUDENT', payload: restoredStudent })
+    cancelReturnStudent()
+  }
+
   const filterCounts = {
     all: state.students.filter(s => s.active).length,
     retest: state.students.filter(s => s.active && pendingRetestIds.has(s.id)).length,
@@ -134,14 +177,106 @@ export default function StudentPage() {
           <h1 className="text-2xl font-bold text-slate-800">학생관리</h1>
           <p className="text-sm text-slate-500 mt-1">전체 {state.students.filter(s => s.active).length}명 등록</p>
         </div>
-        <button
-          onClick={() => setShowAdd(v => !v)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <UserPlus size={16} />
-          학생 추가
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            onClick={() => setShowWithdrawn(v => !v)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border
+              ${showWithdrawn
+                ? 'bg-slate-700 text-white border-slate-700'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+              }`}
+          >
+            <Users size={16} />
+            퇴원 학생 관리
+            {withdrawnStudents.length > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${showWithdrawn ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                {withdrawnStudents.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setShowAdd(v => !v)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus size={16} />
+            학생 추가
+          </button>
+        </div>
       </div>
+
+      {/* 퇴원 학생 관리 */}
+      {showWithdrawn && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-700">퇴원 학생 관리</h2>
+              <p className="text-xs text-slate-400 mt-0.5">복귀하면 선택한 반의 학생 목록과 학생 대시보드에 다시 표시됩니다</p>
+            </div>
+            <span className="text-xs text-slate-400">{withdrawnStudents.length}명</span>
+          </div>
+          {withdrawnStudents.length === 0 ? (
+            <p className="text-center py-10 text-slate-400 text-sm">퇴원 처리된 학생이 없습니다</p>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {withdrawnStudents.map(student => {
+                const isReturning = returningStudentId === student.id
+                return (
+                  <div key={student.id} className="px-5 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-slate-800">{student.name}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                          기존 {getClassName(student.classId) || '반 없음'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400">
+                        <span>사유: {student.withdrawalReason ?? '알 수 없음'}</span>
+                        {formatWithdrawnDate(student.withdrawnAt) && <span>퇴원일: {formatWithdrawnDate(student.withdrawnAt)}</span>}
+                      </div>
+                    </div>
+                    {isReturning ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={returnClassId}
+                          onChange={e => setReturnClassId(e.target.value)}
+                          className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                        >
+                          <option value="">반 선택</option>
+                          {state.classes.map(cls => (
+                            <option key={cls.id} value={cls.id}>{cls.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleReturnStudent(student)}
+                          disabled={!returnClassId}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                        >
+                          <CheckCircle size={14} />
+                          확인
+                        </button>
+                        <button
+                          onClick={cancelReturnStudent}
+                          className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startReturnStudent(student)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors w-fit"
+                      >
+                        <RotateCcw size={14} />
+                        복귀
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 학생 추가 폼 */}
       {showAdd && (

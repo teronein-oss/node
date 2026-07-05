@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
-import type { Student, HomeworkStatus, ScoreColumn } from '../types'
+import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason } from '../types'
 import { useApp } from '../context/AppContext'
 import { getClassDate, getMWFClassDate, formatDateKo, fmtDate, getMonthClassDates, getMonthMWFSessions } from '../utils/helpers'
 import { toPng } from 'html-to-image'
@@ -9,6 +9,15 @@ interface Props {
   student: Student
   onClose: () => void
 }
+
+const WITHDRAWAL_REASONS: WithdrawalReason[] = [
+  '방학 휴원',
+  '성적불만',
+  '개인학습',
+  '관리부족',
+  '성적상승 후 퇴원',
+  '알 수 없음',
+]
 
 /** 해당 반 유형의 과거 수업 날짜를 최신순으로 반환 (3개월 이내) */
 function buildClassDateList(classDays: string, todayStr: string): string[] {
@@ -39,7 +48,8 @@ function buildClassDateList(classDays: string, todayStr: string): string[] {
 
 export default function StudentDetail({ student, onClose }: Props) {
   const { state, dispatch, getCurrentSession } = useApp()
-  const [confirmRemove, setConfirmRemove] = useState(false)
+  const [showWithdraw, setShowWithdraw] = useState(false)
+  const [withdrawalReason, setWithdrawalReason] = useState<WithdrawalReason>('알 수 없음')
   const [transferClassId, setTransferClassId] = useState('')
   const [showTransfer, setShowTransfer] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -178,8 +188,16 @@ export default function StudentDetail({ student, onClose }: Props) {
     { submitted: 0, missing: 0, incomplete: 0, absent: 0 }
   )
 
-  const handleRemove = () => {
-    dispatch({ type: 'DEACTIVATE_STUDENT', payload: student.id })
+  const handleWithdraw = () => {
+    dispatch({
+      type: 'UPDATE_STUDENT',
+      payload: {
+        ...student,
+        active: false,
+        withdrawalReason,
+        withdrawnAt: new Date().toISOString(),
+      },
+    })
     onClose()
   }
 
@@ -615,29 +633,38 @@ export default function StudentDetail({ student, onClose }: Props) {
             )}
           </div>
 
-          {confirmRemove ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500">정말 제거하시겠습니까?</span>
+          {showWithdraw ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-slate-500">퇴원 유형</span>
+              <select
+                value={withdrawalReason}
+                onChange={e => setWithdrawalReason(e.target.value as WithdrawalReason)}
+                className="border border-red-100 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-red-100 bg-white"
+              >
+                {WITHDRAWAL_REASONS.map(reason => (
+                  <option key={reason} value={reason}>{reason}</option>
+                ))}
+              </select>
               <button
-                onClick={() => setConfirmRemove(false)}
+                onClick={() => setShowWithdraw(false)}
                 className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
               >
                 취소
               </button>
               <button
-                onClick={handleRemove}
+                onClick={handleWithdraw}
                 className="px-3 py-1.5 text-sm text-white bg-red-500 rounded-lg hover:bg-red-600"
               >
-                제거 확인
+                퇴원 등록
               </button>
             </div>
           ) : (
             <button
-              onClick={() => setConfirmRemove(true)}
+              onClick={() => setShowWithdraw(true)}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
             >
               <Trash2 size={14} />
-              학생 제거
+              퇴원
             </button>
           )}
         </div>
