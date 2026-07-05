@@ -151,7 +151,7 @@ function SelectCell({
     <select
       value={value ?? ''}
       onChange={e => onSave(e.target.value)}
-      className={`w-full rounded-full border-0 px-2.5 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-blue-200 ${tones[tone]}`}
+      className={`w-full rounded-full border-0 px-2.5 py-1 text-center text-xs font-medium outline-none focus:ring-2 focus:ring-blue-200 ${tones[tone]}`}
     >
       {options.map(option => (
         <option key={option || 'empty'} value={option}>{option || '-'}</option>
@@ -164,12 +164,10 @@ function TextCell({
   value,
   onSave,
   placeholder,
-  align = 'center',
 }: {
   value?: string
   onSave: (value: string) => void
   placeholder?: string
-  align?: 'left' | 'center'
 }) {
   const [draft, setDraft] = useState(value ?? '')
 
@@ -186,7 +184,7 @@ function TextCell({
         if (e.key === 'Enter') e.currentTarget.blur()
       }}
       placeholder={placeholder}
-      className={`w-full rounded-md border border-transparent bg-white px-2 py-1 text-xs text-slate-700 outline-none transition-colors placeholder:text-slate-300 hover:border-slate-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 ${align === 'center' ? 'text-center' : 'text-left'}`}
+      className="w-full rounded-md border border-transparent bg-white px-2 py-1 text-center text-xs text-slate-700 outline-none transition-colors placeholder:text-slate-300 hover:border-slate-200 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
     />
   )
 }
@@ -443,10 +441,10 @@ export default function StudentDashboardPage() {
             <table className="min-w-[1780px] w-full table-fixed border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-50 text-xs text-slate-700">
-                  <th className="sticky left-0 z-30 w-36 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">반</th>
-                  <th className="sticky left-[9rem] z-30 w-32 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">선생님</th>
+                  <th className="sticky left-0 z-30 w-36 border-r border-slate-300 bg-slate-50 px-3 py-3 text-center whitespace-nowrap">반</th>
+                  <th className="sticky left-[9rem] z-30 w-32 border-r border-slate-300 bg-slate-50 px-3 py-3 text-center whitespace-nowrap">선생님</th>
                   <th className="sticky left-[17rem] z-30 w-16 border-r border-slate-300 bg-slate-50 px-3 py-3 text-center whitespace-nowrap">번호</th>
-                  <th className="sticky left-[21rem] z-30 w-32 border-r-2 border-slate-800 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">이름</th>
+                  <th className="sticky left-[21rem] z-30 w-32 border-r-2 border-slate-800 bg-slate-50 px-3 py-3 text-center whitespace-nowrap">이름</th>
                   <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">첫상담</th>
                   <th className="w-24 border-r border-slate-200 bg-emerald-50 px-2 py-3 whitespace-nowrap">1학기 중간</th>
                   <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">중간 상담</th>
@@ -463,17 +461,17 @@ export default function StudentDashboardPage() {
                   <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">6월 모의</th>
                   <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">9월 모의</th>
                   <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">10월 모의</th>
-                  <th className="w-44 px-2 py-3 text-left whitespace-nowrap">메모</th>
+                  <th className="w-44 px-2 py-3 text-center whitespace-nowrap">메모</th>
                 </tr>
               </thead>
               <tbody>
                 {classBlocks.map(block => (
                   block.isEmpty ? (
                     <tr key={block.key} className="border-t-2 border-slate-800 bg-slate-50/50">
-                      <td className="sticky left-0 z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 font-semibold text-slate-500">{block.label}</td>
+                      <td className="sticky left-0 z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center font-semibold text-slate-500">{block.label}</td>
                       <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
                       <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
-                      <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
+                      <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-center text-sm text-slate-300">등록 학생 없음</td>
                       {Array.from({ length: 17 }, (_, i) => (
                         <td key={`${block.key}-empty-${i}`} className="border-r border-slate-100 bg-slate-50/60 px-2 py-4" />
                       ))}
@@ -483,10 +481,10 @@ export default function StudentDashboardPage() {
                     const number = idx + 1
                     return (
                       <tr key={row.rowId} className={`${startsGroup ? 'border-t-2 border-slate-800' : 'border-t border-slate-200'} hover:bg-blue-50/30`}>
-                        <td className="sticky left-0 z-20 border-r border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800">{startsGroup ? block.label : ''}</td>
-                        <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{startsGroup ? row.teacherName : ''}</td>
+                        <td className="sticky left-0 z-20 border-r border-slate-300 bg-white px-3 py-2 text-center font-semibold text-slate-800">{startsGroup ? block.label : ''}</td>
+                        <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-center text-xs text-slate-500">{startsGroup ? row.teacherName : ''}</td>
                         <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
-                        <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
+                        <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-white px-3 py-2 text-center font-medium text-slate-800">{row.student.name}</td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.vocabProgress} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { vocabProgress: value })} /></td>
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstMidScore} onSave={value => updateRow(row.rowId, { firstMidScore: value })} /></td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstMidConsulted: value })} /></td>
@@ -503,7 +501,7 @@ export default function StudentDashboardPage() {
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockJune} onSave={value => updateRow(row.rowId, { mockJune: value })} /></td>
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockSeptember} onSave={value => updateRow(row.rowId, { mockSeptember: value })} /></td>
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.mockOctober} onSave={value => updateRow(row.rowId, { mockOctober: value })} /></td>
-                        <td className="px-2 py-1"><TextCell value={row.sheet.memo} align="left" placeholder="메모" onSave={value => updateRow(row.rowId, { memo: value })} /></td>
+                        <td className="px-2 py-1"><TextCell value={row.sheet.memo} placeholder="메모" onSave={value => updateRow(row.rowId, { memo: value })} /></td>
                       </tr>
                     )
                   })

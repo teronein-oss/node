@@ -244,18 +244,41 @@ function MiniCalendar({ year, month, scheduleEvents }: {
 interface TodayTaskRow {
   classId: string
   className: string
-  vocabNames: string[]
-  dailyNames: string[]
-  homeworkTargetNames: string[]
+  vocabRetests: TodayRetestItem[]
+  dailyRetests: TodayRetestItem[]
+  homeworkTargets: TodayHomeworkItem[]
   homeworkBadNames: string[]
   homeworkMissingNames: string[]
   homeworkDescription: string
 }
 
-function TodayFocusPanel({ rows }: { rows: TodayTaskRow[] }) {
-  const vocabTotal = rows.reduce((sum, row) => sum + row.vocabNames.length, 0)
-  const dailyTotal = rows.reduce((sum, row) => sum + row.dailyNames.length, 0)
-  const homeworkTotal = rows.reduce((sum, row) => sum + row.homeworkTargetNames.length, 0)
+interface TodayRetestItem {
+  id: string
+  name: string
+  passed: boolean | null
+}
+
+interface TodayHomeworkItem {
+  studentId: string
+  name: string
+  assignmentId?: string
+  itemIds: string[]
+  sessionNum: number
+  completed: boolean
+}
+
+function TodayFocusPanel({
+  rows,
+  onCompleteRetest,
+  onCompleteHomework,
+}: {
+  rows: TodayTaskRow[]
+  onCompleteRetest: (item: TodayRetestItem) => void
+  onCompleteHomework: (item: TodayHomeworkItem) => void
+}) {
+  const vocabTotal = rows.reduce((sum, row) => sum + row.vocabRetests.length, 0)
+  const dailyTotal = rows.reduce((sum, row) => sum + row.dailyRetests.length, 0)
+  const homeworkTotal = rows.reduce((sum, row) => sum + row.homeworkTargets.length, 0)
   const total = vocabTotal + dailyTotal + homeworkTotal
 
   return (
@@ -280,16 +303,16 @@ function TodayFocusPanel({ rows }: { rows: TodayTaskRow[] }) {
                 )}
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <TodayTaskGroup label="단어 재시험" names={row.vocabNames} color="purple" />
-                <TodayTaskGroup label="Daily 재시험" names={row.dailyNames} color="blue" />
+                <TodayRetestGroup label="단어 재시험" items={row.vocabRetests} color="purple" onComplete={onCompleteRetest} />
+                <TodayRetestGroup label="Daily 재시험" items={row.dailyRetests} color="blue" onComplete={onCompleteRetest} />
                 <div>
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-slate-500">숙제검사</span>
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${row.homeworkTargetNames.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
-                      {row.homeworkTargetNames.length}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${row.homeworkTargets.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
+                      {row.homeworkTargets.length}
                     </span>
                   </div>
-                  <NameTags names={row.homeworkTargetNames} color="orange" limit={4} />
+                  <TodayHomeworkList items={row.homeworkTargets} onComplete={onCompleteHomework} />
                   {(row.homeworkBadNames.length > 0 || row.homeworkMissingNames.length > 0) && (
                     <div className="mt-2 space-y-1">
                       <HomeworkStatusLine label="미흡" names={row.homeworkBadNames} color="orange" />
@@ -306,24 +329,76 @@ function TodayFocusPanel({ rows }: { rows: TodayTaskRow[] }) {
   )
 }
 
-function TodayTaskGroup({
+function TodayRetestGroup({
   label,
-  names,
+  items,
   color,
+  onComplete,
 }: {
   label: string
-  names: string[]
+  items: TodayRetestItem[]
   color: 'purple' | 'blue'
+  onComplete: (item: TodayRetestItem) => void
 }) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-slate-500">{label}</span>
-        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${names.length > 0 ? color === 'purple' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
-          {names.length}
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${items.length > 0 ? color === 'purple' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
+          {items.length}
         </span>
       </div>
-      <NameTags names={names} color={color} limit={4} />
+      {items.length === 0 ? (
+        <span className="flex items-center gap-1 text-green-500 text-xs"><CheckCircle size={13} /> 없음</span>
+      ) : (
+        <div className="space-y-1">
+          {items.map(item => (
+            <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
+              <span className={`truncate text-xs font-medium ${color === 'purple' ? 'text-purple-700' : 'text-blue-700'}`}>{item.name}</span>
+              {item.passed === true ? (
+                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">통과</span>
+              ) : (
+                <button
+                  onClick={() => onComplete(item)}
+                  className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-600 hover:bg-blue-100"
+                >
+                  완료
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TodayHomeworkList({
+  items,
+  onComplete,
+}: {
+  items: TodayHomeworkItem[]
+  onComplete: (item: TodayHomeworkItem) => void
+}) {
+  if (items.length === 0) return <span className="flex items-center gap-1 text-green-500 text-xs"><CheckCircle size={13} /> 없음</span>
+
+  return (
+    <div className="space-y-1">
+      {items.map(item => (
+        <div key={item.studentId} className="flex items-center justify-between gap-2 rounded-lg bg-orange-50 px-2 py-1.5">
+          <span className="truncate text-xs font-medium text-orange-700">{item.name}</span>
+          {item.completed ? (
+            <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">완료</span>
+          ) : (
+            <button
+              onClick={() => onComplete(item)}
+              className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-600 hover:bg-blue-100"
+            >
+              완료
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -505,14 +580,34 @@ export default function DashboardPage() {
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
         const studentIds = new Set(activeStudents.map(s => s.id))
         const retests = state.retests.filter(
-          r => r.sessionNum === sessionNum && r.passed === null && studentIds.has(r.studentId)
+          r => r.sessionNum === sessionNum && studentIds.has(r.studentId) && (r.passed === null || r.passed === true)
         )
-        const vocabNames = retests.filter(r => r.type === 'vocab').map(r => getStudentName(r.studentId))
-        const dailyNames = retests.filter(r => r.type === 'daily').map(r => getStudentName(r.studentId))
+        const vocabRetests = retests
+          .filter(r => r.type === 'vocab')
+          .map(r => ({ id: r.id, name: getStudentName(r.studentId), passed: r.passed }))
+        const dailyRetests = retests
+          .filter(r => r.type === 'daily')
+          .map(r => ({ id: r.id, name: getStudentName(r.studentId), passed: r.passed }))
         const hw = state.homeworks.find(
           h => h.sessionNum === sessionNum - 1 && (h.classId === cls.id || h.classId === '')
         )
-        const homeworkTargetNames = hw ? activeStudents.map(s => s.name) : []
+        const homeworkTargets: TodayHomeworkItem[] = hw ? activeStudents.map(student => {
+          const itemIds = (hw.items ?? []).map(item => item.id)
+          const itemStatuses = (hw.items ?? []).map(item =>
+            (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
+          )
+          const gradeStatus = state.grades.find(g => g.studentId === student.id && g.sessionNum === sessionNum)?.homeworkDone
+          return {
+            studentId: student.id,
+            name: student.name,
+            assignmentId: hw.id,
+            itemIds,
+            sessionNum,
+            completed: itemStatuses.length > 0
+              ? itemStatuses.every(status => status === '제출' || status === '재확인완료')
+              : gradeStatus === '제출' || gradeStatus === '재확인완료',
+          }
+        }) : []
         const homeworkBadSet = new Set<string>()
         const homeworkMissingSet = new Set<string>()
 
@@ -540,18 +635,37 @@ export default function DashboardPage() {
         const row: TodayTaskRow = {
           classId: cls.id,
           className: cls.name,
-          vocabNames,
-          dailyNames,
-          homeworkTargetNames,
+          vocabRetests,
+          dailyRetests,
+          homeworkTargets,
           homeworkBadNames: [...homeworkBadSet].filter(name => !homeworkMissingSet.has(name)),
           homeworkMissingNames: [...homeworkMissingSet],
           homeworkDescription: hw?.description || (hw?.items ?? []).map(item => item.text).join(', '),
         }
-        const hasTargets = row.vocabNames.length > 0 || row.dailyNames.length > 0 || row.homeworkTargetNames.length > 0
+        const hasTargets = row.vocabRetests.length > 0 || row.dailyRetests.length > 0 || row.homeworkTargets.length > 0
         return hasTargets ? row : null
       })
       .filter((row): row is TodayTaskRow => row !== null)
   }, [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr])
+
+  const completeTodayRetest = (item: TodayRetestItem) => {
+    if (!confirm(`${item.name} 재시험을 통과 처리하겠습니까?`)) return
+    dispatch({ type: 'SAVE_RETEST', payload: { id: item.id, retestScore: null, passed: true } })
+  }
+
+  const completeTodayHomework = (item: TodayHomeworkItem) => {
+    if (!confirm(`${item.name} 숙제검사를 완료 처리하겠습니까?`)) return
+    if (item.assignmentId && item.itemIds.length > 0) {
+      for (const itemId of item.itemIds) {
+        dispatch({
+          type: 'SET_ITEM_STUDENT_STATUS',
+          payload: { assignmentId: item.assignmentId, itemId, studentId: item.studentId, status: '제출' },
+        })
+      }
+    } else {
+      dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: item.studentId, sessionNum: item.sessionNum, status: '제출' } })
+    }
+  }
 
   const goWeek = (offset: number) => {
     const nextWeekStart = addDays(selectedWeekStart, offset * 7)
@@ -698,7 +812,7 @@ export default function DashboardPage() {
             onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
             readOnly={isJogyo}
           />
-          <TodayFocusPanel rows={todayTaskRows} />
+          <TodayFocusPanel rows={todayTaskRows} onCompleteRetest={completeTodayRetest} onCompleteHomework={completeTodayHomework} />
         </div>
         <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
       </div>

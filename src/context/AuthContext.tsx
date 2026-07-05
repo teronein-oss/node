@@ -12,6 +12,7 @@ import {
   doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, getDoc, deleteField,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import { displayName } from '../utils/displayName'
 
 export const ADMIN_EMAIL = 'teronein@gmail.com'
 
@@ -95,9 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setViewingUid = (uid: string | null, name?: string, role?: string, jogyoTeacherList?: Array<{ uid: string; displayName: string }>) => {
     setViewingUidState(uid)
-    setViewingUserName(uid ? (name ?? null) : null)
+    setViewingUserName(uid ? (displayName(name) || null) : null)
     setViewingUserRole(uid ? (role ?? null) : null)
-    setViewingJogyoTeachers(uid && role === '조교' ? (jogyoTeacherList ?? []) : [])
+    setViewingJogyoTeachers(uid && role === '조교'
+      ? (jogyoTeacherList ?? []).map(t => ({ ...t, displayName: displayName(t.displayName) }))
+      : [])
   }
   const regUnsubRef = useRef<(() => void) | null>(null)
 
@@ -128,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(adminUser)
 
       if (adminUser) {
-        const adminDisplayName = fbUser.displayName ?? '고승환'
+        const adminDisplayName = displayName(fbUser.displayName) || '고승환'
         setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: adminDisplayName, role: '관리자' })
         setAdminUid(fbUser.uid)
         setRegistrationStatus('approved')
@@ -153,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           snap.docs.forEach(d => {
             const reg = d.data() as RegistrationInfo
             if (reg.role === '선생님' && reg.status === 'approved') {
-              teacherMap[reg.uid] = reg.displayName
+              teacherMap[reg.uid] = displayName(reg.displayName)
             }
           })
           setDoc(doc(db, 'config', 'sharedData'), { approvedTeachers: teacherMap }, { merge: true })
@@ -171,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           const data = snap.data() as RegistrationInfo
           if (data.status === 'approved') {
-            setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: data.displayName, role: data.role })
+            setUser({ uid: fbUser.uid, email: fbUser.email ?? '', displayName: displayName(data.displayName), role: data.role })
             setRegistrationStatus('approved')
             if (data.role === '조교') {
               const uids = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
@@ -212,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (snap.exists()) {
         const teachersMap = (snap.data().approvedTeachers ?? {}) as Record<string, string>
         setApprovedTeachers(
-          Object.entries(teachersMap).map(([uid, displayName]) => ({ uid, displayName }))
+          Object.entries(teachersMap).map(([uid, name]) => ({ uid, displayName: displayName(name) }))
         )
       } else {
         setApprovedTeachers([])
@@ -329,5 +332,10 @@ export function useAuth() {
 // Helper to fetch all registrations (admin only)
 export async function fetchAllRegistrations(): Promise<RegistrationInfo[]> {
   const snap = await getDocs(collection(db, 'registrations'))
-  return snap.docs.map(d => d.data() as RegistrationInfo).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  return snap.docs
+    .map(d => {
+      const data = d.data() as RegistrationInfo
+      return { ...data, displayName: displayName(data.displayName) }
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }

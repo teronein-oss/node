@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X, Users, GraduationCap, Loader2, Clock, Settings } from 'lucide-react'
 import { genId } from '../utils/helpers'
+import { displayName } from '../utils/displayName'
 import type { Class } from '../types'
 
 const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
@@ -63,7 +64,7 @@ export default function AdminManagePage() {
       snap.forEach(d => {
         const data = d.data()
         if (data.status === 'approved' && (data.role === '선생님' || data.role === '관리자')) {
-          list.push({ uid: d.id, displayName: data.displayName, role: data.role })
+          list.push({ uid: d.id, displayName: displayName(data.displayName), role: data.role })
         }
       })
       setTeachers(list.sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko')))
