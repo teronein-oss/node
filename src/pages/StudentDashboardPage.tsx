@@ -78,7 +78,6 @@ const HIGH_LEVEL_ORDER = ['S1', 'S2', 'A1', 'A2', 'A3']
 const MIDDLE_LEVEL_ORDER = ['A', 'B', 'A1', 'A2', 'B1', 'B2']
 const ELEMENTARY_LEVEL_ORDER = ['A1', 'A2', 'A3', 'A4', 'S1', 'S2']
 const LEVEL_SORT_ORDER = ['S1', 'S2', 'A', 'B', 'A1', 'A2', 'A3', 'A4', 'B1', 'B2']
-const TEXTBOOK_OPTIONS = ['', '없음', '(고2)특급VOCA', '(고2)ASAP VOCA', '능률VOCA', '워드마스터']
 const STATUS_OPTIONS = ['', '완료', '예정', '필요', '보류']
 const GRADE_OPTIONS = ['', '1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급']
 
@@ -441,32 +440,30 @@ export default function StudentDashboardPage() {
           <div className="py-20 text-center text-sm text-slate-400">표시할 학교·반이 없습니다</div>
         ) : (
           <div className="overflow-auto">
-            <table className="min-w-[2400px] w-full table-fixed border-collapse text-sm">
+            <table className="min-w-[1780px] w-full table-fixed border-collapse text-sm">
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-50 text-xs text-slate-700">
                   <th className="sticky left-0 z-30 w-36 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">반</th>
                   <th className="sticky left-[9rem] z-30 w-32 border-r border-slate-300 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">선생님</th>
                   <th className="sticky left-[17rem] z-30 w-16 border-r border-slate-300 bg-slate-50 px-3 py-3 text-center whitespace-nowrap">번호</th>
                   <th className="sticky left-[21rem] z-30 w-32 border-r-2 border-slate-800 bg-slate-50 px-3 py-3 text-left whitespace-nowrap">이름</th>
-                  <th className="w-44 border-r border-slate-200 bg-slate-100 px-3 py-3">1~2월 단어장</th>
-                  <th className="w-44 border-r border-slate-200 bg-amber-100 px-3 py-3">3월 이후 단어장</th>
-                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">첫상담</th>
-                  <th className="w-32 border-r border-slate-200 bg-emerald-50 px-3 py-3 whitespace-nowrap">1학기 중간</th>
-                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">중간 상담</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">1학기 기말</th>
-                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">기말 상담</th>
-                  <th className="w-32 border-r border-slate-200 bg-emerald-100 px-3 py-3 whitespace-nowrap">점수 등락폭</th>
-                  <th className="w-32 border-r-2 border-slate-800 bg-yellow-100 px-3 py-3 whitespace-nowrap">1학기 등급</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">2학기 중간</th>
-                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">중간 상담</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">2학기 기말</th>
-                  <th className="w-32 border-r border-slate-200 bg-rose-100 px-3 py-3 whitespace-nowrap">기말 상담</th>
-                  <th className="w-32 border-r-2 border-slate-800 bg-yellow-100 px-3 py-3 whitespace-nowrap">2학기 등급</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">3월 모의</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">6월 모의</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">9월 모의</th>
-                  <th className="w-32 border-r border-slate-200 px-3 py-3 whitespace-nowrap">10월 모의</th>
-                  <th className="w-56 px-3 py-3 text-left whitespace-nowrap">메모</th>
+                  <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">첫상담</th>
+                  <th className="w-24 border-r border-slate-200 bg-emerald-50 px-2 py-3 whitespace-nowrap">1학기 중간</th>
+                  <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">중간 상담</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">1학기 기말</th>
+                  <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">기말 상담</th>
+                  <th className="w-28 border-r border-slate-200 bg-emerald-100 px-2 py-3 whitespace-nowrap">점수 등락폭</th>
+                  <th className="w-24 border-r-2 border-slate-800 bg-yellow-100 px-2 py-3 whitespace-nowrap">1학기 등급</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">2학기 중간</th>
+                  <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">중간 상담</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">2학기 기말</th>
+                  <th className="w-24 border-r border-slate-200 bg-rose-100 px-2 py-3 whitespace-nowrap">기말 상담</th>
+                  <th className="w-24 border-r-2 border-slate-800 bg-yellow-100 px-2 py-3 whitespace-nowrap">2학기 등급</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">3월 모의</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">6월 모의</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">9월 모의</th>
+                  <th className="w-24 border-r border-slate-200 px-2 py-3 whitespace-nowrap">10월 모의</th>
+                  <th className="w-44 px-2 py-3 text-left whitespace-nowrap">메모</th>
                 </tr>
               </thead>
               <tbody>
@@ -477,7 +474,7 @@ export default function StudentDashboardPage() {
                       <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-xs text-slate-300" />
                       <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-slate-50 px-3 py-4 text-center text-slate-300" />
                       <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-slate-50 px-3 py-4 text-sm text-slate-300">등록 학생 없음</td>
-                      {Array.from({ length: 19 }, (_, i) => (
+                      {Array.from({ length: 17 }, (_, i) => (
                         <td key={`${block.key}-empty-${i}`} className="border-r border-slate-100 bg-slate-50/60 px-2 py-4" />
                       ))}
                     </tr>
@@ -490,8 +487,6 @@ export default function StudentDashboardPage() {
                         <td className="sticky left-[9rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">{startsGroup ? row.teacherName : ''}</td>
                         <td className="sticky left-[17rem] z-20 border-r border-slate-300 bg-white px-3 py-2 text-center text-slate-500">{number}</td>
                         <td className="sticky left-[21rem] z-20 border-r-2 border-slate-800 bg-white px-3 py-2 font-medium text-slate-800">{row.student.name}</td>
-                        <td className="border-r border-slate-200 px-2 py-1"><SelectCell value={row.sheet.prevVocab} options={TEXTBOOK_OPTIONS} onSave={value => updateRow(row.rowId, { prevVocab: value })} /></td>
-                        <td className="border-r border-slate-200 bg-amber-50/60 px-2 py-1"><SelectCell value={row.sheet.currentVocab} options={TEXTBOOK_OPTIONS} tone="yellow" onSave={value => updateRow(row.rowId, { currentVocab: value })} /></td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.vocabProgress} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { vocabProgress: value })} /></td>
                         <td className="border-r border-slate-200 px-2 py-1"><TextCell value={row.sheet.firstMidScore} onSave={value => updateRow(row.rowId, { firstMidScore: value })} /></td>
                         <td className="border-r border-slate-200 bg-rose-50/60 px-2 py-1"><SelectCell value={row.sheet.firstMidConsulted} options={STATUS_OPTIONS} tone="green" onSave={value => updateRow(row.rowId, { firstMidConsulted: value })} /></td>
