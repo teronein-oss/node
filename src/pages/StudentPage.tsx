@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, BookOpenCheck, Pencil, RotateCcw, Users } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import type { Student, FilterType, Class } from '../types'
+import type { Student, FilterType, Class, WithdrawalReason } from '../types'
 import { getMonthSessions } from '../utils/helpers'
 import { buildMonthOptions, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import StudentDetail from './StudentDetail'
@@ -11,6 +11,15 @@ const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
   { value: 'tue-thu', label: '화·목' },
   { value: 'wed-sat', label: '수·토' },
   { value: 'mon-wed-fri', label: '월·수·금' },
+]
+
+const WITHDRAWAL_REASONS: WithdrawalReason[] = [
+  '방학 휴원',
+  '성적불만',
+  '개인학습',
+  '관리부족',
+  '성적상승 후 퇴원',
+  '알 수 없음',
 ]
 
 export default function StudentPage() {
@@ -23,6 +32,7 @@ export default function StudentPage() {
   const [statusFilter, setStatusFilter] = useState<FilterType>('all')
   const [selected, setSelected] = useState<Student | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [showBulkAdd, setShowBulkAdd] = useState(false)
   const [showWithdrawn, setShowWithdrawn] = useState(false)
   const [returningStudentId, setReturningStudentId] = useState<string | null>(null)
   const [returnClassId, setReturnClassId] = useState(state.classes[0]?.id ?? '')
@@ -30,6 +40,8 @@ export default function StudentPage() {
   // 새 학생 추가 폼
   const [newName, setNewName] = useState('')
   const [newClass, setNewClass] = useState(state.classes[0]?.id ?? '')
+  const [bulkNames, setBulkNames] = useState('')
+  const [bulkClass, setBulkClass] = useState(state.classes[0]?.id ?? '')
 
   // 반관리
   const [showAddClass, setShowAddClass] = useState(false)
@@ -98,6 +110,23 @@ export default function StudentPage() {
     setShowAdd(false)
   }
 
+  const bulkNameList = bulkNames
+    .split(/[\n,;]+/)
+    .map(name => name.trim())
+    .filter(Boolean)
+
+  const handleBulkAddStudents = () => {
+    if (!bulkClass || bulkNameList.length === 0) return
+    bulkNameList.forEach(name => {
+      dispatch({
+        type: 'ADD_STUDENT',
+        payload: { name, classId: bulkClass, active: true },
+      })
+    })
+    setBulkNames('')
+    setShowBulkAdd(false)
+  }
+
   const handleAddClass = () => {
     if (!newClassName.trim()) return
     dispatch({ type: 'ADD_CLASS', payload: { name: newClassName.trim(), days: newClassDays } })
@@ -162,6 +191,17 @@ export default function StudentPage() {
     cancelReturnStudent()
   }
 
+  const handleUpdateWithdrawalReason = (student: Student, reason: WithdrawalReason) => {
+    dispatch({
+      type: 'UPDATE_STUDENT',
+      payload: {
+        ...student,
+        withdrawalReason: reason,
+        withdrawnAt: student.withdrawnAt ?? new Date().toISOString(),
+      },
+    })
+  }
+
   const filterCounts = {
     all: state.students.filter(s => s.active).length,
     retest: state.students.filter(s => s.active && pendingRetestIds.has(s.id)).length,
@@ -195,7 +235,24 @@ export default function StudentPage() {
             )}
           </button>
           <button
-            onClick={() => setShowAdd(v => !v)}
+            onClick={() => {
+              setShowBulkAdd(v => !v)
+              setShowAdd(false)
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border
+              ${showBulkAdd
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
+              }`}
+          >
+            <Plus size={16} />
+            일괄 추가
+          </button>
+          <button
+            onClick={() => {
+              setShowAdd(v => !v)
+              setShowBulkAdd(false)
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
             <UserPlus size={16} />
@@ -230,7 +287,16 @@ export default function StudentPage() {
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-400">
-                        <span>사유: {student.withdrawalReason ?? '알 수 없음'}</span>
+                        <span>사유</span>
+                        <select
+                          value={student.withdrawalReason ?? '알 수 없음'}
+                          onChange={e => handleUpdateWithdrawalReason(student, e.target.value as WithdrawalReason)}
+                          className="border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                        >
+                          {WITHDRAWAL_REASONS.map(reason => (
+                            <option key={reason} value={reason}>{reason}</option>
+                          ))}
+                        </select>
                         {formatWithdrawnDate(student.withdrawnAt) && <span>퇴원일: {formatWithdrawnDate(student.withdrawnAt)}</span>}
                       </div>
                     </div>
@@ -275,6 +341,57 @@ export default function StudentPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* 일괄 학생 추가 폼 */}
+      {showBulkAdd && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-blue-800 mb-3">학생 일괄 추가</h3>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">등록할 반</label>
+                <select
+                  value={bulkClass}
+                  onChange={e => setBulkClass(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                >
+                  {state.classes.map(cls => (
+                    <option key={cls.id} value={cls.id}>{cls.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="text-xs text-slate-500">
+                추가 예정 <span className="font-semibold text-blue-700">{bulkNameList.length}</span>명
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 mb-1 block">학생 이름</label>
+              <textarea
+                value={bulkNames}
+                onChange={e => setBulkNames(e.target.value)}
+                placeholder={'김민재\n이서윤\n박준후'}
+                className="w-full min-h-36 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 resize-y bg-white"
+              />
+              <p className="text-xs text-slate-400 mt-1">한 줄에 한 명씩 입력하거나 쉼표로 구분해 입력할 수 있습니다</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleBulkAddStudents}
+                disabled={!bulkClass || bulkNameList.length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+              >
+                {bulkNameList.length}명 추가
+              </button>
+              <button
+                onClick={() => setShowBulkAdd(false)}
+                className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+              >
+                취소
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
