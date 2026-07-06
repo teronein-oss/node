@@ -20,7 +20,6 @@ const GradePage = lazy(() => import('../pages/GradePage'))
 const StudentPage = lazy(() => import('../pages/StudentPage'))
 const StudentDashboardPage = lazy(() => import('../pages/StudentDashboardPage'))
 const HomeworkPage = lazy(() => import('../pages/HomeworkPage'))
-const ExamPage = lazy(() => import('../pages/ExamPage'))
 const SchedulePage = lazy(() => import('../pages/SchedulePage'))
 const ClinicPage = lazy(() => import('../pages/ClinicPage'))
 const AdminPage = lazy(() => import('../pages/AdminPage'))
@@ -69,7 +68,7 @@ export const router = createBrowserRouter([
       { path: 'students', element: <Lazy><StudentPage /></Lazy> },
       { path: 'student-dashboard', element: <Lazy><StudentDashboardPage /></Lazy> },
       { path: 'homework', element: <Lazy><HomeworkPage /></Lazy> },
-      { path: 'exam', element: <Lazy><ExamPage /></Lazy> },
+      { path: 'exam', element: <Navigate to="/" replace /> },
       { path: 'clinic', element: <Lazy><ClinicPage /></Lazy> },
       { path: 'schedule', element: <ScheduleGuard><Lazy><SchedulePage /></Lazy></ScheduleGuard> },
       { path: 'admin', element: <AdminGuard><Lazy><AdminPage /></Lazy></AdminGuard> },
