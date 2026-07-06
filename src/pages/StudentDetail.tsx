@@ -55,6 +55,7 @@ export default function StudentDetail({ student, onClose }: Props) {
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(student.name)
   const [fromDate, setFromDate] = useState<string>('')
+  const [toDate, setToDate] = useState<string>('')
   const [downloading, setDownloading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
 
@@ -88,6 +89,7 @@ export default function StudentDetail({ student, onClose }: Props) {
       const date = getClassDate(g.sessionNum, classDays)
       if (date > todayStr) return false
       if (fromDate && date < fromDate) return false
+      if (toDate && date > toDate) return false
       return true
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
@@ -98,6 +100,7 @@ export default function StudentDetail({ student, onClose }: Props) {
       const date = getClassDate(r.sessionNum, classDays)
       if (date > todayStr) return false
       if (fromDate && date < fromDate) return false
+      if (toDate && date > toDate) return false
       return true
     })
     .sort((a, b) => b.sessionNum - a.sessionNum)
@@ -167,6 +170,7 @@ export default function StudentDetail({ student, onClose }: Props) {
       const checkDate = getClassDate(hw.sessionNum + 1, classDays)
       if (checkDate > todayStr) return false
       if (fromDate && checkDate < fromDate) return false
+      if (toDate && checkDate > toDate) return false
       return true
     })
     .slice()
@@ -246,7 +250,12 @@ export default function StudentDetail({ student, onClose }: Props) {
 
   const otherClasses = state.classes.filter(c => c.id !== student.classId)
 
-  const fromDateLabel = fromDate ? `${formatDateKo(fromDate)} 이후` : '전체 기간'
+  const periodLabel = (() => {
+    if (fromDate && toDate) return `${formatDateKo(fromDate)} ~ ${formatDateKo(toDate)}`
+    if (fromDate) return `${formatDateKo(fromDate)} 이후`
+    if (toDate) return `${formatDateKo(toDate)}까지`
+    return '전체 기간'
+  })()
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -333,27 +342,46 @@ export default function StudentDetail({ student, onClose }: Props) {
           </div>
 
           {/* 기간 선택 */}
-          <div className="flex items-center gap-2 mt-2.5">
+          <div className="flex flex-wrap items-center gap-2 mt-2.5">
             <span className="text-xs text-slate-400 shrink-0">기간</span>
-            <select
-              value={fromDate}
-              onChange={e => setFromDate(e.target.value)}
-              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 max-w-xs"
-            >
-              <option value="">전체 기간</option>
-              {classDatesGrouped.map(({ label, dates }) => (
-                <optgroup key={label} label={label}>
-                  {dates.map(date => (
-                    <option key={date} value={date}>
-                      {formatDateKo(date)} 이후
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {fromDate && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 max-w-[150px]"
+              >
+                <option value="">시작일</option>
+                {classDatesGrouped.map(({ label, dates }) => (
+                  <optgroup key={label} label={label}>
+                    {dates.map(date => (
+                      <option key={date} value={date}>
+                        {formatDateKo(date)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <span className="text-xs text-slate-300">~</span>
+              <select
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 max-w-[150px]"
+              >
+                <option value="">종료일</option>
+                {classDatesGrouped.map(({ label, dates }) => (
+                  <optgroup key={label} label={label}>
+                    {dates.map(date => (
+                      <option key={date} value={date}>
+                        {formatDateKo(date)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            {(fromDate || toDate) && (
               <button
-                onClick={() => setFromDate('')}
+                onClick={() => { setFromDate(''); setToDate('') }}
                 className="text-xs text-slate-400 hover:text-slate-600 underline"
               >
                 초기화
@@ -361,8 +389,8 @@ export default function StudentDetail({ student, onClose }: Props) {
             )}
           </div>
           {/* 선택된 기간 표시 (PNG 포함용) */}
-          {fromDate && (
-            <p className="text-xs text-blue-600 mt-1">{fromDateLabel} 현황</p>
+          {(fromDate || toDate) && (
+            <p className="text-xs text-blue-600 mt-1">{periodLabel} 현황</p>
           )}
         </div>
 
@@ -590,6 +618,7 @@ export default function StudentDetail({ student, onClose }: Props) {
             classDays={classDays}
             currentSessionNum={currentSessionNum}
             fromDate={fromDate}
+            toDate={toDate}
           />
         </div>
 
@@ -678,11 +707,13 @@ function WeeklyProgressSection({
   classDays,
   currentSessionNum,
   fromDate,
+  toDate,
 }: {
   classId: string
   classDays: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
   currentSessionNum: number
   fromDate: string
+  toDate: string
 }) {
   const { state } = useApp()
 
@@ -690,7 +721,9 @@ function WeeklyProgressSection({
     .filter(p => {
       if (p.classId !== classId) return false
       if (p.sessionNum > currentSessionNum) return false
-      if (fromDate && getClassDate(p.sessionNum, classDays) < fromDate) return false
+      const date = getClassDate(p.sessionNum, classDays)
+      if (fromDate && date < fromDate) return false
+      if (toDate && date > toDate) return false
       return true
     })
     .sort((a, b) => a.sessionNum - b.sessionNum)
