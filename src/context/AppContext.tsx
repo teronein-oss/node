@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, type ReactNode } from 'react'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
-import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions } from '../utils/helpers'
+import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions, getClassDate } from '../utils/helpers'
 import { useAppPersistence } from './useAppPersistence'
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -335,6 +335,10 @@ function reducer(state: AppState, action: Action): AppState {
         : '제출'
 
       const existingGrade = state.grades.find(g => g.studentId === studentId && g.sessionNum === sessionNum)
+      const studentClass = state.classes.find(c => c.id === state.students.find(s => s.id === studentId)?.classId)
+      const weekStart = studentClass
+        ? getWeekStart(new Date(getClassDate(sessionNum, studentClass.days, studentClass.weekdays) + 'T00:00:00'))
+        : getWeekStartForSession(sessionNum)
 
       const updatedGrades = existingGrade
         ? state.grades.map(g =>
@@ -344,7 +348,7 @@ function reducer(state: AppState, action: Action): AppState {
           )
         : [...state.grades, {
             id: genId(), studentId, sessionNum,
-            weekStart: getWeekStartForSession(sessionNum),
+            weekStart,
             vocabScore: null, dailyTestScore: null, extras: {},
             attendance: null, homeworkDone: derivedStatus,
             createdAt: new Date().toISOString(),
@@ -356,6 +360,10 @@ function reducer(state: AppState, action: Action): AppState {
     case 'UPDATE_HOMEWORK_STATUS': {
       const { studentId, sessionNum, status } = action.payload
       const existing = state.grades.find(g => g.studentId === studentId && g.sessionNum === sessionNum)
+      const studentClass = state.classes.find(c => c.id === state.students.find(s => s.id === studentId)?.classId)
+      const weekStart = studentClass
+        ? getWeekStart(new Date(getClassDate(sessionNum, studentClass.days, studentClass.weekdays) + 'T00:00:00'))
+        : getWeekStartForSession(sessionNum)
 
       if (status === null) {
         if (existing && existing.vocabScore === null && existing.dailyTestScore === null) {
@@ -393,7 +401,7 @@ function reducer(state: AppState, action: Action): AppState {
             id: genId(),
             studentId,
             sessionNum,
-            weekStart: getWeekStartForSession(sessionNum),
+            weekStart,
             vocabScore: null,
             dailyTestScore: null,
             extras: {},

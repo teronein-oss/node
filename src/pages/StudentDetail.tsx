@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
 import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason, WeekdayKey } from '../types'
 import { useApp } from '../context/AppContext'
-import { getClassDate, formatDateKo, fmtDate, getMonthClassDates, normalizeClassWeekdays } from '../utils/helpers'
+import { getClassDate, formatDateKo, fmtDate, getMonthClassDates, normalizeClassWeekdays, getCurrentClassSessionNum } from '../utils/helpers'
 import { toPng } from 'html-to-image'
 
 interface Props {
@@ -40,7 +40,7 @@ function buildClassDateList(classDays: string, classWeekdays: WeekdayKey[], toda
 }
 
 export default function StudentDetail({ student, onClose }: Props) {
-  const { state, dispatch, getCurrentSession } = useApp()
+  const { state, dispatch } = useApp()
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState<WithdrawalReason>('알 수 없음')
   const [transferClassId, setTransferClassId] = useState('')
@@ -54,9 +54,9 @@ export default function StudentDetail({ student, onClose }: Props) {
 
   const studentCls = state.classes.find(c => c.id === student.classId)
   const className = studentCls?.name ?? ''
-  const { sessionNum: currentSessionNum } = getCurrentSession()
   const classDays = studentCls?.days ?? 'tue-thu'
   const classWeekdays = normalizeClassWeekdays(classDays, studentCls?.weekdays)
+  const currentSessionNum = getCurrentClassSessionNum(classDays, classWeekdays)
   const todayStr = fmtDate(new Date())
 
   /** 드롭다운용 수업 날짜 목록 (최신순), 월별 그룹 */

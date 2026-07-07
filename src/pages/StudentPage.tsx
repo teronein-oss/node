@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react'
 import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, RotateCcw, Users } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { Student, FilterType, WithdrawalReason } from '../types'
-import { getMonthSessions } from '../utils/helpers'
-import { buildMonthOptions, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
+import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import StudentDetail from './StudentDetail'
 
 const WITHDRAWAL_REASONS: WithdrawalReason[] = [
@@ -16,7 +15,7 @@ const WITHDRAWAL_REASONS: WithdrawalReason[] = [
 ]
 
 export default function StudentPage() {
-  const { state, dispatch, visibleCount, setVisibleCount, selectedYM, setSelectedYM } = useApp()
+  const { state, dispatch, selectedYM, setSelectedYM } = useApp()
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState(() => {
@@ -51,15 +50,35 @@ export default function StudentPage() {
   // selectedYM / setSelectedYM come from global context (shared across pages)
   const selectedMonthInfo = availableMonths.find(m => m.ym === selectedYM) ?? availableMonths[0]
 
-  // 선택 월의 sessionNum 목록
-  const monthSessionNums = useMemo(() => {
-    if (!selectedMonthInfo) return []
-    return getMonthSessions(selectedMonthInfo.year, selectedMonthInfo.month, visibleCount)
-  }, [selectedMonthInfo, visibleCount])
+  const classMonthSessions = useMemo(() => {
+    const map = new Map<string, Set<number>>()
+    if (!selectedMonthInfo) return map
+    state.classes.forEach(cls => {
+      map.set(
+        cls.id,
+        new Set(
+          getClassDatesForMonth({
+            classInfo: cls,
+            year: selectedMonthInfo.year,
+            month: selectedMonthInfo.month,
+            includeFuture: true,
+            filterMWFToCalendarMonth: true,
+          }).map(entry => entry.sessionNum)
+        )
+      )
+    })
+    return map
+  }, [state.classes, selectedMonthInfo])
+
+  const isStudentSessionInSelectedMonth = (studentId: string, sessionNum: number) => {
+    const student = state.students.find(s => s.id === studentId)
+    if (!student) return false
+    return classMonthSessions.get(student.classId)?.has(sessionNum) ?? false
+  }
 
   // 선택 월 기준 성적·재시험 데이터
-  const monthGrades = state.grades.filter(g => monthSessionNums.includes(g.sessionNum))
-  const monthRetests = state.retests.filter(r => monthSessionNums.includes(r.sessionNum))
+  const monthGrades = state.grades.filter(g => isStudentSessionInSelectedMonth(g.studentId, g.sessionNum))
+  const monthRetests = state.retests.filter(r => isStudentSessionInSelectedMonth(r.studentId, r.sessionNum))
 
   const pendingRetestIds = new Set(
     monthRetests.filter(r => r.passed === null).map(r => r.studentId)
@@ -197,7 +216,7 @@ export default function StudentPage() {
     'no-homework': state.students.filter(s => s.active && noHomeworkIds.has(s.id)).length,
   }
 
-  const totalSessions = monthSessionNums.length
+  const selectedClassSessionCount = classFilter === 'all' ? null : (classMonthSessions.get(classFilter)?.size ?? 0)
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -582,7 +601,9 @@ export default function StudentPage() {
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
           <p className="text-xs text-slate-500">{filteredStudents.length}명 표시</p>
-          <p className="text-xs text-slate-400">{selectedMonthInfo?.label} 기준 · {totalSessions}회차</p>
+          <p className="text-xs text-slate-400">
+            {selectedMonthInfo?.label} 기준 · {selectedClassSessionCount === null ? '반별 수업일' : `${selectedClassSessionCount}회차`}
+          </p>
         </div>
         <div className="divide-y divide-slate-50">
           {filteredStudents.length === 0 ? (
@@ -593,6 +614,7 @@ export default function StudentPage() {
               const studentRetests = monthRetests.filter(r => r.studentId === student.id && r.passed === null)
               const noHwCount = studentGrades.filter(g => g.homeworkDone === '미흡').length
               const recorded = studentGrades.length
+              const totalSessions = classMonthSessions.get(student.classId)?.size ?? 0
 
               return (
                 <button
@@ -634,15 +656,6 @@ export default function StudentPage() {
               )
             })
           )}
-        </div>
-        <div className="px-5 py-3 border-t border-slate-100 text-center">
-          <button
-            onClick={() => setVisibleCount(c => c + 2)}
-            className="flex items-center gap-1.5 mx-auto text-xs text-slate-400 hover:text-blue-600 transition-colors"
-          >
-            <Plus size={13} />
-            회차 추가
-          </button>
         </div>
       </div>
 

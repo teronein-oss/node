@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { needsRetest, getWeekStart, getClassDate, formatDateKo, fmtDate, normalizeClassWeekdays } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
+import { isDefaultAcademy } from '../utils/academy'
 import { Pencil, Trash2, X } from 'lucide-react'
 
 interface GradeRow {
@@ -16,6 +18,8 @@ interface GradeRow {
 
 export default function GradePage() {
   const { state, dispatch, getScope, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
+  const { user, viewingAcademyId } = useAuth()
+  const showVocabTest = isDefaultAcademy(viewingAcademyId ?? user?.academyId)
 
   const today = new Date()
   const currentYM = getCurrentYM(today)
@@ -274,9 +278,12 @@ export default function GradePage() {
       state.students.filter(s => s.classId === selectedClass && s.active).map(s => s.id)
     )
     return state.retests.filter(
-      r => r.sessionNum === selectedSession && r.passed === null && classStudentIds.has(r.studentId)
+      r => r.sessionNum === selectedSession
+        && r.passed === null
+        && classStudentIds.has(r.studentId)
+        && (showVocabTest || r.type !== 'vocab')
     )
-  }, [state.retests, state.students, selectedClass, selectedSession])
+  }, [state.retests, state.students, selectedClass, selectedSession, showVocabTest])
 
   const handleBulkRetestDate = () => {
     const date = bulkRetestDate || nextClassDate
@@ -328,6 +335,7 @@ export default function GradePage() {
     )
     for (const r of state.retests) {
       if (r.passed !== null || r.sessionNum !== selectedSession) continue
+      if (!showVocabTest && r.type === 'vocab') continue
       if (!classStudentIds.has(r.studentId)) continue
       const key = `${r.studentId}-${r.type}`
       const retestDow = r.retestDate ? new Date(r.retestDate + 'T00:00:00').getDay() : null
@@ -338,7 +346,7 @@ export default function GradePage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.retests, selectedSession, nextClassDate, selectedClass, state.students, selectedCls])
+  }, [state.retests, selectedSession, nextClassDate, selectedClass, state.students, selectedCls, showVocabTest])
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -461,18 +469,20 @@ export default function GradePage() {
         {/* 범위 입력 */}
         <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
           <span className="text-xs text-slate-400 shrink-0">범위</span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500 shrink-0">단어</span>
-            <input
-              type="text"
-              value={vocabRange}
-              onChange={e => setVocabRange(e.target.value)}
-              onBlur={saveScope}
-              onKeyDown={e => e.key === 'Enter' && saveScope()}
-              placeholder="예) Day 1~5"
-              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-36 bg-white"
-            />
-          </div>
+          {showVocabTest && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-500 shrink-0">단어</span>
+              <input
+                type="text"
+                value={vocabRange}
+                onChange={e => setVocabRange(e.target.value)}
+                onBlur={saveScope}
+                onKeyDown={e => e.key === 'Enter' && saveScope()}
+                placeholder="예) Day 1~5"
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 w-36 bg-white"
+              />
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 shrink-0">Daily Test</span>
             <input
@@ -523,52 +533,53 @@ export default function GradePage() {
               <tr className="bg-slate-50 text-xs text-slate-500">
                 <th className="text-left px-5 py-3 w-44">이름</th>
 
-                {/* 단어시험 */}
-                <th className="text-center px-4 py-3 min-w-[13rem]">
-                  {editingVocabName ? (
-                    <input
-                      autoFocus
-                      value={vocabNameStr}
-                      onChange={e => setVocabNameStr(e.target.value)}
-                      onBlur={() => saveVocabName(vocabNameStr)}
-                      onKeyDown={e => e.key === 'Enter' && saveVocabName(vocabNameStr)}
-                      className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center gap-1">
-                      <span>{vocabName}</span>
-                      <button
-                        onClick={() => { setEditingVocabName(true); setVocabNameStr(vocabName) }}
-                        className="text-slate-300 hover:text-blue-500 transition-colors"
-                        title="이름 수정"
-                      >
-                        <Pencil size={11} />
-                      </button>
+                {showVocabTest && (
+                  <th className="text-center px-4 py-3 min-w-[13rem]">
+                    {editingVocabName ? (
+                      <input
+                        autoFocus
+                        value={vocabNameStr}
+                        onChange={e => setVocabNameStr(e.target.value)}
+                        onBlur={() => saveVocabName(vocabNameStr)}
+                        onKeyDown={e => e.key === 'Enter' && saveVocabName(vocabNameStr)}
+                        className="w-20 text-center border border-blue-300 rounded px-1 py-0.5 text-xs outline-none bg-white text-slate-700"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center gap-1">
+                        <span>{vocabName}</span>
+                        <button
+                          onClick={() => { setEditingVocabName(true); setVocabNameStr(vocabName) }}
+                          className="text-slate-300 hover:text-blue-500 transition-colors"
+                          title="이름 수정"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '점수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
+                      <span className="text-slate-300 text-xs">|</span>
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '개수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
                     </div>
-                  )}
-                  <div className="flex items-center justify-center gap-1 mt-1">
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '점수' } })}
-                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
-                    <span className="text-slate-300 text-xs">|</span>
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '개수' } })}
-                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
-                  </div>
-                  <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
-                    <span>총</span>
-                    <input type="number" value={vocabTotalStr}
-                      onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabTotal: v } }) }}
-                      onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(vocabTotal.toString()) }}
-                      className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                    <span>{vocabMode === '점수' ? '점' : '개'}</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
-                    <input type="number" value={vocabThreshStr}
-                      onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabThreshold: v } }) }}
-                      onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(vocabThreshold.toString()) }}
-                      className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                    <span>이상 통과</span>
-                  </div>
-                </th>
+                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                      <span>총</span>
+                      <input type="number" value={vocabTotalStr}
+                        onChange={e => { setVocabTotalStr(e.target.value); const v = Number(e.target.value); if (v > 0) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabTotal: v } }) }}
+                        onBlur={() => { if (!Number(vocabTotalStr)) setVocabTotalStr(vocabTotal.toString()) }}
+                        className="w-10 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <span>{vocabMode === '점수' ? '점' : '개'}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
+                      <input type="number" value={vocabThreshStr}
+                        onChange={e => { setVocabThreshStr(e.target.value); const v = Number(e.target.value); if (v > 0 && v <= vocabTotal) dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabThreshold: v } }) }}
+                        onBlur={() => { if (!Number(vocabThreshStr)) setVocabThreshStr(vocabThreshold.toString()) }}
+                        className="w-8 text-center border-b border-slate-300 focus:border-blue-400 outline-none bg-transparent text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <span>이상 통과</span>
+                    </div>
+                  </th>
+                )}
 
                 {/* Daily Test */}
                 <th className="text-center px-4 py-3 min-w-[13rem]">
@@ -736,7 +747,7 @@ export default function GradePage() {
             <tbody className="divide-y divide-slate-50">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5 + sessionCols.length} className="text-center py-10 text-slate-400">
+                  <td colSpan={(showVocabTest ? 5 : 4) + sessionCols.length} className="text-center py-10 text-slate-400">
                     이 반에 등록된 학생이 없습니다
                   </td>
                 </tr>
@@ -744,21 +755,22 @@ export default function GradePage() {
                 const isAbsent = row.attendance === '결석'
                 const vocabNum = row.vocabScore !== '' ? Number(row.vocabScore) : null
                 const dailyNum = row.dailyScore !== '' ? Number(row.dailyScore) : null
-                const isVocabRetest = !isAbsent && needsRetest(vocabNum, vocabThreshold)
+                const isVocabRetest = showVocabTest && !isAbsent && needsRetest(vocabNum, vocabThreshold)
                 const isDailyRetest = !isAbsent && needsRetest(dailyNum, dailyThreshold)
 
                 const studentRetests = state.retests.filter(
                   r => r.studentId === row.studentId && r.sessionNum === selectedSession
                 )
-                const vocabRetest = studentRetests.find(r => r.type === 'vocab' && r.passed === null)
+                const visibleStudentRetests = showVocabTest ? studentRetests : studentRetests.filter(r => r.type !== 'vocab')
+                const vocabRetest = showVocabTest ? studentRetests.find(r => r.type === 'vocab' && r.passed === null) : undefined
                 const dailyRetest = studentRetests.find(r => r.type === 'daily' && r.passed === null)
-                const vocabRetestPassed = studentRetests.some(r => r.type === 'vocab' && r.passed === true)
+                const vocabRetestPassed = showVocabTest && studentRetests.some(r => r.type === 'vocab' && r.passed === true)
                 const dailyRetestPassed = studentRetests.some(r => r.type === 'daily' && r.passed === true)
                 const hasExtraRetest = !isAbsent && sessionCols.some(col =>
                   studentRetests.some(r => r.type === col.id && r.passed === null)
                 )
                 const hasPendingRetest = !isAbsent && (vocabRetest !== undefined || dailyRetest !== undefined || hasExtraRetest)
-                const allRetestsPassed = !isAbsent && studentRetests.length > 0 && studentRetests.every(r => r.passed === true)
+                const allRetestsPassed = !isAbsent && visibleStudentRetests.length > 0 && visibleStudentRetests.every(r => r.passed === true)
 
                 return (
                   <tr key={row.studentId} className={`hover:bg-slate-50 ${isAbsent ? 'bg-slate-100/60' : (isVocabRetest || isDailyRetest) ? 'bg-orange-50/40' : ''}`}>
@@ -781,40 +793,41 @@ export default function GradePage() {
                       </div>
                     </td>
 
-                    {/* 단어시험 점수 + 재시험 날짜 */}
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1.5 justify-center flex-wrap">
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={0}
-                            max={vocabTotal}
-                            value={row.vocabScore}
-                            onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
-                            placeholder="-"
-                            className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
-                              ${needsRetest(vocabNum, vocabThreshold)
-                                ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
-                                : 'border-slate-200 focus:ring-blue-200'
-                              }`}
-                          />
-                          <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
-                          {needsRetest(vocabNum, vocabThreshold) && (
-                            <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                    {showVocabTest && (
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={vocabTotal}
+                              value={row.vocabScore}
+                              onChange={e => updateRow(idx, 'vocabScore', e.target.value)}
+                              placeholder="-"
+                              className={`w-14 text-center border rounded-lg py-1.5 text-sm outline-none focus:ring-2
+                                ${needsRetest(vocabNum, vocabThreshold)
+                                  ? 'border-orange-300 focus:ring-orange-200 text-orange-600'
+                                  : 'border-slate-200 focus:ring-blue-200'
+                                }`}
+                            />
+                            <span className="text-slate-300 text-xs shrink-0">/{vocabTotal}</span>
+                            {needsRetest(vocabNum, vocabThreshold) && (
+                              <AlertCircle size={14} className="text-orange-400 shrink-0" />
+                            )}
+                          </div>
+                          {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
+                            <select
+                              value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? nextClassDate}
+                              onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
+                              className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
+                            >
+                              <option value="">날짜 선택</option>
+                              {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+                            </select>
                           )}
                         </div>
-                        {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
-                          <select
-                            value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? nextClassDate}
-                            onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
-                            className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
-                          >
-                            <option value="">날짜 선택</option>
-                            {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                          </select>
-                        )}
-                      </div>
-                    </td>
+                      </td>
+                    )}
 
                     {/* Daily Test 점수 + 재시험 날짜 */}
                     <td className="px-4 py-2.5">
@@ -918,8 +931,13 @@ export default function GradePage() {
         </div>
 
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-400">
-          * {vocabName} {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
-          {' '}{dailyName} {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만
+          * {showVocabTest && (
+            <>
+              {vocabName} {vocabThreshold}{vocabMode === '개수' ? '개' : '점'} 미만,
+              {' '}
+            </>
+          )}
+          {dailyName} {dailyThreshold}{dailyMode === '개수' ? '개' : '점'} 미만
           {sessionCols.filter(c => (c.threshold ?? 0) > 0).map(c => (
             <span key={c.id}>, {c.name} {c.threshold}{(c.mode ?? '점수') === '개수' ? '개' : '점'} 미만</span>
           ))}

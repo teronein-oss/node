@@ -190,6 +190,17 @@ export function getClassDate(sessionNum: number, days: string, weekdays?: Weekda
   return fmtDate(mon)
 }
 
+export function getCurrentClassSessionNum(days: string, weekdays?: WeekdayKey[], date: Date = new Date()): number {
+  const normalized = normalizeClassWeekdays(days, weekdays)
+  const weekStart = getWeekStart(date)
+  const weekDiff = Math.round((new Date(weekStart + 'T00:00:00').getTime() - new Date(BASE_WEEK).getTime()) / (7 * 24 * 60 * 60 * 1000))
+  const todayDow = date.getDay()
+  const classDows = normalized.map(day => WEEKDAY_TO_DOW[day])
+  const slot = classDows.reduce((last, dow, idx) => dow <= todayDow ? idx : last, -1)
+  if (slot >= 0) return Math.max(1, weekDiff * normalized.length + slot + 1)
+  return Math.max(1, (weekDiff - 1) * normalized.length + normalized.length)
+}
+
 /**
  * 해당 월의 실제 수업 날짜와 회차 번호를 반환 (목요일 기준 주 배정이 아닌 실제 날짜 기준)
  * 월 경계에서 목요일-기준 배정과 실제 날짜가 엇갈리는 버그를 방지함

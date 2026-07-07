@@ -3,7 +3,7 @@ import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calenda
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
-import { getWeekStart, getWeekStartForSession, formatDateKo, fmtDate, getClassDate, getClassDaysLabel } from '../utils/helpers'
+import { getWeekStart, formatDateKo, fmtDate, getClassDate, getClassDaysLabel } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM } from '../utils/academic'
 
 // ─── 달력 헬퍼 ────────────────────────────────────────────────────────────────
@@ -759,7 +759,7 @@ export default function DashboardPage() {
             sessionNum: sNum,
             classId: cls.id,
             className: cls.name,
-            isCurrent: getWeekStartForSession(sNum) === weekStart,
+            isCurrent: getWeekStart(new Date(date + 'T00:00:00')) === weekStart,
             vocabRange: scope?.vocabRange ?? '',
             dailyRange: scope?.dailyRange ?? '',
             vocabNames,
