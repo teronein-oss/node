@@ -19,15 +19,15 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingJogyoTeachers, signOut, jogyoTeachers, switchTeacher, setViewingUid } = useAuth()
+  const { user, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingAcademyId, viewingJogyoTeachers, signOut, jogyoTeachers, switchTeacher, setViewingUid } = useAuth()
   const navigate = useNavigate()
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
-  const effectiveAcademyId = user?.academyId ?? DEFAULT_ACADEMY_ID
+  const effectiveAcademyId = viewingAcademyId ?? user?.academyId
   const isJogyo = effectiveRole === '조교'
   const visibleNavItems = NAV_ITEMS.filter(item => {
     if (isJogyo && item.to === '/schedule') return false
-    if (effectiveAcademyId !== DEFAULT_ACADEMY_ID && item.to === '/student-dashboard') return false
+    if (item.to === '/student-dashboard' && effectiveAcademyId !== DEFAULT_ACADEMY_ID) return false
     return true
   })
 
