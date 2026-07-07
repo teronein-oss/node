@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate, useRouteError } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
+import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
 function ScheduleGuard({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
@@ -12,6 +13,12 @@ function ScheduleGuard({ children }: { children: React.ReactNode }) {
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const { isAdmin, isAcademyAdmin, viewingUid } = useAuth()
   if ((!isAdmin && !isAcademyAdmin) || viewingUid) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function StudentDashboardGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  if ((user?.academyId ?? DEFAULT_ACADEMY_ID) !== DEFAULT_ACADEMY_ID) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -66,7 +73,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Lazy><DashboardPage /></Lazy> },
       { path: 'grades', element: <Lazy><GradePage /></Lazy> },
       { path: 'students', element: <Lazy><StudentPage /></Lazy> },
-      { path: 'student-dashboard', element: <Lazy><StudentDashboardPage /></Lazy> },
+      { path: 'student-dashboard', element: <StudentDashboardGuard><Lazy><StudentDashboardPage /></Lazy></StudentDashboardGuard> },
       { path: 'homework', element: <Lazy><HomeworkPage /></Lazy> },
       { path: 'exam', element: <Navigate to="/" replace /> },
       { path: 'clinic', element: <Lazy><ClinicPage /></Lazy> },

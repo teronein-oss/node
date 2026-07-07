@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
 interface SidebarProps {
   open: boolean
@@ -22,8 +23,13 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const navigate = useNavigate()
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
+  const effectiveAcademyId = user?.academyId ?? DEFAULT_ACADEMY_ID
   const isJogyo = effectiveRole === '조교'
-  const visibleNavItems = NAV_ITEMS.filter(item => !(isJogyo && item.to === '/schedule'))
+  const visibleNavItems = NAV_ITEMS.filter(item => {
+    if (isJogyo && item.to === '/schedule') return false
+    if (effectiveAcademyId !== DEFAULT_ACADEMY_ID && item.to === '/student-dashboard') return false
+    return true
+  })
 
   // 실제 조교 본인: 담당 선생님 2명 이상
   const isOwnJogyoSwitch = !viewingUid && user?.role === '조교' && jogyoTeachers.length > 1
