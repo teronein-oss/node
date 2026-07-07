@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Stethoscope } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { fmtDate, formatDateKo, getClassDate } from '../utils/helpers'
+import { fmtDate, formatDateKo, getClassDate, normalizeClassWeekdays } from '../utils/helpers'
 
 function buildCalDays(year: number, month: number): (Date | null)[] {
   const first = new Date(year, month - 1, 1)
@@ -42,11 +42,9 @@ export default function ClinicPage() {
       if (!student?.active) continue
       const cls = state.classes.find(c => c.id === student.classId)
       if (!cls) continue
-      const validDows = cls.days === 'mon-fri' ? [1, 5]
-        : cls.days === 'tue-thu' ? [2, 4]
-        : cls.days === 'wed-sat' ? [3, 6]
-        : [1, 3, 5]
-      const correctDate = getClassDate(r.sessionNum + 1, cls.days)
+      const dowMap = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 } as const
+      const validDows: number[] = normalizeClassWeekdays(cls.days, cls.weekdays).map(day => dowMap[day])
+      const correctDate = getClassDate(r.sessionNum + 1, cls.days, cls.weekdays)
       const retestDow = r.retestDate ? new Date(r.retestDate + 'T00:00:00').getDay() : null
       const hasInvalidDay = retestDow !== null && !validDows.includes(retestDow)
       if (!r.retestDate || hasInvalidDay) {
@@ -93,7 +91,7 @@ export default function ClinicPage() {
         const cls = state.classes.find(c => c.id === s.classId)
         if (!cls) continue
         const date = hw.recheckDates?.find(rd => rd.studentId === studentId)?.date
-          ?? getClassDate(hw.sessionNum + 2, cls.days)
+          ?? getClassDate(hw.sessionNum + 2, cls.days, cls.weekdays)
         if (!acc[date]) acc[date] = new Map()
         const existing = acc[date].get(studentId)
         if (existing) {

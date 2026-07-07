@@ -34,6 +34,7 @@ export interface AppState {
 export type Action =
   | { type: 'LOAD'; payload: AppState }
   | { type: 'ADD_CLASS'; payload: Omit<Class, 'id'> }
+  | { type: 'UPDATE_CLASS'; payload: Class }
   | { type: 'RENAME_CLASS'; payload: { id: string; name: string } }
   | { type: 'DELETE_CLASS'; payload: string }
   | { type: 'ADD_STUDENT'; payload: Omit<Student, 'id'> }
@@ -84,6 +85,12 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         classes: [...state.classes, { ...action.payload, id: genId() }],
+      }
+
+    case 'UPDATE_CLASS':
+      return {
+        ...state,
+        classes: state.classes.map(c => c.id === action.payload.id ? action.payload : c),
       }
 
     case 'RENAME_CLASS':
@@ -724,6 +731,7 @@ export function normalizeState(parsed: AppState): AppState {
     classes: (parsed.classes ?? []).map(c => ({
       ...c,
       name: CLASS_NAME_MIGRATION[c.name] ?? c.name,
+      days: c.days ?? 'mon-fri',
     })),
     grades: (parsed.grades ?? []).map((g: GradeRecord & { homeworkDone: unknown }) => {
       const hd: unknown = g.homeworkDone

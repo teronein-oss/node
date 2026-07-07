@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Save, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { needsRetest, getWeekStartForSession, getClassDate, formatDateKo, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
+import { needsRetest, getWeekStart, getClassDate, formatDateKo, fmtDate, normalizeClassWeekdays } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import { Pencil, Trash2, X } from 'lucide-react'
 
@@ -161,9 +161,7 @@ export default function GradePage() {
   }, [selectedClass, selectedSession, state.students, state.sessionTestConfigs])
 
   const buildPayload = (currentRows: GradeRow[], sessionNum: number) => {
-    const weekStart = selectedCls?.days === 'mon-wed-fri'
-      ? getWeekStartForMWFSession(sessionNum)
-      : getWeekStartForSession(sessionNum)
+    const weekStart = getWeekStart(new Date(getClassDate(sessionNum, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays) + 'T00:00:00'))
     return currentRows.map(r => ({
       studentId: r.studentId,
       sessionNum,
@@ -303,7 +301,7 @@ export default function GradePage() {
 
   const nextClassDate = useMemo(() => {
     if (!selectedCls) return ''
-    return getClassDate(selectedSession + 1, selectedCls.days)
+    return getClassDate(selectedSession + 1, selectedCls.days, selectedCls.weekdays)
   }, [selectedSession, selectedCls])
 
   const retestDateOptions = useMemo(() => {
@@ -323,10 +321,8 @@ export default function GradePage() {
 
   useEffect(() => {
     if (!nextClassDate || !selectedCls) return
-    const validDows = selectedCls.days === 'mon-fri' ? [1, 5]
-      : selectedCls.days === 'tue-thu' ? [2, 4]
-      : selectedCls.days === 'wed-sat' ? [3, 6]
-      : [1, 3, 5]
+    const dowMap = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 } as const
+    const validDows: number[] = normalizeClassWeekdays(selectedCls.days, selectedCls.weekdays).map(day => dowMap[day])
     const classStudentIds = new Set(
       state.students.filter(s => s.classId === selectedClass && s.active).map(s => s.id)
     )

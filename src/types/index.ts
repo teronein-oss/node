@@ -1,7 +1,12 @@
+export type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'
+export type WeeklyFrequency = 1 | 2 | 3
+
 export interface Class {
   id: string
   name: string
-  days: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
+  days: string
+  weeklyFrequency?: WeeklyFrequency
+  weekdays?: WeekdayKey[]
 }
 
 export interface NoticeItem {

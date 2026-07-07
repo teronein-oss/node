@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Calendar, Trash2, RotateCcw, Plus, Pencil, Check, X, AlertTriangle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { genId, getWeekStartForSession, getClassDate, formatDateKo, getMWFClassDate, getWeekStartForMWFSession, fmtDate } from '../utils/helpers'
+import { genId, getWeekStart, getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import type { HomeworkAssignment, HomeworkItem } from '../types'
 
@@ -44,13 +44,11 @@ export default function HomeworkPage() {
   )
 
   const prevDate = (sessionNum: number) =>
-    selectedCls?.days === 'mon-wed-fri'
-      ? getMWFClassDate(sessionNum - 1)
-      : getClassDate(sessionNum - 1, selectedCls?.days ?? 'mon-fri')
+    getClassDate(sessionNum - 1, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays)
 
   // 재확인 기본 날짜 = 다음 수업일 (검사일 카드 회차 + 1)
   const nextClassDate = (sessionNum: number) =>
-    getClassDate(sessionNum + 1, selectedCls?.days ?? 'mon-fri')
+    getClassDate(sessionNum + 1, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays)
 
   // 드롭다운 옵션: 기준일부터 +6일 (7개)
   const dateRangeOptions = (baseDate: string) => {
@@ -129,9 +127,7 @@ export default function HomeworkPage() {
     const text = (newItemTexts[sessionNum] ?? '').trim()
     if (!text) return
     const hw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)
-    const weekStart = selectedCls?.days === 'mon-wed-fri'
-      ? getWeekStartForMWFSession(sessionNum)
-      : getWeekStartForSession(sessionNum)
+    const weekStart = getWeekStart(new Date(getClassDate(sessionNum, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays) + 'T00:00:00'))
     const newItem: HomeworkItem = { id: genId(), text, done: false }
     dispatch({
       type: 'SAVE_HOMEWORK',

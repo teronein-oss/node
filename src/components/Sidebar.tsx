@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
@@ -116,6 +116,23 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </>
           )}
         </nav>
+
+        <div className="px-3 pb-3">
+          <NavLink
+            to="/classes"
+            onClick={onClose}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors
+              ${isActive
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              }`
+            }
+          >
+            <BookOpenCheck size={18} />
+            반관리
+          </NavLink>
+        </div>
 
         {/* 사용자 정보 + 로그아웃 */}
         <div className="px-4 py-4 border-t border-slate-700 space-y-3">

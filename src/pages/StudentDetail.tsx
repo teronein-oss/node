@@ -1,8 +1,8 @@
 import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
-import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason } from '../types'
+import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason, WeekdayKey } from '../types'
 import { useApp } from '../context/AppContext'
-import { getClassDate, getMWFClassDate, formatDateKo, fmtDate, getMonthClassDates, getMonthMWFSessions } from '../utils/helpers'
+import { getClassDate, formatDateKo, fmtDate, getMonthClassDates, normalizeClassWeekdays } from '../utils/helpers'
 import { toPng } from 'html-to-image'
 
 interface Props {
@@ -20,7 +20,7 @@ const WITHDRAWAL_REASONS: WithdrawalReason[] = [
 ]
 
 /** 해당 반 유형의 과거 수업 날짜를 최신순으로 반환 (3개월 이내) */
-function buildClassDateList(classDays: string, todayStr: string): string[] {
+function buildClassDateList(classDays: string, classWeekdays: WeekdayKey[], todayStr: string): string[] {
   const result: string[] = []
   const now = new Date()
   const cutoff = new Date(now)
@@ -29,15 +29,8 @@ function buildClassDateList(classDays: string, todayStr: string): string[] {
 
   while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
     const cutoffStr = fmtDate(cutoff)
-    if (classDays === 'mon-wed-fri') {
-      for (const sNum of getMonthMWFSessions(y, m)) {
-        const d = getMWFClassDate(sNum)
-        if (d <= todayStr && d >= cutoffStr) result.push(d)
-      }
-    } else {
-      for (const { date } of getMonthClassDates(y, m, classDays as 'mon-fri' | 'tue-thu' | 'wed-sat')) {
-        if (date <= todayStr && date >= cutoffStr) result.push(date)
-      }
+    for (const { date } of getMonthClassDates(y, m, classDays, classWeekdays)) {
+      if (date <= todayStr && date >= cutoffStr) result.push(date)
     }
     m++
     if (m > 12) { m = 1; y++ }
@@ -63,11 +56,12 @@ export default function StudentDetail({ student, onClose }: Props) {
   const className = studentCls?.name ?? ''
   const { sessionNum: currentSessionNum } = getCurrentSession()
   const classDays = studentCls?.days ?? 'tue-thu'
+  const classWeekdays = normalizeClassWeekdays(classDays, studentCls?.weekdays)
   const todayStr = fmtDate(new Date())
 
   /** 드롭다운용 수업 날짜 목록 (최신순), 월별 그룹 */
   const classDatesGrouped = useMemo(() => {
-    const all = buildClassDateList(classDays, todayStr)
+    const all = buildClassDateList(classDays, classWeekdays, todayStr)
     const groups: { label: string; dates: string[] }[] = []
     const map = new Map<string, string[]>()
     for (const date of all) {
@@ -81,12 +75,12 @@ export default function StudentDetail({ student, onClose }: Props) {
       map.get(key)!.push(date)
     }
     return groups
-  }, [classDays, todayStr])
+  }, [classDays, classWeekdays, todayStr])
 
   const grades = state.grades
     .filter(g => g.studentId === student.id)
     .filter(g => {
-      const date = getClassDate(g.sessionNum, classDays)
+      const date = getClassDate(g.sessionNum, classDays, classWeekdays)
       if (date > todayStr) return false
       if (fromDate && date < fromDate) return false
       if (toDate && date > toDate) return false
@@ -97,7 +91,7 @@ export default function StudentDetail({ student, onClose }: Props) {
   const retests = state.retests
     .filter(r => r.studentId === student.id)
     .filter(r => {
-      const date = getClassDate(r.sessionNum, classDays)
+      const date = getClassDate(r.sessionNum, classDays, classWeekdays)
       if (date > todayStr) return false
       if (fromDate && date < fromDate) return false
       if (toDate && date > toDate) return false
@@ -136,7 +130,7 @@ export default function StudentDetail({ student, onClose }: Props) {
       )
       if (myStatuses.some(s => s === '미흡' || s === '미제출')) return '미흡'
       if (myStatuses.some(s => s === '재확인완료')) return '재확인완료'
-      if (getClassDate(sessionNum + 1, classDays) <= todayStr) return '제출'
+      if (getClassDate(sessionNum + 1, classDays, classWeekdays) <= todayStr) return '제출'
     }
     return grade?.homeworkDone ?? null
   }
@@ -157,7 +151,7 @@ export default function StudentDetail({ student, onClose }: Props) {
       if (worstRank === 3) return '미제출'
       if (worstRank === 2) return '미흡'
       if (worstRank === 1) return '재확인완료'
-      if (getClassDate(checkSessionNum, classDays) <= todayStr) return '제출'
+      if (getClassDate(checkSessionNum, classDays, classWeekdays) <= todayStr) return '제출'
       return null
     }
     const assignGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSessionNum - 1)
@@ -167,7 +161,7 @@ export default function StudentDetail({ student, onClose }: Props) {
   const homeworkRows = state.homeworks
     .filter(hw => hw.classId === student.classId || hw.classId === '')
     .filter(hw => {
-      const checkDate = getClassDate(hw.sessionNum + 1, classDays)
+      const checkDate = getClassDate(hw.sessionNum + 1, classDays, classWeekdays)
       if (checkDate > todayStr) return false
       if (fromDate && checkDate < fromDate) return false
       if (toDate && checkDate > toDate) return false
@@ -177,7 +171,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     .sort((a, b) => b.sessionNum - a.sessionNum)
     .map(hw => ({
       hw,
-      checkDate: getClassDate(hw.sessionNum + 1, classDays),
+      checkDate: getClassDate(hw.sessionNum + 1, classDays, classWeekdays),
       status: homeworkStatusForCheckSession(hw.sessionNum + 1),
     }))
 
@@ -432,7 +426,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                       return (
                         <tr key={g.id} className="hover:bg-slate-50">
                           <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">
-                            {formatDateKo(getClassDate(g.sessionNum, classDays))}
+                            {formatDateKo(getClassDate(g.sessionNum, classDays, classWeekdays))}
                           </td>
                           <td className="text-center px-4 py-2.5">
                             {g.vocabScore !== null ? (
@@ -579,7 +573,7 @@ export default function StudentDetail({ student, onClose }: Props) {
               <div className="space-y-2">
                 {retests.map(r => (
                   <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="text-xs text-slate-500 whitespace-nowrap">{formatDateKo(getClassDate(r.sessionNum, classDays))}</span>
+                    <span className="text-xs text-slate-500 whitespace-nowrap">{formatDateKo(getClassDate(r.sessionNum, classDays, classWeekdays))}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium
                       ${r.type === 'vocab' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
                       {r.type === 'vocab' ? '단어' : 'Daily'}
@@ -616,6 +610,7 @@ export default function StudentDetail({ student, onClose }: Props) {
           <WeeklyProgressSection
             classId={student.classId}
             classDays={classDays}
+            classWeekdays={classWeekdays}
             currentSessionNum={currentSessionNum}
             fromDate={fromDate}
             toDate={toDate}
@@ -705,12 +700,14 @@ export default function StudentDetail({ student, onClose }: Props) {
 function WeeklyProgressSection({
   classId,
   classDays,
+  classWeekdays,
   currentSessionNum,
   fromDate,
   toDate,
 }: {
   classId: string
-  classDays: 'mon-fri' | 'tue-thu' | 'wed-sat' | 'mon-wed-fri'
+  classDays: string
+  classWeekdays: WeekdayKey[]
   currentSessionNum: number
   fromDate: string
   toDate: string
@@ -721,7 +718,7 @@ function WeeklyProgressSection({
     .filter(p => {
       if (p.classId !== classId) return false
       if (p.sessionNum > currentSessionNum) return false
-      const date = getClassDate(p.sessionNum, classDays)
+      const date = getClassDate(p.sessionNum, classDays, classWeekdays)
       if (fromDate && date < fromDate) return false
       if (toDate && date > toDate) return false
       return true
@@ -749,7 +746,7 @@ function WeeklyProgressSection({
             {progressRows.map(p => (
               <tr key={p.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-700">
-                  {formatDateKo(getClassDate(p.sessionNum, classDays))}
+                  {formatDateKo(getClassDate(p.sessionNum, classDays, classWeekdays))}
                 </td>
                 <td className="px-4 py-2.5 text-slate-700">{p.content}</td>
                 <td className="px-4 py-2.5 text-slate-400 text-xs">{p.memo || '—'}</td>

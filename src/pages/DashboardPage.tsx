@@ -3,7 +3,7 @@ import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calenda
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
-import { getMonthSessions, getWeekStart, getWeekStartForSession, formatDateKo, fmtDate, getClassDate, getMonthMWFSessions } from '../utils/helpers'
+import { getWeekStart, getWeekStartForSession, formatDateKo, fmtDate, getClassDate, getClassDaysLabel } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM } from '../utils/academic'
 
 // ─── 달력 헬퍼 ────────────────────────────────────────────────────────────────
@@ -673,12 +673,6 @@ export default function DashboardPage() {
     setSelectedYM(getMonthKey(nextWeekStart))
   }
 
-  // 해당 월 세션 목록 (넉넉하게 12개)
-  const monthSessions = useMemo(
-    () => getMonthSessions(selectedYear, selectedMonth, 12),
-    [selectedYear, selectedMonth]
-  )
-
   // 날짜 기반 행 생성 (반 하나에 대해)
   const buildRows = useMemo(() => {
     return (classId: string) => {
@@ -686,13 +680,17 @@ export default function DashboardPage() {
       if (!cls) return []
       const studentIds = new Set(state.students.filter(s => s.active && s.classId === classId).map(s => s.id))
 
-      const sessions = cls.days === 'mon-wed-fri'
-        ? getMonthMWFSessions(selectedYear, selectedMonth)
-        : monthSessions
+      const sessions = getClassDatesForMonth({
+        classInfo: cls,
+        year: selectedYear,
+        month: selectedMonth,
+        includeFuture: true,
+        filterMWFToCalendarMonth: true,
+      }).map(entry => entry.sessionNum)
 
       return sessions
         .map(sNum => {
-          const date = getClassDate(sNum, cls.days)
+          const date = getClassDate(sNum, cls.days, cls.weekdays)
           const [y, m] = date.split('-').map(Number)
           if (y !== selectedYear || m !== selectedMonth) return null
 
@@ -778,7 +776,7 @@ export default function DashboardPage() {
         })
         .filter((r): r is NonNullable<typeof r> => r !== null)
     }
-  }, [state, monthSessions, selectedYear, selectedMonth, weekStart])
+  }, [state, selectedYear, selectedMonth, weekStart])
 
   // 현재 탭에 따라 표시할 행들 (오늘 이후 날짜 제외)
   const displayRows = useMemo(() => {
@@ -913,10 +911,7 @@ export default function DashboardPage() {
                   <td className="px-4 py-3 align-top">
                     <div className="font-semibold text-slate-800">{row.className}</div>
                     <div className="text-xs text-slate-400 mt-1">
-                      {row.classDays === 'mon-fri' ? '월·금'
-                        : row.classDays === 'tue-thu' ? '화·목'
-                        : row.classDays === 'wed-sat' ? '수·토'
-                        : '월·수·금'}
+                      {getClassDaysLabel(row.classDays)}
                     </div>
                   </td>
                   {row.days.map(day => (
@@ -987,10 +982,7 @@ export default function DashboardPage() {
                   <td className="px-4 py-3 align-top">
                     <div className="font-semibold text-slate-800">{row.className}</div>
                     <div className="text-xs text-slate-400 mt-1">
-                      {row.classDays === 'mon-fri' ? '월·금'
-                        : row.classDays === 'tue-thu' ? '화·목'
-                        : row.classDays === 'wed-sat' ? '수·토'
-                        : '월·수·금'}
+                      {getClassDaysLabel(row.classDays)}
                     </div>
                   </td>
                   {row.days.map(day => (

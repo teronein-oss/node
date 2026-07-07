@@ -2,9 +2,8 @@ import type { Class, GradeRecord, HomeworkAssignment, WeeklyProgress } from '../
 import {
   fmtDate,
   getMonthClassDates,
-  getMonthMWFSessions,
-  getMWFClassDate,
   getWeekStartForSession,
+  normalizeClassWeekdays,
 } from './helpers'
 
 export interface MonthOption {
@@ -31,14 +30,10 @@ export function getCurrentYM(date = new Date()): string {
 
 export function getDefaultClassIdForToday(classes: Class[], fallback = ''): string {
   const dow = new Date().getDay()
-  const todayDays = dow === 1 || dow === 5
-    ? 'mon-fri'
-    : dow === 2 || dow === 4
-      ? 'tue-thu'
-      : dow === 3
-        ? 'mon-wed-fri'
-        : null
-  const matched = todayDays ? classes.find(c => c.days === todayDays) : null
+  const matched = classes.find(c => normalizeClassWeekdays(c.days, c.weekdays).some(day => {
+    const map = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 } as const
+    return map[day] === dow
+  }))
   return matched?.id ?? fallback
 }
 
@@ -95,17 +90,12 @@ export function getClassDatesForMonth({
 }): { date: string; sessionNum: number }[] {
   if (!classInfo) return []
   const todayStr = fmtDate(today)
-  const dates = classInfo.days === 'mon-wed-fri'
-    ? getMonthMWFSessions(year, month).map(sessionNum => ({
-        date: getMWFClassDate(sessionNum),
-        sessionNum,
-      }))
-    : getMonthClassDates(year, month, classInfo.days)
+  const dates = getMonthClassDates(year, month, classInfo.days, classInfo.weekdays)
 
   return dates
     .filter(({ date }) => includeFuture || date <= todayStr)
     .filter(({ date }) => {
-      if (classInfo.days !== 'mon-wed-fri' || !filterMWFToCalendarMonth) return true
+      if (!filterMWFToCalendarMonth) return true
       const [dateYear, dateMonth] = date.split('-').map(Number)
       return dateYear === year && dateMonth === month
     })
