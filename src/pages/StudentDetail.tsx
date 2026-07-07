@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
 import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason, WeekdayKey } from '../types'
 import { useApp } from '../context/AppContext'
-import { getClassDate, formatDateKo, fmtDate, getMonthClassDates, normalizeClassWeekdays, getCurrentClassSessionNum } from '../utils/helpers'
+import { getClassDate, formatDateKo, fmtDate, normalizeClassWeekdays, getCurrentClassSessionNum } from '../utils/helpers'
 import { toPng } from 'html-to-image'
 
 interface Props {
@@ -18,26 +18,6 @@ const WITHDRAWAL_REASONS: WithdrawalReason[] = [
   '성적상승 후 퇴원',
   '알 수 없음',
 ]
-
-/** 해당 반 유형의 과거 수업 날짜를 최신순으로 반환 (3개월 이내) */
-function buildClassDateList(classDays: string, classWeekdays: WeekdayKey[], todayStr: string): string[] {
-  const result: string[] = []
-  const now = new Date()
-  const cutoff = new Date(now)
-  cutoff.setMonth(cutoff.getMonth() - 3)
-  let y = cutoff.getFullYear(), m = cutoff.getMonth() + 1
-
-  while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
-    const cutoffStr = fmtDate(cutoff)
-    for (const { date } of getMonthClassDates(y, m, classDays, classWeekdays)) {
-      if (date <= todayStr && date >= cutoffStr) result.push(date)
-    }
-    m++
-    if (m > 12) { m = 1; y++ }
-  }
-
-  return [...new Set(result)].sort().reverse()
-}
 
 export default function StudentDetail({ student, onClose }: Props) {
   const { state, dispatch } = useApp()
@@ -58,24 +38,6 @@ export default function StudentDetail({ student, onClose }: Props) {
   const classWeekdays = normalizeClassWeekdays(classDays, studentCls?.weekdays)
   const currentSessionNum = getCurrentClassSessionNum(classDays, classWeekdays)
   const todayStr = fmtDate(new Date())
-
-  /** 드롭다운용 수업 날짜 목록 (최신순), 월별 그룹 */
-  const classDatesGrouped = useMemo(() => {
-    const all = buildClassDateList(classDays, classWeekdays, todayStr)
-    const groups: { label: string; dates: string[] }[] = []
-    const map = new Map<string, string[]>()
-    for (const date of all) {
-      const [y, mo] = date.split('-').map(Number)
-      const key = `${y}년 ${mo}월`
-      if (!map.has(key)) {
-        const arr: string[] = []
-        map.set(key, arr)
-        groups.push({ label: key, dates: arr })
-      }
-      map.get(key)!.push(date)
-    }
-    return groups
-  }, [classDays, classWeekdays, todayStr])
 
   const grades = state.grades
     .filter(g => g.studentId === student.id)
@@ -339,39 +301,32 @@ export default function StudentDetail({ student, onClose }: Props) {
           <div className="flex flex-wrap items-center gap-2 mt-2.5">
             <span className="text-xs text-slate-400 shrink-0">기간</span>
             <div className="flex items-center gap-1.5">
-              <select
+              <input
+                type="date"
                 value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 max-w-[150px]"
-              >
-                <option value="">시작일</option>
-                {classDatesGrouped.map(({ label, dates }) => (
-                  <optgroup key={label} label={label}>
-                    {dates.map(date => (
-                      <option key={date} value={date}>
-                        {formatDateKo(date)}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                max={toDate || todayStr}
+                onChange={e => {
+                  const value = e.target.value
+                  setFromDate(value)
+                  if (value && toDate && value > toDate) setToDate(value)
+                }}
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 w-32"
+                aria-label="시작일"
+              />
               <span className="text-xs text-slate-300">~</span>
-              <select
+              <input
+                type="date"
                 value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 max-w-[150px]"
-              >
-                <option value="">종료일</option>
-                {classDatesGrouped.map(({ label, dates }) => (
-                  <optgroup key={label} label={label}>
-                    {dates.map(date => (
-                      <option key={date} value={date}>
-                        {formatDateKo(date)}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                min={fromDate || undefined}
+                max={todayStr}
+                onChange={e => {
+                  const value = e.target.value
+                  setToDate(value)
+                  if (value && fromDate && value < fromDate) setFromDate(value)
+                }}
+                className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-200 bg-white text-slate-700 w-32"
+                aria-label="종료일"
+              />
             </div>
             {(fromDate || toDate) && (
               <button

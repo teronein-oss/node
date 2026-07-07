@@ -17,8 +17,8 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
 }
 
 function StudentDashboardGuard({ children }: { children: React.ReactNode }) {
-  const { user, viewingAcademyId } = useAuth()
-  const effectiveAcademyId = viewingAcademyId ?? user?.academyId
+  const { user, viewingUid, viewingAcademyId } = useAuth()
+  const effectiveAcademyId = viewingUid ? viewingAcademyId : user?.academyId
   if (effectiveAcademyId !== DEFAULT_ACADEMY_ID) return <Navigate to="/" replace />
   return <>{children}</>
 }

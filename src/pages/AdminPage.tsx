@@ -105,14 +105,16 @@ export default function AdminPage() {
   }
 
   const handleView = (reg: RegistrationInfo, teacherUid?: string) => {
+    const targetAcademyId = normalizeAcademyId(reg.academyId ?? currentAcademyId)
+    const targetAcademyName = normalizeAcademyName(reg.academyName ?? currentAcademy.name)
     if (reg.role === '조교') {
       const uid = teacherUid ?? getJogyoUids(reg)[0]
       if (uid) {
         const jogyoTeacherList = teachers.filter(t => getJogyoUids(reg).includes(t.uid))
-        setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교', jogyoTeacherList, reg.academyId, reg.academyName)
+        setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교', jogyoTeacherList, targetAcademyId, targetAcademyName)
       }
     } else {
-      setViewingUid(reg.uid, reg.displayName, reg.role, undefined, reg.academyId, reg.academyName)
+      setViewingUid(reg.uid, reg.displayName, reg.role, undefined, targetAcademyId, targetAcademyName)
     }
     navigate('/')
   }

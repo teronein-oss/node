@@ -116,8 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setViewingUidState(uid)
     setViewingUserName(uid ? (displayName(name) || null) : null)
     setViewingUserRole(uid ? (role ?? null) : null)
-    setViewingAcademyId(uid ? normalizeAcademyId(academyId) : null)
-    setViewingAcademyName(uid ? normalizeAcademyName(academyName) : null)
+    setViewingAcademyId(uid && academyId ? normalizeAcademyId(academyId) : null)
+    setViewingAcademyName(uid && academyName ? normalizeAcademyName(academyName) : null)
     setViewingJogyoTeachers(uid && role === '조교'
       ? (jogyoTeacherList ?? []).map(t => ({ ...t, displayName: displayName(t.displayName) }))
       : [])
