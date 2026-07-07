@@ -34,6 +34,18 @@ function syncWeekdaysToFrequency(current: WeekdayKey[], frequency: WeeklyFrequen
   return [...unique, ...defaults.filter(day => !unique.includes(day))].slice(0, frequency)
 }
 
+function setWeekdayByClick(current: WeekdayKey[], day: WeekdayKey, frequency: WeeklyFrequency) {
+  const unique = current.filter((value, idx) => current.indexOf(value) === idx)
+  if (unique.includes(day)) {
+    if (unique.length === 1) return unique
+    return unique.filter(value => value !== day)
+  }
+  if (unique.length >= frequency) {
+    return syncWeekdaysToFrequency([...unique.slice(1), day], frequency)
+  }
+  return syncWeekdaysToFrequency([...unique, day], frequency)
+}
+
 export default function ClassManagePage() {
   const { state, dispatch } = useApp()
   const [newName, setNewName] = useState('')
@@ -58,13 +70,7 @@ export default function ClassManagePage() {
     frequency: WeeklyFrequency,
     setter: (days: WeekdayKey[]) => void
   ) => {
-    if (selected.includes(day)) {
-      if (selected.length === 1) return
-      setter(selected.filter(value => value !== day))
-      return
-    }
-    if (selected.length >= frequency) return
-    setter(syncWeekdaysToFrequency([...selected, day], frequency))
+    setter(setWeekdayByClick(selected, day, frequency))
   }
 
   const changeNewFrequency = (frequency: WeeklyFrequency) => {
@@ -165,19 +171,15 @@ export default function ClassManagePage() {
     <div className="flex flex-wrap gap-2">
       {WEEKDAY_OPTIONS.map(day => {
         const checked = selected.includes(day.value)
-        const disabled = !checked && selected.length >= frequency
         return (
           <button
             key={day.value}
             type="button"
-            disabled={disabled}
             onClick={() => toggleDay(day.value, selected, frequency, setter)}
             className={`w-10 h-10 rounded-full border text-sm font-bold transition-colors
               ${checked
                 ? 'bg-slate-800 text-white border-slate-800'
-                : disabled
-                  ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
               }`}
           >
             {day.label}
@@ -202,11 +204,12 @@ export default function ClassManagePage() {
         <div className="grid grid-cols-1 xl:grid-cols-[220px_240px_1fr_auto] gap-4 items-end">
           <div>
             <label className="text-xs font-semibold text-slate-500 mb-1.5 block">반 이름</label>
+            <p className="text-[11px] text-slate-400 mb-1">학교이름_학년_레벨, 레벨이 없으면 생략</p>
             <input
               value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAdd()}
-              placeholder="예: 청덕2 S1"
+              placeholder="예: 한국고2_S1 또는 한국고2"
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
             />
           </div>
