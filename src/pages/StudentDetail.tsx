@@ -173,6 +173,8 @@ export default function StudentDetail({ student, onClose }: Props) {
     setDownloading(true)
     const card = cardRef.current
     const scrollDiv = card.querySelector<HTMLElement>('[data-scroll-area]')
+    const wideTables = Array.from(card.querySelectorAll<HTMLElement>('[data-wide-table]'))
+    const prevCardWidth = card.style.width
     card.style.maxHeight = 'none'
     card.style.overflow = 'visible'
     if (scrollDiv) {
@@ -180,6 +182,8 @@ export default function StudentDetail({ student, onClose }: Props) {
       scrollDiv.style.flex = 'none'
       scrollDiv.style.maxHeight = 'none'
     }
+    wideTables.forEach(el => { el.style.overflow = 'visible' })
+    card.style.width = `${Math.max(card.scrollWidth, card.getBoundingClientRect().width)}px`
     try {
       const dataUrl = await toPng(card, {
         backgroundColor: '#ffffff',
@@ -193,6 +197,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     } catch (e) {
       console.error('PNG 다운로드 실패:', e)
     } finally {
+      card.style.width = prevCardWidth
       card.style.maxHeight = ''
       card.style.overflow = ''
       if (scrollDiv) {
@@ -200,6 +205,7 @@ export default function StudentDetail({ student, onClose }: Props) {
         scrollDiv.style.flex = ''
         scrollDiv.style.maxHeight = ''
       }
+      wideTables.forEach(el => { el.style.overflow = '' })
       setDownloading(false)
     }
   }
@@ -217,7 +223,7 @@ export default function StudentDetail({ student, onClose }: Props) {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         ref={cardRef}
-        className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
+        className="bg-white rounded-2xl w-full max-w-5xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -350,18 +356,18 @@ export default function StudentDetail({ student, onClose }: Props) {
             {grades.length === 0 ? (
               <p className="text-sm text-slate-400">입력된 성적이 없습니다</p>
             ) : (
-              <div className="border border-slate-100 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
+              <div data-wide-table className="border border-slate-100 rounded-xl overflow-x-auto">
+                <table className="min-w-max w-full text-sm table-fixed">
                   <thead>
                     <tr className="bg-slate-50 text-xs text-slate-500">
-                      <th className="text-left px-4 py-2.5">날짜</th>
-                      <th className="text-center px-4 py-2.5">단어시험</th>
-                      <th className="text-center px-4 py-2.5">Daily Test</th>
+                      <th className="sticky left-0 z-20 bg-slate-50 text-left px-4 py-2.5 min-w-32 w-32 whitespace-nowrap">날짜</th>
+                      <th className="text-center px-4 py-2.5 min-w-28 w-28 break-keep">단어시험</th>
+                      <th className="text-center px-4 py-2.5 min-w-28 w-28 break-keep">Daily Test</th>
                       {allSessionCols.map(col => (
-                        <th key={col.id} className="text-center px-4 py-2.5">{col.name}</th>
+                        <th key={col.id} className="text-center px-4 py-2.5 min-w-28 w-28 break-keep" title={col.name}>{col.name}</th>
                       ))}
-                      <th className="text-center px-4 py-2.5">숙제</th>
-                      <th className="text-center px-4 py-2.5">재시험</th>
+                      <th className="text-center px-4 py-2.5 min-w-24 w-24 break-keep">숙제</th>
+                      <th className="text-center px-4 py-2.5 min-w-20 w-20 break-keep">재시험</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -379,11 +385,11 @@ export default function StudentDetail({ student, onClose }: Props) {
                       const dTotal = sCfg?.dailyTotal ?? state.dailyTotal
                       const dMode = sCfg?.dailyMode ?? state.dailyMode
                       return (
-                        <tr key={g.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap">
+                        <tr key={g.id} className="group hover:bg-slate-50">
+                          <td className="sticky left-0 z-10 bg-white px-4 py-2.5 font-medium text-slate-700 whitespace-nowrap group-hover:bg-slate-50">
                             {formatDateKo(getClassDate(g.sessionNum, classDays, classWeekdays))}
                           </td>
-                          <td className="text-center px-4 py-2.5">
+                          <td className="text-center px-4 py-2.5 whitespace-nowrap">
                             {g.vocabScore !== null ? (
                               <span className={`font-medium ${g.vocabScore < vThresh ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {g.vocabScore}
@@ -391,7 +397,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                               </span>
                             ) : <span className="text-slate-300">-</span>}
                           </td>
-                          <td className="text-center px-4 py-2.5">
+                          <td className="text-center px-4 py-2.5 whitespace-nowrap">
                             {g.dailyTestScore !== null ? (
                               <span className={`font-medium ${g.dailyTestScore < dThresh ? 'text-orange-500' : 'text-slate-700'}`}>
                                 {g.dailyTestScore}
@@ -406,7 +412,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                             const eMode = col.mode ?? '점수'
                             const eFail = eThresh > 0 && eScore != null && eScore < eThresh
                             return (
-                              <td key={col.id} className="text-center px-4 py-2.5">
+                              <td key={col.id} className="text-center px-4 py-2.5 whitespace-nowrap">
                                 {eScore !== null && eScore !== undefined
                                   ? <span className={`font-medium ${eFail ? 'text-orange-500' : 'text-slate-700'}`}>
                                       {eScore}
@@ -417,7 +423,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                               </td>
                             )
                           })}
-                          <td className="text-center px-4 py-2.5">
+                          <td className="text-center px-4 py-2.5 whitespace-nowrap">
                             {(() => {
                               const hwStatus = homeworkStatusForSession(g.sessionNum)
                               if (hwStatus === '제출') return <span className="text-xs text-green-600 font-medium">제출</span>
@@ -427,7 +433,7 @@ export default function StudentDetail({ student, onClose }: Props) {
                               return <span className="text-slate-300 text-xs">-</span>
                             })()}
                           </td>
-                          <td className="text-center px-4 py-2.5">
+                          <td className="text-center px-4 py-2.5 whitespace-nowrap">
                             {hasRetest
                               ? <RotateCcw size={15} className="text-orange-400 mx-auto" />
                               : <span className="text-slate-300 text-xs">-</span>
