@@ -1,69 +1,142 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
 
-    // Registration requests — users can read/write their own
+    function isSuperAdmin() {
+      return signedIn() && request.auth.token.email == 'teronein@gmail.com';
+    }
+
+    function regPath(uid) {
+      return /databases/$(database)/documents/registrations/$(uid);
+    }
+
+    function hasRegistration(uid) {
+      return exists(regPath(uid));
+    }
+
+    function myRegistration() {
+      return get(regPath(request.auth.uid)).data;
+    }
+
+    function myAcademyId() {
+      return hasRegistration(request.auth.uid) && ('academyId' in myRegistration())
+        ? myRegistration().academyId
+        : 'node-default';
+    }
+
+    function isApproved() {
+      return signedIn()
+        && hasRegistration(request.auth.uid)
+        && myRegistration().status == 'approved';
+    }
+
+    function isAcademyMember(academyId) {
+      return isSuperAdmin() || (isApproved() && myAcademyId() == academyId);
+    }
+
+    function isAcademyAdmin(academyId) {
+      return isSuperAdmin()
+        || (
+          isApproved()
+          && myAcademyId() == academyId
+          && myRegistration().role == '관리자'
+        );
+    }
+
+    function isDefaultMember() {
+      return isSuperAdmin() || (isApproved() && myAcademyId() == 'node-default');
+    }
+
+    function isAssignedJogyo(userId) {
+      return isApproved()
+        && myRegistration().role == '조교'
+        && (
+          myRegistration().assignedTeacherUid == userId
+          || (
+            'assignedTeacherUids' in myRegistration()
+            && userId in myRegistration().assignedTeacherUids
+          )
+        );
+    }
+
+    match /academies/{academyId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isAcademyAdmin(academyId);
+
+      match /config/{docId} {
+        allow read: if isAcademyMember(academyId);
+        allow write: if isAcademyAdmin(academyId);
+      }
+
+      match /appData/{userId} {
+        allow read, write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
+          || isAcademyAdmin(academyId)
+          || (isAcademyMember(academyId) && isAssignedJogyo(userId));
+      }
+
+      match /users/{userId} {
+        allow read, write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
+          || isAcademyAdmin(academyId);
+      }
+
+      match /sharedStudentRosters/{userId} {
+        allow read: if isAcademyMember(academyId);
+        allow write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
+          || isAcademyAdmin(academyId)
+          || (isAcademyMember(academyId) && isAssignedJogyo(userId));
+      }
+
+      match /studentDashboardRows/{rowId} {
+        allow read, write: if isAcademyMember(academyId);
+      }
+    }
+
     match /registrations/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      // Admin can read/write all registrations
-      allow read, write: if request.auth != null
-        && request.auth.token.email == 'teronein@gmail.com';
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if isSuperAdmin();
+      allow read, update, delete: if signedIn()
+        && resource.data.academyId == myAcademyId()
+        && isAcademyAdmin(resource.data.academyId);
     }
 
-    // User profile metadata (set by admin on approval)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow read, write: if request.auth != null
-        && request.auth.token.email == 'teronein@gmail.com';
+      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isDefaultMember() && myRegistration().role == '관리자';
     }
 
-    // Shared config (admin UID for 조교 access)
     match /config/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.auth.token.email == 'teronein@gmail.com';
+      allow read: if isDefaultMember();
+      allow write: if isSuperAdmin() || (isDefaultMember() && myRegistration().role == '관리자');
     }
 
-    // App state per user (grades, homework, schedule, etc.)
     match /appData/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      // Admin can read/write any user's data (for viewing mode)
-      allow read, write: if request.auth != null
-        && request.auth.token.email == 'teronein@gmail.com';
-      // 조교 can read/write assigned teacher's data
-      allow read, write: if request.auth != null
-        && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.role == '조교'
-        && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.status == 'approved'
-        && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.assignedTeacherUid == userId;
-      // Any authenticated user can read admin's appData (for shared schedule announcements)
-      allow read: if request.auth != null
+      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isDefaultMember() && myRegistration().role == '관리자';
+      allow read, write: if isDefaultMember() && isAssignedJogyo(userId);
+      allow read: if isDefaultMember()
         && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
     }
 
-    // Shared roster for the student dashboard.
-    // This exposes only classes/students needed for the shared sheet, not each teacher's full appData.
     match /sharedStudentRosters/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (
-        request.auth.uid == userId
-        || request.auth.token.email == 'teronein@gmail.com'
-        || (
-          get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.role == '조교'
-          && get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.status == 'approved'
-          && (
-            get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.assignedTeacherUid == userId
-            || (
-              'assignedTeacherUids' in get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data
-              && userId in get(/databases/$(database)/documents/registrations/$(request.auth.uid)).data.assignedTeacherUids
-            )
-          )
-        )
-      );
+      allow read: if isDefaultMember();
+      allow write: if isSuperAdmin()
+        || (signedIn() && request.auth.uid == userId)
+        || (isDefaultMember() && myRegistration().role == '관리자')
+        || (isDefaultMember() && isAssignedJogyo(userId));
     }
 
-    // Shared editable cells for the student dashboard.
     match /studentDashboardRows/{rowId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isDefaultMember();
     }
   }
 }

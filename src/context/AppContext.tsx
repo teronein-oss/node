@@ -767,13 +767,24 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null)
 
-export function AppProvider({ children, uid, isAdmin = false }: { children: ReactNode; uid: string; isAdmin?: boolean }) {
+export function AppProvider({
+  children,
+  uid,
+  academyId,
+  isAdmin = false,
+}: {
+  children: ReactNode
+  uid: string
+  academyId?: string
+  isAdmin?: boolean
+}) {
   const [state, baseDispatch] = useReducer(reducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
   const [globalScheduleEvents, setGlobalScheduleEvents] = useState<ScheduleEvent[]>([])
   const [visibleCount, setVisibleCount] = useState(8)
   const dispatch = useAppPersistence({
     uid,
+    academyId,
     isAdmin,
     state,
     loading,

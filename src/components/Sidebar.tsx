@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
-  const { user, isAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingJogyoTeachers, signOut, jogyoTeachers, switchTeacher, setViewingUid } = useAuth()
+  const { user, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingJogyoTeachers, signOut, jogyoTeachers, switchTeacher, setViewingUid } = useAuth()
   const navigate = useNavigate()
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
@@ -90,7 +90,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           ))}
 
           {/* 관리자 모드 */}
-          {isAdmin && (
+          {(isAdmin || isAcademyAdmin) && (
             <>
               <div className="my-3 border-t border-slate-700" />
               <NavLink

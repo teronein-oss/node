@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { GraduationCap, LogIn, UserPlus } from 'lucide-react'
 import { useAuth, ROLES } from '../context/AuthContext'
 
@@ -16,20 +16,15 @@ function GoogleIcon() {
 type Mode = 'select' | 'register'
 
 export default function LoginPage() {
-  const { firebaseUser, registrationStatus, signInWithGoogle, signOut, submitRegistration, approvedTeachers } = useAuth()
+  const { firebaseUser, registrationStatus, signInWithGoogle, signOut, submitRegistration } = useAuth()
   const [mode, setMode] = useState<Mode>('select')
   const [name, setName] = useState('')
   const [role, setRole] = useState<string>(ROLES[0])
-  const [selectedTeacherUid, setSelectedTeacherUid] = useState<string>('')
+  const [academyMode, setAcademyMode] = useState<'join' | 'create'>('join')
+  const [academyName, setAcademyName] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (role === '조교' && approvedTeachers.length > 0 && !selectedTeacherUid) {
-      setSelectedTeacherUid(approvedTeachers[0].uid)
-    }
-    if (role !== '조교') setSelectedTeacherUid('')
-  }, [role, approvedTeachers])
 
   const handleGoogleLogin = async (nextMode?: Mode) => {
     setError('')
@@ -52,13 +47,22 @@ export default function LoginPage() {
 
   const handleSubmit = async () => {
     if (!name.trim()) return
-    if (role === '조교' && !selectedTeacherUid) return
+    if (academyMode === 'create' && !academyName.trim()) return
+    if (academyMode === 'join' && !inviteCode.trim()) return
     setSubmitting(true)
     setError('')
     try {
-      await submitRegistration(name.trim(), role, role === '조교' ? selectedTeacherUid : undefined)
-    } catch {
-      setError('가입신청 중 오류가 발생했습니다.')
+      await submitRegistration(
+        name.trim(),
+        academyMode === 'create' ? '관리자' : role,
+        undefined,
+        { mode: academyMode, academyName, inviteCode }
+      )
+    } catch (e: unknown) {
+      const message = (e as Error)?.message
+      setError(message === 'academy-not-found'
+        ? '초대코드에 해당하는 학원을 찾을 수 없습니다.'
+        : '가입신청 중 오류가 발생했습니다.')
       setSubmitting(false)
     }
   }
@@ -139,34 +143,59 @@ export default function LoginPage() {
               autoFocus
               className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
             />
-            <select
-              value={role}
-              onChange={e => setRole(e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
-            >
-              {ROLES.map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-            {role === '조교' && (
-              <select
-                value={selectedTeacherUid}
-                onChange={e => setSelectedTeacherUid(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAcademyMode('join')}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${academyMode === 'join' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
               >
-                {approvedTeachers.length === 0 ? (
-                  <option value="">등록된 선생님 없음</option>
-                ) : (
-                  approvedTeachers.map(t => (
-                    <option key={t.uid} value={t.uid}>{t.displayName} 선생님</option>
-                  ))
-                )}
-              </select>
+                초대코드 참여
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcademyMode('create')}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${academyMode === 'create' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+              >
+                새 학원 만들기
+              </button>
+            </div>
+            {academyMode === 'join' ? (
+              <>
+                <input
+                  type="text"
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                  placeholder="학원 초대코드"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                />
+                <select
+                  value={role}
+                  onChange={e => setRole(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
+                >
+                  {ROLES.filter(r => r !== '관리자').map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <input
+                type="text"
+                value={academyName}
+                onChange={e => setAcademyName(e.target.value)}
+                placeholder="학원 이름"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+              />
             )}
             {error && <p className="text-xs text-red-500 text-center">{error}</p>}
             <button
               onClick={handleSubmit}
-              disabled={!name.trim() || submitting || (role === '조교' && approvedTeachers.length > 0 && !selectedTeacherUid)}
+              disabled={
+                !name.trim()
+                || submitting
+                || (academyMode === 'create' && !academyName.trim())
+                || (academyMode === 'join' && !inviteCode.trim())
+              }
               className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 transition-colors"
             >
               {submitting ? '신청 중...' : '가입신청'}

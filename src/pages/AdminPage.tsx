@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
+import { deleteDoc } from 'firebase/firestore'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users, Settings } from 'lucide-react'
-import { doc, deleteDoc } from 'firebase/firestore'
-import { db } from '../firebase'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
+import { appDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
 
 function AdminTabs() {
   const { pathname } = useLocation()
@@ -28,7 +28,7 @@ function AdminTabs() {
 }
 
 export default function AdminPage() {
-  const { approveUser, rejectUser, deleteRegistration, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo } = useAuth()
+  const { approveUser, rejectUser, deleteRegistration, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo, isAdmin, user } = useAuth()
   const [registrations, setRegistrations] = useState<RegistrationInfo[]>([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -36,7 +36,7 @@ export default function AdminPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await fetchAllRegistrations()
+      const data = await fetchAllRegistrations(user?.academyId, isAdmin)
       setRegistrations(data)
     } finally {
       setLoading(false)
@@ -78,18 +78,18 @@ export default function AdminPage() {
       const uid = teacherUid ?? getJogyoUids(reg)[0]
       if (uid) {
         const jogyoTeacherList = teachers.filter(t => getJogyoUids(reg).includes(t.uid))
-        setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교', jogyoTeacherList)
+        setViewingUid(uid, `${reg.displayName} 조교 뷰`, '조교', jogyoTeacherList, reg.academyId, reg.academyName)
       }
     } else {
-      setViewingUid(reg.uid, reg.displayName, reg.role)
+      setViewingUid(reg.uid, reg.displayName, reg.role, undefined, reg.academyId, reg.academyName)
     }
     navigate('/')
   }
 
-  const handleResetData = async (uid: string, name: string) => {
+  const handleResetData = async (uid: string, name: string, academyId?: string) => {
     if (!confirm(`"${name}" 계정의 모든 데이터(반, 학생, 성적 등)를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return
-    await deleteDoc(doc(db, 'appData', uid))
-    await deleteDoc(doc(db, 'sharedStudentRosters', uid))
+    await deleteDoc(appDataDoc(uid, academyId ?? user?.academyId))
+    await deleteDoc(sharedStudentRosterDoc(uid, academyId ?? user?.academyId))
   }
 
   if (loading) {
@@ -105,6 +105,13 @@ export default function AdminPage() {
       <div className="space-y-4">
         <h1 className="text-xl font-bold text-slate-800">관리자 패널</h1>
         <AdminTabs />
+        {user?.academyId && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+            <p className="text-xs font-semibold text-blue-700">학원 초대코드</p>
+            <p className="mt-1 text-sm font-bold text-slate-800">{user.academyId}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{user.academyName} 구성원 가입 시 이 코드를 입력합니다</p>
+          </div>
+        )}
       </div>
 
       {/* 승인 대기 */}
@@ -179,7 +186,7 @@ export default function AdminPage() {
                         <Eye size={13} />대시보드 보기
                       </button>
                       <button
-                        onClick={() => handleResetData(teacher.uid, teacher.displayName)}
+                        onClick={() => handleResetData(teacher.uid, teacher.displayName, teacher.academyId)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200 transition-colors"
                         title="반·학생·성적 데이터 초기화"
                       >

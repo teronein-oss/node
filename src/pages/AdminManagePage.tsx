@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { getDocs, getDoc, setDoc, query, where } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X, Users, GraduationCap, Loader2, Clock, Settings } from 'lucide-react'
 import { genId } from '../utils/helpers'
 import { displayName } from '../utils/displayName'
 import type { Class, WithdrawalReason } from '../types'
+import { appDataDoc, registrationsCollection, sharedStudentRosterDoc } from '../utils/firestorePaths'
 
 const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
   { value: 'mon-fri', label: '월·금' },
@@ -15,7 +15,7 @@ const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
   { value: 'mon-wed-fri', label: '월·수·금' },
 ]
 
-interface TeacherInfo { uid: string; displayName: string; role: string }
+interface TeacherInfo { uid: string; displayName: string; role: string; academyId?: string; academyName?: string }
 interface ClassData { id: string; name: string; days: string }
 interface StudentData {
   id: string
@@ -51,12 +51,13 @@ function AdminTabs() {
 }
 
 export default function AdminManagePage() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isAcademyAdmin, user } = useAuth()
   const navigate = useNavigate()
 
   const [teachers, setTeachers] = useState<TeacherInfo[]>([])
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState('')
+  const [selectedAcademyId, setSelectedAcademyId] = useState<string | undefined>(undefined)
   const [classes, setClasses] = useState<ClassData[]>([])
   const [students, setStudents] = useState<StudentData[]>([])
   const [appDataRef, setAppDataRef] = useState<AppData>({})
@@ -65,24 +66,28 @@ export default function AdminManagePage() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (!isAdmin) { navigate('/'); return }
-    getDocs(collection(db, 'registrations')).then(snap => {
+    if (!isAdmin && !isAcademyAdmin) { navigate('/'); return }
+    const regQuery = isAdmin
+      ? registrationsCollection()
+      : query(registrationsCollection(), where('academyId', '==', user?.academyId ?? ''))
+    getDocs(regQuery).then(snap => {
       const list: TeacherInfo[] = []
       snap.forEach(d => {
         const data = d.data()
         if (data.status === 'approved' && (data.role === '선생님' || data.role === '관리자')) {
-          list.push({ uid: d.id, displayName: displayName(data.displayName), role: data.role })
+          list.push({ uid: d.id, displayName: displayName(data.displayName), role: data.role, academyId: data.academyId, academyName: data.academyName })
         }
       })
       setTeachers(list.sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko')))
     })
-  }, [isAdmin, navigate])
+  }, [isAdmin, isAcademyAdmin, navigate, user?.academyId])
 
   const selectTeacher = async (t: TeacherInfo) => {
     setSelectedUid(t.uid)
     setSelectedName(t.displayName)
+    setSelectedAcademyId(t.academyId ?? user?.academyId)
     setLoadingTeacher(true)
-    const snap = await getDoc(doc(db, 'appData', t.uid))
+    const snap = await getDoc(appDataDoc(t.uid, t.academyId ?? user?.academyId))
     const data: AppData = snap.exists() ? snap.data() : {}
     setAppDataRef(data)
     setClasses(data.classes ?? [])
@@ -96,8 +101,8 @@ export default function AdminManagePage() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     setSavingMsg('저장 중...')
     saveTimer.current = setTimeout(async () => {
-      await setDoc(doc(db, 'appData', selectedUid), { ...appDataRef, classes: newClasses, students: newStudents })
-      await setDoc(doc(db, 'sharedStudentRosters', selectedUid), {
+      await setDoc(appDataDoc(selectedUid, selectedAcademyId ?? user?.academyId), { ...appDataRef, classes: newClasses, students: newStudents })
+      await setDoc(sharedStudentRosterDoc(selectedUid, selectedAcademyId ?? user?.academyId), {
         uid: selectedUid,
         classes: newClasses,
         students: newStudents,
@@ -144,7 +149,7 @@ export default function AdminManagePage() {
     scheduleSave(classes, updated)
   }
 
-  if (!isAdmin) return null
+  if (!isAdmin && !isAcademyAdmin) return null
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">

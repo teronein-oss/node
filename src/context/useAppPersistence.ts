@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { onSnapshot, setDoc } from 'firebase/firestore'
 import type { ScheduleEvent } from '../types'
 import type { Action, AppState } from './AppContext'
+import { appDataDoc, configDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
 
 interface UseAppPersistenceParams {
   uid: string
+  academyId?: string
   isAdmin: boolean
   state: AppState
   loading: boolean
@@ -24,6 +25,7 @@ const getGlobalEvents = (events: ScheduleEvent[] = []) =>
 
 export function useAppPersistence({
   uid,
+  academyId,
   isAdmin,
   state,
   loading,
@@ -34,7 +36,7 @@ export function useAppPersistence({
   legacyStorageKey,
   scheduleActionTypes,
 }: UseAppPersistenceParams): Dispatch<Action> {
-  const firestoreDoc = useMemo(() => doc(db, 'appData', uid), [uid])
+  const firestoreDoc = useMemo(() => appDataDoc(uid, academyId), [uid, academyId])
   const stateRef = useRef(state)
   stateRef.current = state
   const loadingRef = useRef(true)
@@ -45,7 +47,7 @@ export function useAppPersistence({
   // 비관리자: config/sharedData 구독해서 전체 공지 일정 수신
   useEffect(() => {
     if (isAdmin) return
-    const sharedRef = doc(db, 'config', 'sharedData')
+    const sharedRef = configDoc(academyId)
     return onSnapshot(sharedRef, (snap) => {
       if (snap.exists()) {
         const raw = ((snap.data().globalScheduleEvents ?? []) as Record<string, unknown>[])
@@ -69,7 +71,7 @@ export function useAppPersistence({
   useEffect(() => {
     if (!isAdmin || loading) return
     setDoc(
-      doc(db, 'config', 'sharedData'),
+      configDoc(academyId),
       { globalScheduleEvents: toFirestoreData(getGlobalEvents(state.scheduleEvents)) },
       { merge: true }
     ).catch(err => console.error('❌ 전체 일정 동기화 실패:', err?.code))
@@ -91,7 +93,7 @@ export function useAppPersistence({
           // 관리자가 일정을 변경한 경우 전체 공지 일정을 config/sharedData에 동기화
           if (isAdmin && scheduleActionTypes.has(action.type)) {
             setDoc(
-              doc(db, 'config', 'sharedData'),
+              configDoc(academyId),
               { globalScheduleEvents: toFirestoreData(getGlobalEvents(stateRef.current.scheduleEvents)) },
               { merge: true }
             )
@@ -119,7 +121,7 @@ export function useAppPersistence({
           // 관리자 계정 로드 시 기존 전체 공지 일정도 즉시 동기화
           if (isAdmin) {
             setDoc(
-              doc(db, 'config', 'sharedData'),
+              configDoc(academyId),
               { globalScheduleEvents: toFirestoreData(getGlobalEvents(normalized.scheduleEvents)) },
               { merge: true }
             )
@@ -149,13 +151,13 @@ export function useAppPersistence({
 
   useEffect(() => {
     if (loading) return
-    setDoc(doc(db, 'sharedStudentRosters', uid), {
+    setDoc(sharedStudentRosterDoc(uid, academyId), {
       uid,
       classes: toFirestoreData(state.classes ?? []),
       students: toFirestoreData(state.students ?? []),
       updatedAt: new Date().toISOString(),
     }, { merge: true }).catch(err => console.error('공유 학생 명단 동기화 실패:', err?.code))
-  }, [uid, loading, state.classes, state.students])
+  }, [uid, academyId, loading, state.classes, state.students])
 
   return dispatch
 }

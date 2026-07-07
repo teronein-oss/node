@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { collection, doc, getDocs, onSnapshot, setDoc } from 'firebase/firestore'
+import { getDocs, onSnapshot, setDoc } from 'firebase/firestore'
 import { Check, LayoutGrid, Loader2 } from 'lucide-react'
-import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import type { Class, Student } from '../types'
+import { appDataCollection, sharedStudentRosterDoc, sharedStudentRostersCollection, studentDashboardRowDoc, studentDashboardRowsCollection } from '../utils/firestorePaths'
 
 interface SharedRoster {
   uid: string
@@ -211,7 +211,7 @@ function ScoreDeltaCell({ midScore, finalScore }: { midScore?: string; finalScor
 }
 
 export default function StudentDashboardPage() {
-  const { approvedTeachers, isAdmin, user } = useAuth()
+  const { approvedTeachers, isAdmin, isAcademyAdmin, user } = useAuth()
   const [rosters, setRosters] = useState<SharedRoster[]>([])
   const [sheetRows, setSheetRows] = useState<Record<string, SheetRowData>>({})
   const [activeSchool, setActiveSchool] = useState('')
@@ -229,15 +229,15 @@ export default function StudentDashboardPage() {
   )
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'sharedStudentRosters'), (snap) => {
+    const unsub = onSnapshot(sharedStudentRostersCollection(user?.academyId), (snap) => {
       setRosters(snap.docs.map(d => ({ uid: d.id, ...(d.data() as Omit<SharedRoster, 'uid'>) })))
       setLoading(false)
     }, () => setLoading(false))
     return unsub
-  }, [])
+  }, [user?.academyId])
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'studentDashboardRows'), (snap) => {
+    const unsub = onSnapshot(studentDashboardRowsCollection(user?.academyId), (snap) => {
       const next: Record<string, SheetRowData> = {}
       snap.docs.forEach(d => {
         next[d.id] = d.data() as SheetRowData
@@ -245,16 +245,16 @@ export default function StudentDashboardPage() {
       setSheetRows(next)
     })
     return unsub
-  }, [])
+  }, [user?.academyId])
 
   useEffect(() => {
-    if (!isAdmin || adminBootstrapDone.current) return
+    if ((!isAdmin && !isAcademyAdmin) || adminBootstrapDone.current) return
     adminBootstrapDone.current = true
-    getDocs(collection(db, 'appData')).then(async snap => {
+    getDocs(appDataCollection(user?.academyId)).then(async snap => {
       await Promise.all(snap.docs.map(async appDoc => {
         const data = appDoc.data() as { classes?: Class[]; students?: Student[] }
         if (!Array.isArray(data.classes) && !Array.isArray(data.students)) return
-        await setDoc(doc(db, 'sharedStudentRosters', appDoc.id), {
+        await setDoc(sharedStudentRosterDoc(appDoc.id, user?.academyId), {
           uid: appDoc.id,
           classes: data.classes ?? [],
           students: data.students ?? [],
@@ -262,7 +262,7 @@ export default function StudentDashboardPage() {
         }, { merge: true })
       }))
     }).catch(err => console.error('공유 학생 명단 초기 동기화 실패:', err?.code))
-  }, [isAdmin])
+  }, [isAdmin, isAcademyAdmin, user?.academyId])
 
   const rows = useMemo(() => {
     const built: DashboardRow[] = []
@@ -386,7 +386,7 @@ export default function StudentDashboardPage() {
   const updateRow = async (rowId: string, patch: SheetRowData) => {
     const prev = sheetRows[rowId] ?? {}
     setSheetRows(cur => ({ ...cur, [rowId]: { ...(cur[rowId] ?? {}), ...patch } }))
-    await setDoc(doc(db, 'studentDashboardRows', rowId), {
+    await setDoc(studentDashboardRowDoc(rowId, user?.academyId), {
       ...prev,
       ...patch,
       updatedAt: new Date().toISOString(),

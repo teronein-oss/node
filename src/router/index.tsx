@@ -10,8 +10,8 @@ function ScheduleGuard({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { isAdmin, viewingUid } = useAuth()
-  if (!isAdmin || viewingUid) return <Navigate to="/" replace />
+  const { isAdmin, isAcademyAdmin, viewingUid } = useAuth()
+  if ((!isAdmin && !isAcademyAdmin) || viewingUid) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
