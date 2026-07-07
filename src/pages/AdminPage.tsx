@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { deleteDoc } from 'firebase/firestore'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users, Settings } from 'lucide-react'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
 import { appDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
+import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
 
 function AdminTabs() {
   const { pathname } = useLocation()
@@ -31,6 +32,7 @@ export default function AdminPage() {
   const { approveUser, rejectUser, deleteRegistration, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo, isAdmin, user } = useAuth()
   const [registrations, setRegistrations] = useState<RegistrationInfo[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeAcademyId, setActiveAcademyId] = useState('')
   const navigate = useNavigate()
 
   const load = async () => {
@@ -45,9 +47,38 @@ export default function AdminPage() {
 
   useEffect(() => { load() }, [])
 
-  const pending = registrations.filter(r => r.status === 'pending')
-  const approved = registrations.filter(r => r.status === 'approved')
-  const rejected = registrations.filter(r => r.status === 'rejected')
+  const academyGroups = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; registrations: RegistrationInfo[] }>()
+    for (const reg of registrations) {
+      const id = normalizeAcademyId(reg.academyId)
+      const name = normalizeAcademyName(reg.academyName)
+      const group = map.get(id) ?? { id, name, registrations: [] }
+      group.registrations.push(reg)
+      map.set(id, group)
+    }
+    if (!map.has(DEFAULT_ACADEMY_ID) && user?.academyId === DEFAULT_ACADEMY_ID) {
+      map.set(DEFAULT_ACADEMY_ID, { id: DEFAULT_ACADEMY_ID, name: DEFAULT_ACADEMY_NAME, registrations: [] })
+    }
+    return [...map.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id)
+    )
+  }, [registrations, user?.academyId])
+
+  const currentAcademyId = isAdmin
+    ? (activeAcademyId && academyGroups.some(a => a.id === activeAcademyId)
+      ? activeAcademyId
+      : academyGroups[0]?.id ?? user?.academyId ?? DEFAULT_ACADEMY_ID)
+    : user?.academyId ?? DEFAULT_ACADEMY_ID
+  const currentAcademy = academyGroups.find(a => a.id === currentAcademyId) ?? {
+    id: currentAcademyId,
+    name: normalizeAcademyName(user?.academyName),
+    registrations: [],
+  }
+
+  const currentRegistrations = currentAcademy.registrations
+  const pending = currentRegistrations.filter(r => r.status === 'pending')
+  const approved = currentRegistrations.filter(r => r.status === 'approved')
+  const rejected = currentRegistrations.filter(r => r.status === 'rejected')
 
   const teachers = approved.filter(r => r.role === '선생님' || r.role === '관리자')
   const jogyoList = approved.filter(r => r.role === '조교')
@@ -112,6 +143,38 @@ export default function AdminPage() {
             <p className="mt-0.5 text-xs text-slate-500">{user.academyName} 구성원 가입 시 이 코드를 입력합니다</p>
           </div>
         )}
+        {isAdmin && academyGroups.length > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <p className="mb-2 text-xs font-semibold text-slate-500">학원별 관리</p>
+            <div className="flex flex-wrap gap-2">
+              {academyGroups.map(academy => {
+                const count = academy.registrations.length
+                return (
+                  <button
+                    key={academy.id}
+                    onClick={() => setActiveAcademyId(academy.id)}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                      currentAcademyId === academy.id
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="block font-semibold">{academy.name}</span>
+                    <span className="text-[11px] opacity-80">{academy.id} · {count}명</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <p className="text-xs font-semibold text-slate-500">현재 관리 중인 학원</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="text-lg font-bold text-slate-800">{currentAcademy.name}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{currentAcademy.id}</span>
+        </div>
       </div>
 
       {/* 승인 대기 */}

@@ -54,7 +54,7 @@ export default function LoginPage() {
     try {
       await submitRegistration(
         name.trim(),
-        academyMode === 'create' ? '관리자' : role,
+        academyMode === 'create' ? '선생님' : role,
         undefined,
         { mode: academyMode, academyName, inviteCode }
       )
@@ -123,7 +123,8 @@ export default function LoginPage() {
             </p>
           </div>
 
-        ) : registrationStatus === 'none' || (registrationStatus === 'approved' && mode === 'register') ? (
+        ) : registrationStatus === 'none'
+          || ((registrationStatus === 'approved' || registrationStatus === 'rejected') && mode === 'register') ? (
           /* ── 가입신청 폼 ── */
           <div className="space-y-4">
             <div className="text-center mb-2">
@@ -229,6 +230,15 @@ export default function LoginPage() {
               <p className="font-semibold text-red-700">허락되지 않은 계정입니다</p>
               <p className="text-sm text-slate-500 mt-1">관리자에게 문의하세요</p>
             </div>
+            <button
+              onClick={() => {
+                setMode('register')
+                setError('')
+              }}
+              className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              가입신청 다시 하기
+            </button>
             <button onClick={signOut} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
               로그아웃
             </button>

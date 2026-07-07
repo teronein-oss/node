@@ -296,7 +296,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ownerUid: firebaseUser.uid,
         createdAt: new Date().toISOString(),
       }, { merge: true })
-      role = '관리자'
     } else if (academy?.mode === 'join' && academy.inviteCode?.trim()) {
       academyId = academy.inviteCode.trim().toUpperCase()
       const academySnap = await getDoc(academyDoc(academyId))

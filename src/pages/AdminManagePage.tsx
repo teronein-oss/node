@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { getDocs, getDoc, setDoc, query, where } from 'firebase/firestore'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
@@ -7,6 +7,7 @@ import { genId } from '../utils/helpers'
 import { displayName } from '../utils/displayName'
 import type { Class, WithdrawalReason } from '../types'
 import { appDataDoc, registrationsCollection, sharedStudentRosterDoc } from '../utils/firestorePaths'
+import { normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
 
 const DAYS_OPTIONS: { value: Class['days']; label: string }[] = [
   { value: 'mon-fri', label: '월·금' },
@@ -64,6 +65,20 @@ export default function AdminManagePage() {
   const [loadingTeacher, setLoadingTeacher] = useState(false)
   const [savingMsg, setSavingMsg] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const teacherGroups = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; teachers: TeacherInfo[] }>()
+    for (const teacher of teachers) {
+      const id = normalizeAcademyId(teacher.academyId ?? user?.academyId)
+      const name = normalizeAcademyName(teacher.academyName ?? user?.academyName)
+      const group = map.get(id) ?? { id, name, teachers: [] }
+      group.teachers.push(teacher)
+      map.set(id, group)
+    }
+    return [...map.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, 'ko') || a.id.localeCompare(b.id)
+    )
+  }, [teachers, user?.academyId, user?.academyName])
 
   useEffect(() => {
     if (!isAdmin && !isAcademyAdmin) { navigate('/'); return }
@@ -180,19 +195,29 @@ export default function AdminManagePage() {
           {teachers.length === 0 ? (
             <p className="text-xs text-slate-400 text-center py-6">없음</p>
           ) : (
-            <div className="divide-y divide-slate-50">
-              {teachers.map(t => (
-                <button
-                  key={t.uid}
-                  onClick={() => selectTeacher(t)}
-                  className={`w-full text-left px-4 py-3 text-sm transition-colors
-                    ${selectedUid === t.uid
-                      ? 'bg-blue-50 text-blue-700 font-semibold'
-                      : 'text-slate-700 hover:bg-slate-50'}`}
-                >
-                  <div>{t.displayName}</div>
-                  <div className="text-xs text-slate-400 font-normal">{t.role}</div>
-                </button>
+            <div>
+              {teacherGroups.map(group => (
+                <div key={group.id} className="border-b border-slate-100 last:border-b-0">
+                  <div className="bg-slate-50 px-4 py-2">
+                    <div className="text-xs font-semibold text-slate-600">{group.name}</div>
+                    <div className="text-[11px] text-slate-400">{group.id}</div>
+                  </div>
+                  <div className="divide-y divide-slate-50">
+                    {group.teachers.map(t => (
+                      <button
+                        key={t.uid}
+                        onClick={() => selectTeacher(t)}
+                        className={`w-full text-left px-4 py-3 text-sm transition-colors
+                          ${selectedUid === t.uid
+                            ? 'bg-blue-50 text-blue-700 font-semibold'
+                            : 'text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        <div>{t.displayName}</div>
+                        <div className="text-xs text-slate-400 font-normal">{t.role}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
