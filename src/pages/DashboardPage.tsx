@@ -296,10 +296,10 @@ function TodayFocusPanel({
         <div className="divide-y divide-slate-50">
           {rows.map(row => (
             <div key={row.classId} className="px-5 py-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-slate-700">{row.className}</span>
+              <div className="mb-2 space-y-1">
+                <span className="block whitespace-nowrap text-sm font-semibold text-slate-700">{row.className}</span>
                 {row.homeworkDescription && (
-                  <span className="truncate text-xs text-slate-400">{row.homeworkDescription}</span>
+                  <span className="block truncate text-xs text-slate-400">{row.homeworkDescription}</span>
                 )}
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
