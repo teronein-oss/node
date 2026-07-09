@@ -572,15 +572,12 @@ export default function DashboardPage() {
 
     return state.classes
       .map(cls => {
-        const sessionNum = getClassDateMapForWeek(cls, [todayStr]).get(todayStr)
-        if (!sessionNum) return null
-
         const activeStudents = state.students
           .filter(s => s.active && s.classId === cls.id)
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
         const studentIds = new Set(activeStudents.map(s => s.id))
         const retests = state.retests.filter(
-          r => r.sessionNum === sessionNum && studentIds.has(r.studentId) && (r.passed === null || r.passed === true)
+          r => r.retestDate === todayStr && r.passed === null && studentIds.has(r.studentId)
         )
         const vocabRetests = retests
           .filter(r => r.type === 'vocab')
@@ -589,7 +586,7 @@ export default function DashboardPage() {
           .filter(r => r.type === 'daily')
           .map(r => ({ id: r.id, name: getStudentName(r.studentId), passed: r.passed }))
         const dueHomeworks = state.homeworks.filter(
-          h => h.sessionNum < sessionNum && (h.classId === cls.id || h.classId === '')
+          h => h.classId === cls.id || h.classId === ''
         )
         const homeworkTargets: TodayHomeworkItem[] = []
         const homeworkBadSet = new Set<string>()
