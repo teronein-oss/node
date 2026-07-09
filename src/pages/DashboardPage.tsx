@@ -385,7 +385,7 @@ function TodayHomeworkList({
   return (
     <div className="space-y-1">
       {items.map(item => (
-        <div key={item.studentId} className="flex items-center justify-between gap-2 rounded-lg bg-orange-50 px-2 py-1.5">
+        <div key={`${item.assignmentId ?? item.sessionNum}-${item.studentId}`} className="flex items-center justify-between gap-2 rounded-lg bg-orange-50 px-2 py-1.5">
           <span className="truncate text-xs font-medium text-orange-700">{item.name}</span>
           {item.completed ? (
             <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">완료</span>
@@ -588,47 +588,67 @@ export default function DashboardPage() {
         const dailyRetests = retests
           .filter(r => r.type === 'daily')
           .map(r => ({ id: r.id, name: getStudentName(r.studentId), passed: r.passed }))
-        const hw = state.homeworks.find(
-          h => h.sessionNum === sessionNum - 1 && (h.classId === cls.id || h.classId === '')
+        const dueHomeworks = state.homeworks.filter(
+          h => h.sessionNum < sessionNum && (h.classId === cls.id || h.classId === '')
         )
-        const homeworkTargets: TodayHomeworkItem[] = hw ? activeStudents.map(student => {
-          const itemIds = (hw.items ?? []).map(item => item.id)
-          const itemStatuses = (hw.items ?? []).map(item =>
-            (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
-          )
-          const gradeStatus = state.grades.find(g => g.studentId === student.id && g.sessionNum === sessionNum)?.homeworkDone
-          return {
-            studentId: student.id,
-            name: student.name,
-            assignmentId: hw.id,
-            itemIds,
-            sessionNum,
-            completed: itemStatuses.length > 0
-              ? itemStatuses.every(status => status === '제출' || status === '재확인완료')
-              : gradeStatus === '제출' || gradeStatus === '재확인완료',
-          }
-        }) : []
+        const homeworkTargets: TodayHomeworkItem[] = []
         const homeworkBadSet = new Set<string>()
         const homeworkMissingSet = new Set<string>()
+        const homeworkDescriptionSet = new Set<string>()
 
-        if (hw?.items?.length) {
-          const worstMap = new Map<string, number>()
-          for (const item of hw.items) {
-            for (const ss of (item.studentStatuses ?? [])) {
-              if (!studentIds.has(ss.studentId)) continue
-              const rank = statusRank[ss.status] ?? 0
-              if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
+        for (const hw of dueHomeworks) {
+          const defaultRecheckDate = getClassDate(hw.sessionNum + 2, cls.days, cls.weekdays)
+          const description = hw.description || (hw.items ?? []).map(item => item.text).join(', ')
+
+          if (hw.items?.length) {
+            const targetsByStudent = new Map<string, { itemIds: string[]; rank: number }>()
+            for (const item of hw.items) {
+              for (const ss of (item.studentStatuses ?? [])) {
+                if (!studentIds.has(ss.studentId)) continue
+                const rank = statusRank[ss.status] ?? 0
+                if (rank < 2) continue
+                const recheckDate = hw.recheckDates?.find(rd => rd.studentId === ss.studentId)?.date ?? defaultRecheckDate
+                if (recheckDate !== todayStr) continue
+                const target = targetsByStudent.get(ss.studentId) ?? { itemIds: [], rank: 0 }
+                target.itemIds.push(item.id)
+                target.rank = Math.max(target.rank, rank)
+                targetsByStudent.set(ss.studentId, target)
+              }
             }
-          }
-          for (const [studentId, rank] of worstMap) {
-            const name = getStudentName(studentId)
-            if (rank === 3) homeworkMissingSet.add(name)
-            else if (rank === 2) homeworkBadSet.add(name)
-          }
-        } else if (hw) {
-          for (const g of state.grades.filter(g => g.sessionNum === sessionNum && studentIds.has(g.studentId))) {
-            if (g.attendance === '결석') continue
-            if (g.homeworkDone === '미흡') homeworkBadSet.add(getStudentName(g.studentId))
+            for (const [studentId, target] of targetsByStudent) {
+              const student = activeStudents.find(s => s.id === studentId)
+              if (!student) continue
+              homeworkTargets.push({
+                studentId,
+                name: student.name,
+                assignmentId: hw.id,
+                itemIds: target.itemIds,
+                sessionNum: hw.sessionNum + 1,
+                completed: false,
+              })
+              if (description) homeworkDescriptionSet.add(description)
+              const name = getStudentName(studentId)
+              if (target.rank === 3) homeworkMissingSet.add(name)
+              else if (target.rank === 2) homeworkBadSet.add(name)
+            }
+          } else {
+            const checkSessionNum = hw.sessionNum + 1
+            for (const g of state.grades.filter(g => g.sessionNum === checkSessionNum && studentIds.has(g.studentId))) {
+              if (g.attendance === '결석') continue
+              if (g.homeworkDone !== '미흡') continue
+              const recheckDate = hw.recheckDates?.find(rd => rd.studentId === g.studentId)?.date ?? defaultRecheckDate
+              if (recheckDate !== todayStr) continue
+              homeworkTargets.push({
+                studentId: g.studentId,
+                name: getStudentName(g.studentId),
+                assignmentId: hw.id,
+                itemIds: [],
+                sessionNum: checkSessionNum,
+                completed: false,
+              })
+              if (description) homeworkDescriptionSet.add(description)
+              homeworkBadSet.add(getStudentName(g.studentId))
+            }
           }
         }
 
@@ -640,7 +660,7 @@ export default function DashboardPage() {
           homeworkTargets,
           homeworkBadNames: [...homeworkBadSet].filter(name => !homeworkMissingSet.has(name)),
           homeworkMissingNames: [...homeworkMissingSet],
-          homeworkDescription: hw?.description || (hw?.items ?? []).map(item => item.text).join(', '),
+          homeworkDescription: [...homeworkDescriptionSet].join(' / '),
         }
         const hasTargets = row.vocabRetests.length > 0 || row.dailyRetests.length > 0 || row.homeworkTargets.length > 0
         return hasTargets ? row : null
@@ -659,11 +679,11 @@ export default function DashboardPage() {
       for (const itemId of item.itemIds) {
         dispatch({
           type: 'SET_ITEM_STUDENT_STATUS',
-          payload: { assignmentId: item.assignmentId, itemId, studentId: item.studentId, status: '제출' },
+          payload: { assignmentId: item.assignmentId, itemId, studentId: item.studentId, status: '재확인완료' },
         })
       }
     } else {
-      dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: item.studentId, sessionNum: item.sessionNum, status: '제출' } })
+      dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: item.studentId, sessionNum: item.sessionNum, status: '재확인완료' } })
     }
   }
 
