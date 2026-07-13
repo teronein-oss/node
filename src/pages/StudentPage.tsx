@@ -3,6 +3,7 @@ import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calend
 import { useApp } from '../context/AppContext'
 import type { Student, FilterType, WithdrawalReason } from '../types'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
+import { fmtDate, getClassDate } from '../utils/helpers'
 import StudentDetail from './StudentDetail'
 
 const WITHDRAWAL_REASONS: WithdrawalReason[] = [
@@ -49,6 +50,16 @@ export default function StudentPage() {
 
   // selectedYM / setSelectedYM come from global context (shared across pages)
   const selectedMonthInfo = availableMonths.find(m => m.ym === selectedYM) ?? availableMonths[0]
+  const selectedMonthStartDate = selectedMonthInfo
+    ? `${selectedMonthInfo.year}-${String(selectedMonthInfo.month).padStart(2, '0')}-01`
+    : ''
+  const selectedMonthEndDate = selectedMonthInfo
+    ? fmtDate(new Date(selectedMonthInfo.year, selectedMonthInfo.month, 0))
+    : ''
+  const homeworkIssueKeySeparator = '::'
+  const isDateInSelectedMonth = (date?: string) =>
+    !!date && !!selectedMonthStartDate && !!selectedMonthEndDate
+    && date >= selectedMonthStartDate && date <= selectedMonthEndDate
 
   const classMonthSessions = useMemo(() => {
     const map = new Map<string, Set<number>>()
@@ -76,15 +87,44 @@ export default function StudentPage() {
     return classMonthSessions.get(student.classId)?.has(sessionNum) ?? false
   }
 
-  // 선택 월 기준 성적·재시험 데이터
+  // 선택 월 기준 성적·재시험·숙제 데이터
   const monthGrades = state.grades.filter(g => isStudentSessionInSelectedMonth(g.studentId, g.sessionNum))
-  const monthRetests = state.retests.filter(r => isStudentSessionInSelectedMonth(r.studentId, r.sessionNum))
+  const monthRetests = state.retests.filter(r => {
+    const student = state.students.find(s => s.id === r.studentId)
+    const cls = student ? state.classes.find(c => c.id === student.classId) : undefined
+    const scheduledDate = r.retestDate ?? (cls ? getClassDate(r.sessionNum + 1, cls.days, cls.weekdays) : undefined)
+    return isDateInSelectedMonth(scheduledDate)
+  })
+
+  const monthHomeworkIssueKeys = new Set<string>()
+  for (const hw of state.homeworks) {
+    for (const student of state.students.filter(s => s.active && (hw.classId === s.classId || hw.classId === ''))) {
+      const cls = state.classes.find(c => c.id === student.classId)
+      if (!cls) continue
+      const checkSessionNum = hw.sessionNum + 1
+      const checkDate = getClassDate(checkSessionNum, cls.days, cls.weekdays)
+      if (!isDateInSelectedMonth(checkDate)) continue
+
+      const items = hw.items ?? []
+      const hasItemIssue = items.some(item => {
+        const status = (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status
+        return status === '미흡' || status === '미제출'
+      })
+      const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSessionNum)
+      const assignGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === hw.sessionNum)
+      const hasLegacyIssue = items.length === 0 && (assignGrade?.homeworkDone === '미흡' || checkGrade?.homeworkDone === '미흡')
+      if (hasItemIssue || hasLegacyIssue) monthHomeworkIssueKeys.add(`${student.id}${homeworkIssueKeySeparator}${checkSessionNum}`)
+    }
+  }
+  for (const g of monthGrades) {
+    if (g.homeworkDone === '미흡') monthHomeworkIssueKeys.add(`${g.studentId}${homeworkIssueKeySeparator}${g.sessionNum}`)
+  }
 
   const pendingRetestIds = new Set(
     monthRetests.filter(r => r.passed === null).map(r => r.studentId)
   )
   const noHomeworkIds = new Set(
-    monthGrades.filter(g => g.homeworkDone === '미흡').map(g => g.studentId)
+    [...monthHomeworkIssueKeys].map(key => key.split(homeworkIssueKeySeparator)[0])
   )
 
   const filteredStudents = state.students
@@ -612,7 +652,7 @@ export default function StudentPage() {
             filteredStudents.map(student => {
               const studentGrades = monthGrades.filter(g => g.studentId === student.id)
               const studentRetests = monthRetests.filter(r => r.studentId === student.id && r.passed === null)
-              const noHwCount = studentGrades.filter(g => g.homeworkDone === '미흡').length
+              const noHwCount = [...monthHomeworkIssueKeys].filter(key => key.startsWith(`${student.id}${homeworkIssueKeySeparator}`)).length
               const recorded = studentGrades.length
               const totalSessions = classMonthSessions.get(student.classId)?.size ?? 0
 
@@ -661,7 +701,7 @@ export default function StudentPage() {
 
       {/* 학생 상세 모달 */}
       {selected && (
-        <StudentDetail student={selected} onClose={() => setSelected(null)} />
+        <StudentDetail student={selected} onClose={() => setSelected(null)} initialFromDate={selectedMonthStartDate} />
       )}
     </div>
   )

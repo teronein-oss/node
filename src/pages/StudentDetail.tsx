@@ -8,6 +8,7 @@ import { toPng } from 'html-to-image'
 interface Props {
   student: Student
   onClose: () => void
+  initialFromDate?: string
 }
 
 const WITHDRAWAL_REASONS: WithdrawalReason[] = [
@@ -19,7 +20,7 @@ const WITHDRAWAL_REASONS: WithdrawalReason[] = [
   '알 수 없음',
 ]
 
-export default function StudentDetail({ student, onClose }: Props) {
+export default function StudentDetail({ student, onClose, initialFromDate = '' }: Props) {
   const { state, dispatch } = useApp()
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState<WithdrawalReason>('알 수 없음')
@@ -27,7 +28,7 @@ export default function StudentDetail({ student, onClose }: Props) {
   const [showTransfer, setShowTransfer] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(student.name)
-  const [fromDate, setFromDate] = useState<string>('')
+  const [fromDate, setFromDate] = useState<string>(initialFromDate)
   const [toDate, setToDate] = useState<string>('')
   const [downloading, setDownloading] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
