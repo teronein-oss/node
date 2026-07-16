@@ -23,8 +23,13 @@ interface StudentData {
   name: string
   classId: string
   active: boolean
+  registeredAt?: string
+  registeredByUid?: string
+  registeredByName?: string
   withdrawalReason?: WithdrawalReason
   withdrawnAt?: string
+  withdrawnByUid?: string
+  withdrawnByName?: string
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AppData = Record<string, any>
@@ -89,7 +94,7 @@ export default function AdminManagePage() {
       const list: TeacherInfo[] = []
       snap.forEach(d => {
         const data = d.data()
-        if (data.status === 'approved' && (data.role === '선생님' || data.role === '관리자')) {
+        if (data.status === 'approved' && (data.role === '선생님' || data.role === '관리자' || data.role === '원장')) {
           list.push({ uid: d.id, displayName: displayName(data.displayName), role: data.role, academyId: data.academyId, academyName: data.academyName })
         }
       })
@@ -140,8 +145,9 @@ export default function AdminManagePage() {
     scheduleSave(updated, students)
   }
   const deleteClass = (id: string) => {
+    const now = new Date().toISOString()
     const updatedClasses = classes.filter(c => c.id !== id)
-    const updatedStudents = students.map(s => s.classId === id ? { ...s, active: false } : s)
+    const updatedStudents = students.map(s => s.classId === id ? { ...s, active: false, withdrawnAt: s.withdrawnAt ?? now, withdrawnByUid: user?.uid, withdrawnByName: user?.displayName } : s)
     setClasses(updatedClasses)
     setStudents(updatedStudents)
     scheduleSave(updatedClasses, updatedStudents)
@@ -149,7 +155,15 @@ export default function AdminManagePage() {
 
   // ── 학생 CRUD ────────────────────────────────────────────────────────────
   const addStudent = (name: string, classId: string) => {
-    const updated = [...students, { id: genId(), name, classId, active: true }]
+    const updated = [...students, {
+      id: genId(),
+      name,
+      classId,
+      active: true,
+      registeredAt: new Date().toISOString(),
+      registeredByUid: user?.uid,
+      registeredByName: user?.displayName,
+    }]
     setStudents(updated)
     scheduleSave(classes, updated)
   }
@@ -159,7 +173,8 @@ export default function AdminManagePage() {
     scheduleSave(classes, updated)
   }
   const deleteStudent = (id: string) => {
-    const updated = students.map(s => s.id === id ? { ...s, active: false } : s)
+    const now = new Date().toISOString()
+    const updated = students.map(s => s.id === id ? { ...s, active: false, withdrawnAt: s.withdrawnAt ?? now, withdrawnByUid: user?.uid, withdrawnByName: user?.displayName } : s)
     setStudents(updated)
     scheduleSave(classes, updated)
   }
@@ -460,7 +475,7 @@ function ClassCard({
             ))}
           </div>
 
-          {/* 학생 추가 */}
+          {/* 학생 등록 */}
           <div className="px-5 py-3 border-t border-slate-50">
             {addingStudent ? (
               <div className="flex items-center gap-2">
@@ -488,7 +503,7 @@ function ClassCard({
                 onClick={() => setAddingStudent(true)}
                 className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-600 transition-colors"
               >
-                <Plus size={13} />학생 추가
+                <Plus size={13} />학생 등록
               </button>
             )}
           </div>

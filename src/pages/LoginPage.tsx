@@ -54,7 +54,7 @@ export default function LoginPage() {
     try {
       await submitRegistration(
         name.trim(),
-        academyMode === 'create' ? '선생님' : role,
+        academyMode === 'create' ? '원장' : role,
         undefined,
         { mode: academyMode, academyName, inviteCode }
       )

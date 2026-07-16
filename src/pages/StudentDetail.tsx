@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react'
 import { X, RotateCcw, Trash2, ArrowRightLeft, BookOpen, Download, Pencil, Check } from 'lucide-react'
 import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason, WeekdayKey } from '../types'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { getClassDate, formatDateKo, fmtDate, normalizeClassWeekdays, getCurrentClassSessionNum } from '../utils/helpers'
 import { toPng } from 'html-to-image'
 
@@ -22,6 +23,7 @@ const WITHDRAWAL_REASONS: WithdrawalReason[] = [
 
 export default function StudentDetail({ student, onClose, initialFromDate = '' }: Props) {
   const { state, dispatch } = useApp()
+  const { user } = useAuth()
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState<WithdrawalReason>('알 수 없음')
   const [transferClassId, setTransferClassId] = useState('')
@@ -150,13 +152,16 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
   )
 
   const handleWithdraw = () => {
+    const now = new Date().toISOString()
     dispatch({
       type: 'UPDATE_STUDENT',
       payload: {
         ...student,
         active: false,
         withdrawalReason,
-        withdrawnAt: new Date().toISOString(),
+        withdrawnAt: now,
+        withdrawnByUid: user?.uid,
+        withdrawnByName: user?.displayName,
       },
     })
     onClose()

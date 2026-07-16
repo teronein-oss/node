@@ -73,6 +73,7 @@ interface AuthContextValue {
   approveUser: (uid: string) => Promise<void>
   rejectUser: (uid: string) => Promise<void>
   deleteRegistration: (uid: string) => Promise<void>
+  updateUserRole: (uid: string, role: string) => Promise<void>
   assignTeacher: (jogyoUid: string, teacherUid: string | null) => Promise<void>
   addTeacherToJogyo: (jogyoUid: string, teacherUid: string) => Promise<void>
   removeTeacherFromJogyo: (jogyoUid: string, teacherUid: string) => Promise<void>
@@ -80,7 +81,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const ROLES = ['관리자', '선생님', '조교', '학생', '학부모'] as const
+const ROLES = ['관리자', '원장', '선생님', '조교', '학생', '학부모'] as const
 
 export { ROLES }
 
@@ -182,13 +183,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             academyName: DEFAULT_ACADEMY_NAME,
             createdAt: (existing?.data() as RegistrationInfo | undefined)?.createdAt ?? new Date().toISOString(),
           }, { merge: true })
-          // 승인된 선생님 + 관리자를 approvedTeachers에 동기화 (조교 전환 드롭다운에서 관리자도 표시되도록)
+          // 승인된 선생님 + 관리자/원장을 approvedTeachers에 동기화 (조교 전환 드롭다운에서 표시되도록)
           const teacherMap: Record<string, string> = {
             [fbUser.uid]: adminDisplayName,
           }
           snap.docs.forEach(d => {
             const reg = d.data() as RegistrationInfo
-            if (reg.role === '선생님' && reg.status === 'approved') {
+            if ((reg.role === '선생님' || reg.role === '관리자' || reg.role === '원장') && reg.status === 'approved') {
               teacherMap[reg.uid] = displayName(reg.displayName)
             }
           })
@@ -217,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               academyId,
               academyName,
             })
-            setIsAcademyAdmin(data.role === '관리자')
+            setIsAcademyAdmin(data.role === '관리자' || data.role === '원장')
             setRegistrationStatus('approved')
             if (data.role === '조교') {
               const uids = data.assignedTeacherUids ?? (data.assignedTeacherUid ? [data.assignedTeacherUid] : [])
@@ -334,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         academyName: normalizeAcademyName(reg.academyName),
         approvedAt: new Date().toISOString(),
       }, { merge: true })
-      if (reg.role === '선생님' || reg.role === '관리자') {
+      if (reg.role === '선생님' || reg.role === '관리자' || reg.role === '원장') {
         await setDoc(configDoc(reg.academyId), {
           approvedTeachers: { [uid]: reg.displayName }
         }, { merge: true })
@@ -351,8 +352,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const regSnap = await getDoc(regRef)
     const reg = regSnap.exists() ? regSnap.data() as RegistrationInfo : null
     await deleteDoc(regRef)
-    if (reg?.role === '선생님' || reg?.role === '관리자') {
+    if (reg?.role === '선생님' || reg?.role === '관리자' || reg?.role === '원장') {
       await updateDoc(configDoc(reg.academyId), {
+        [`approvedTeachers.${uid}`]: deleteField()
+      })
+    }
+  }
+
+  const updateUserRole = async (uid: string, role: string) => {
+    const regRef = registrationDoc(uid, DEFAULT_ACADEMY_ID)
+    const regSnap = await getDoc(regRef)
+    if (!regSnap.exists()) return
+    const reg = regSnap.data() as RegistrationInfo
+    const academyId = normalizeAcademyId(reg.academyId)
+    const rosterRoles = ['선생님', '관리자', '원장']
+
+    await updateDoc(regRef, { role })
+    await setDoc(userDoc(uid, academyId), { role }, { merge: true })
+
+    if (rosterRoles.includes(role)) {
+      await setDoc(configDoc(academyId), {
+        approvedTeachers: { [uid]: reg.displayName }
+      }, { merge: true })
+    } else if (rosterRoles.includes(reg.role)) {
+      await updateDoc(configDoc(academyId), {
         [`approvedTeachers.${uid}`]: deleteField()
       })
     }
@@ -385,7 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       firebaseUser, user, registrationStatus, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingAcademyId, viewingAcademyName, viewingJogyoTeachers, setViewingUid,
       approvedTeachers, jogyoTeacherUids, jogyoTeachers, switchTeacher,
       signInWithGoogle, signOut, submitRegistration,
-      approveUser, rejectUser, deleteRegistration, assignTeacher, addTeacherToJogyo, removeTeacherFromJogyo,
+      approveUser, rejectUser, deleteRegistration, updateUserRole, assignTeacher, addTeacherToJogyo, removeTeacherFromJogyo,
     }}>
       {children}
     </AuthContext.Provider>

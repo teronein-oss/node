@@ -29,8 +29,13 @@ export interface Student {
   name: string
   classId: string
   active: boolean
+  registeredAt?: string
+  registeredByUid?: string
+  registeredByName?: string
   withdrawalReason?: WithdrawalReason
   withdrawnAt?: string
+  withdrawnByUid?: string
+  withdrawnByName?: string
 }
 
 export interface ScoreColumn {

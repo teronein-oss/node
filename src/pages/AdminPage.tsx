@@ -28,8 +28,10 @@ function AdminTabs() {
   )
 }
 
+const ROLE_OPTIONS = ['원장', '선생님', '조교', '학생', '학부모']
+
 export default function AdminPage() {
-  const { approveUser, rejectUser, deleteRegistration, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo, isAdmin, user } = useAuth()
+  const { approveUser, rejectUser, deleteRegistration, updateUserRole, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo, isAdmin, user } = useAuth()
   const [registrations, setRegistrations] = useState<RegistrationInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [activeAcademyId, setActiveAcademyId] = useState('')
@@ -80,8 +82,9 @@ export default function AdminPage() {
   const approved = currentRegistrations.filter(r => r.status === 'approved')
   const rejected = currentRegistrations.filter(r => r.status === 'rejected')
 
-  const teachers = approved.filter(r => r.role === '선생님' || r.role === '관리자')
+  const teachers = approved.filter(r => r.role === '선생님' || r.role === '관리자' || r.role === '원장')
   const jogyoList = approved.filter(r => r.role === '조교')
+  const otherApproved = approved.filter(r => !teachers.some(t => t.uid === r.uid) && r.role !== '조교')
 
   const getJogyoUids = (r: RegistrationInfo) =>
     r.assignedTeacherUids ?? (r.assignedTeacherUid ? [r.assignedTeacherUid] : [])
@@ -101,6 +104,12 @@ export default function AdminPage() {
   const handleDelete = async (uid: string) => {
     if (!confirm('삭제하시겠습니까?')) return
     await deleteRegistration(uid)
+    await load()
+  }
+
+  const handleRoleChange = async (reg: RegistrationInfo, role: string) => {
+    if (reg.role === role) return
+    await updateUserRole(reg.uid, role)
     await load()
   }
 
@@ -244,6 +253,16 @@ export default function AdminPage() {
                       <p className="text-xs text-slate-500">{teacher.email}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <select
+                        value={teacher.role}
+                        onChange={e => handleRoleChange(teacher, e.target.value)}
+                        className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                        title="권한 변경"
+                      >
+                        {ROLE_OPTIONS.map(role => (
+                          <option key={role} value={role}>{role}</option>
+                        ))}
+                      </select>
                       <button
                         onClick={() => handleView(teacher)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
@@ -306,6 +325,16 @@ export default function AdminPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
+                            <select
+                              value={jogyo.role}
+                              onChange={e => handleRoleChange(jogyo, e.target.value)}
+                              className="border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                              title="권한 변경"
+                            >
+                              {ROLE_OPTIONS.map(role => (
+                                <option key={role} value={role}>{role}</option>
+                              ))}
+                            </select>
                             <button
                               onClick={() => handleView(jogyo, teacher.uid)}
                               className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition-colors"
@@ -408,8 +437,59 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    value={jogyo.role}
+                    onChange={e => handleRoleChange(jogyo, e.target.value)}
+                    className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                    title="권한 변경"
+                  >
+                    {ROLE_OPTIONS.map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={() => handleDelete(jogyo.uid)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium hover:bg-red-100 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 size={13} />삭제
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 기타 승인 사용자 */}
+      {otherApproved.length > 0 && (
+        <section>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">
+            <Users size={14} />
+            기타 가입자 ({otherApproved.length})
+          </h2>
+          <div className="space-y-2">
+            {otherApproved.map(reg => (
+              <div key={reg.uid} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">
+                    {reg.displayName}
+                    <span className="ml-2 text-xs text-slate-400">({reg.role})</span>
+                  </p>
+                  <p className="text-xs text-slate-500">{reg.email}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    value={reg.role}
+                    onChange={e => handleRoleChange(reg, e.target.value)}
+                    className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                    title="권한 변경"
+                  >
+                    {ROLE_OPTIONS.map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleDelete(reg.uid)}
                     className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium hover:bg-red-100 hover:text-red-600 transition-colors"
                   >
                     <Trash2 size={13} />삭제

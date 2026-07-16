@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
@@ -25,6 +25,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
   const effectiveAcademyId = viewingUid ? viewingAcademyId : user?.academyId
   const isJogyo = effectiveRole === '조교'
+  const isPrincipal = effectiveRole === '원장' || effectiveRole === '관리자'
   const visibleNavItems = NAV_ITEMS.filter(item => {
     if (isJogyo && item.to === '/schedule') return false
     if (item.to === '/student-dashboard' && effectiveAcademyId !== DEFAULT_ACADEMY_ID) return false
@@ -94,6 +95,23 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               {label}
             </NavLink>
           ))}
+
+          {isPrincipal && !viewingUid && (
+            <NavLink
+              to="/principal"
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 text-sm font-medium transition-colors
+                ${isActive
+                  ? 'bg-emerald-600 text-white'
+                  : 'text-emerald-300 hover:bg-slate-700 hover:text-emerald-200'
+                }`
+              }
+            >
+              <BarChart3 size={18} />
+              원장 대시보드
+            </NavLink>
+          )}
 
           {/* 관리자 모드 */}
           {(isAdmin || isAcademyAdmin) && (

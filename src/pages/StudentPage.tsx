@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, RotateCcw, Users } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import type { Student, FilterType, WithdrawalReason } from '../types'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import { fmtDate, getClassDate } from '../utils/helpers'
@@ -17,6 +18,7 @@ const WITHDRAWAL_REASONS: WithdrawalReason[] = [
 
 export default function StudentPage() {
   const { state, dispatch, selectedYM, setSelectedYM } = useApp()
+  const { user } = useAuth()
 
   const [search, setSearch] = useState('')
   const [classFilter, setClassFilter] = useState(() => {
@@ -31,7 +33,7 @@ export default function StudentPage() {
   const [returningStudentId, setReturningStudentId] = useState<string | null>(null)
   const [returnClassId, setReturnClassId] = useState(state.classes[0]?.id ?? '')
 
-  // 새 학생 추가 폼
+  // 새 학생 등록 폼
   const [newName, setNewName] = useState('')
   const [newClass, setNewClass] = useState(state.classes[0]?.id ?? '')
   const [bulkNames, setBulkNames] = useState('')
@@ -149,9 +151,17 @@ export default function StudentPage() {
 
   const handleAddStudent = () => {
     if (!newName.trim()) return
+    const now = new Date().toISOString()
     dispatch({
       type: 'ADD_STUDENT',
-      payload: { name: newName.trim(), classId: newClass, active: true },
+      payload: {
+        name: newName.trim(),
+        classId: newClass,
+        active: true,
+        registeredAt: now,
+        registeredByUid: user?.uid,
+        registeredByName: user?.displayName,
+      },
     })
     setNewName('')
     setShowAdd(false)
@@ -164,10 +174,18 @@ export default function StudentPage() {
 
   const handleBulkAddStudents = () => {
     if (!bulkClass || bulkNameList.length === 0) return
+    const now = new Date().toISOString()
     bulkNameList.forEach(name => {
       dispatch({
         type: 'ADD_STUDENT',
-        payload: { name, classId: bulkClass, active: true },
+        payload: {
+          name,
+          classId: bulkClass,
+          active: true,
+          registeredAt: now,
+          registeredByUid: user?.uid,
+          registeredByName: user?.displayName,
+        },
       })
     })
     setBulkNames('')
@@ -198,6 +216,8 @@ export default function StudentPage() {
           active: false,
           withdrawalReason: student.withdrawalReason ?? '알 수 없음',
           withdrawnAt: student.withdrawnAt ?? now,
+          withdrawnByUid: user?.uid,
+          withdrawnByName: user?.displayName,
         },
       })
     })
@@ -234,6 +254,9 @@ export default function StudentPage() {
       name: student.name,
       classId: returnClassId,
       active: true,
+      registeredAt: student.registeredAt,
+      registeredByUid: student.registeredByUid,
+      registeredByName: student.registeredByName,
     }
     dispatch({ type: 'UPDATE_STUDENT', payload: restoredStudent })
     cancelReturnStudent()
@@ -246,6 +269,8 @@ export default function StudentPage() {
         ...student,
         withdrawalReason: reason,
         withdrawnAt: student.withdrawnAt ?? new Date().toISOString(),
+        withdrawnByUid: student.withdrawnByUid ?? user?.uid,
+        withdrawnByName: student.withdrawnByName ?? user?.displayName,
       },
     })
   }
@@ -295,7 +320,7 @@ export default function StudentPage() {
               }`}
           >
             <Plus size={16} />
-            일괄 추가
+            일괄 등록
           </button>
           <button
             onClick={() => {
@@ -321,7 +346,7 @@ export default function StudentPage() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
             <UserPlus size={16} />
-            학생 추가
+            학생 등록
           </button>
         </div>
       </div>
@@ -409,10 +434,10 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* 일괄 학생 추가 폼 */}
+      {/* 일괄 학생 등록 폼 */}
       {showBulkAdd && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-blue-800 mb-3">학생 일괄 추가</h3>
+          <h3 className="text-sm font-semibold text-blue-800 mb-3">학생 일괄 등록</h3>
           <div className="space-y-3">
             <div className="flex flex-wrap gap-3 items-end">
               <div>
@@ -428,7 +453,7 @@ export default function StudentPage() {
                 </select>
               </div>
               <div className="text-xs text-slate-500">
-                추가 예정 <span className="font-semibold text-blue-700">{bulkNameList.length}</span>명
+                등록 예정 <span className="font-semibold text-blue-700">{bulkNameList.length}</span>명
               </div>
             </div>
             <div>
@@ -447,7 +472,7 @@ export default function StudentPage() {
                 disabled={!bulkClass || bulkNameList.length === 0}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
               >
-                {bulkNameList.length}명 추가
+                {bulkNameList.length}명 등록
               </button>
               <button
                 onClick={() => setShowBulkAdd(false)}
@@ -513,10 +538,10 @@ export default function StudentPage() {
         </div>
       )}
 
-      {/* 학생 추가 폼 */}
+      {/* 학생 등록 폼 */}
       {showAdd && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-blue-800 mb-3">새 학생 추가</h3>
+          <h3 className="text-sm font-semibold text-blue-800 mb-3">새 학생 등록</h3>
           <div className="flex flex-wrap gap-3 items-end">
             <div>
               <label className="text-xs text-slate-500 mb-1 block">이름</label>
@@ -547,7 +572,7 @@ export default function StudentPage() {
                 disabled={!newName.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
               >
-                추가
+                등록
               </button>
               <button
                 onClick={() => setShowAdd(false)}

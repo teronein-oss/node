@@ -16,6 +16,12 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function PrincipalGuard({ children }: { children: React.ReactNode }) {
+  const { user, isAdmin, viewingUid } = useAuth()
+  if ((!isAdmin && user?.role !== '원장' && user?.role !== '관리자') || viewingUid) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 function StudentDashboardGuard({ children }: { children: React.ReactNode }) {
   const { user, viewingUid, viewingAcademyId } = useAuth()
   const effectiveAcademyId = viewingUid ? viewingAcademyId : user?.academyId
@@ -33,6 +39,7 @@ const ClinicPage = lazy(() => import('../pages/ClinicPage'))
 const ClassManagePage = lazy(() => import('../pages/ClassManagePage'))
 const AdminPage = lazy(() => import('../pages/AdminPage'))
 const AdminManagePage = lazy(() => import('../pages/AdminManagePage'))
+const PrincipalDashboardPage = lazy(() => import('../pages/PrincipalDashboardPage'))
 
 function PageLoader() {
   return (
@@ -81,6 +88,7 @@ export const router = createBrowserRouter([
       { path: 'clinic', element: <Lazy><ClinicPage /></Lazy> },
       { path: 'classes', element: <Lazy><ClassManagePage /></Lazy> },
       { path: 'schedule', element: <ScheduleGuard><Lazy><SchedulePage /></Lazy></ScheduleGuard> },
+      { path: 'principal', element: <PrincipalGuard><Lazy><PrincipalDashboardPage /></Lazy></PrincipalGuard> },
       { path: 'admin', element: <AdminGuard><Lazy><AdminPage /></Lazy></AdminGuard> },
       { path: 'admin/manage', element: <AdminGuard><Lazy><AdminManagePage /></Lazy></AdminGuard> },
     ],

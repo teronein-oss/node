@@ -113,7 +113,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'ADD_STUDENT':
       return {
         ...state,
-        students: [...state.students, { ...action.payload, id: genId() }],
+        students: [...state.students, { ...action.payload, id: genId(), registeredAt: action.payload.registeredAt ?? new Date().toISOString() }],
       }
 
     case 'UPDATE_STUDENT':
@@ -125,7 +125,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'DEACTIVATE_STUDENT':
       return {
         ...state,
-        students: state.students.map(s => s.id === action.payload ? { ...s, active: false } : s),
+        students: state.students.map(s => s.id === action.payload ? { ...s, active: false, withdrawnAt: s.withdrawnAt ?? new Date().toISOString() } : s),
       }
 
     case 'SAVE_GRADES': {
@@ -334,25 +334,35 @@ function reducer(state: AppState, action: Action): AppState {
         : allStatuses.some(s => s === '재확인완료') ? '재확인완료'
         : '제출'
 
-      const existingGrade = state.grades.find(g => g.studentId === studentId && g.sessionNum === sessionNum)
       const studentClass = state.classes.find(c => c.id === state.students.find(s => s.id === studentId)?.classId)
-      const weekStart = studentClass
-        ? getWeekStart(new Date(getClassDate(sessionNum, studentClass.days, studentClass.weekdays) + 'T00:00:00'))
-        : getWeekStartForSession(sessionNum)
+      const upsertHomeworkGrade = (grades: GradeRecord[], targetSessionNum: number) => {
+        const existingGrade = grades.find(g => g.studentId === studentId && g.sessionNum === targetSessionNum)
+        const weekStart = studentClass
+          ? getWeekStart(new Date(getClassDate(targetSessionNum, studentClass.days, studentClass.weekdays) + 'T00:00:00'))
+          : getWeekStartForSession(targetSessionNum)
 
-      const updatedGrades = existingGrade
-        ? state.grades.map(g =>
-            g.studentId === studentId && g.sessionNum === sessionNum
+        if (existingGrade) {
+          return grades.map(g =>
+            g.studentId === studentId && g.sessionNum === targetSessionNum
               ? { ...g, homeworkDone: derivedStatus }
               : g
           )
-        : [...state.grades, {
-            id: genId(), studentId, sessionNum,
-            weekStart,
-            vocabScore: null, dailyTestScore: null, extras: {},
-            attendance: null, homeworkDone: derivedStatus,
-            createdAt: new Date().toISOString(),
-          }]
+        }
+
+        return [...grades, {
+          id: genId(), studentId, sessionNum: targetSessionNum,
+          weekStart,
+          vocabScore: null, dailyTestScore: null, extras: {},
+          attendance: null, homeworkDone: derivedStatus,
+          createdAt: new Date().toISOString(),
+        }]
+      }
+
+      // 숙제 출제일과 검사일 양쪽 성적 기록을 맞춰 대시보드/숙제관리/성적관리가 같은 상태를 보게 한다.
+      const updatedGrades = upsertHomeworkGrade(
+        upsertHomeworkGrade(state.grades, sessionNum),
+        sessionNum + 1
+      )
 
       return { ...state, homeworks: updatedHomeworks, grades: updatedGrades }
     }
