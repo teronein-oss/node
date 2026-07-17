@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, X, UserX } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Users, X, UserX } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
@@ -31,6 +31,35 @@ function daysBetween(start: string, end: string): string[] {
 function diffDays(start: string, end: string): number {
   return Math.round(
     (new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86400000
+  )
+}
+
+function DashboardModal({
+  title,
+  count,
+  onClose,
+  children,
+}: {
+  title: string
+  count?: number
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8">
+      <div className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+          <h2 className="text-base font-bold text-slate-800">{title}</h2>
+          {count !== undefined && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{count}</span>
+          )}
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="overflow-y-auto">{children}</div>
+      </div>
+    </div>
   )
 }
 
@@ -92,14 +121,54 @@ function SchedulePanel({
     [events, todayStr]
   )
   const todayCount = activeEvents.filter(e => e.startDate <= todayStr && e.endDate >= todayStr).length
+  const previewEvents = activeEvents.slice(0, 4)
+
+  const renderEvent = (e: ScheduleEvent) => {
+    const span = diffDays(e.startDate, e.endDate)
+    const isToday = e.startDate <= todayStr && e.endDate >= todayStr
+    return (
+      <li key={e.id} className={`flex items-start gap-2 px-5 py-2.5 group ${isToday ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
+        <div className="flex-1 min-w-0 pt-0.5">
+          <p className={`text-sm break-words ${e.completed ? 'line-through text-slate-400' : isToday ? 'font-semibold text-red-700' : 'text-slate-700'}`}>
+            {e.title}
+          </p>
+          <p className={`text-xs mt-0.5 ${isToday ? 'text-red-500' : 'text-slate-400'}`}>
+            {span > 0 ? `${e.startDate} ~ ${e.endDate} (${span + 1}일)` : e.startDate}
+          </p>
+        </div>
+        {!readOnly && (
+          <button
+            onClick={() => onToggle(e.id)}
+            className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0
+              ${e.completed
+                ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
+              }`}
+          >
+            <CheckCircle size={11} />
+            {e.completed ? '완료됨' : '완료'}
+          </button>
+        )}
+        {readOnly && e.completed && (
+          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border bg-green-50 text-green-600 border-green-200 shrink-0">
+            <CheckCircle size={11} />완료됨
+          </span>
+        )}
+        {!readOnly && (
+          <button
+            onClick={() => onRemove(e.id)}
+            className="text-slate-300 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100 pt-0.5"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </li>
+    )
+  }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setIsOpen(open => !open)}
-        className="flex w-full items-center gap-2 px-5 py-3 border-b border-slate-100 text-left hover:bg-slate-50 transition-colors"
-      >
+    <div className="h-64 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex w-full items-center gap-2 px-5 py-3 border-b border-slate-100 text-left">
         <Icon size={15} className={iconColor} />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">{title}</h2>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${todayCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -108,56 +177,27 @@ function SchedulePanel({
         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
           전체 {activeEvents.length}
         </span>
-        {isOpen ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronDown size={15} className="text-slate-400" />}
-      </button>
+        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+          전체 보기
+        </button>
+      </div>
+      <ul className="h-[208px] divide-y divide-slate-50 overflow-hidden">
+        {activeEvents.length === 0 && (
+          <li className="px-5 py-16 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
+        )}
+        {previewEvents.map(renderEvent)}
+        {activeEvents.length > previewEvents.length && (
+          <li className="px-5 py-2 text-center text-xs text-slate-400">+{activeEvents.length - previewEvents.length}개 더 있음</li>
+        )}
+      </ul>
       {isOpen && (
-        <ul className="divide-y divide-slate-50">
-          {activeEvents.length === 0 && (
-            <li className="px-5 py-3 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
-          )}
-          {activeEvents.map(e => {
-            const span = diffDays(e.startDate, e.endDate)
-            const isToday = e.startDate <= todayStr && e.endDate >= todayStr
-            return (
-              <li key={e.id} className={`flex items-start gap-2 px-5 py-2.5 group ${isToday ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <p className={`text-sm break-words ${e.completed ? 'line-through text-slate-400' : isToday ? 'font-semibold text-red-700' : 'text-slate-700'}`}>
-                    {e.title}
-                  </p>
-                  <p className={`text-xs mt-0.5 ${isToday ? 'text-red-500' : 'text-slate-400'}`}>
-                    {span > 0 ? `${e.startDate} ~ ${e.endDate} (${span + 1}일)` : e.startDate}
-                  </p>
-                </div>
-                {!readOnly && (
-                  <button
-                    onClick={() => onToggle(e.id)}
-                    className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border transition-colors shrink-0
-                      ${e.completed
-                        ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
-                        : 'bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100'
-                      }`}
-                  >
-                    <CheckCircle size={11} />
-                    {e.completed ? '완료됨' : '완료'}
-                  </button>
-                )}
-                {readOnly && e.completed && (
-                  <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border bg-green-50 text-green-600 border-green-200 shrink-0">
-                    <CheckCircle size={11} />완료됨
-                  </span>
-                )}
-                {!readOnly && (
-                  <button
-                    onClick={() => onRemove(e.id)}
-                    className="text-slate-300 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover:opacity-100 pt-0.5"
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+        <DashboardModal title={title} count={activeEvents.length} onClose={() => setIsOpen(false)}>
+          <ul className="divide-y divide-slate-50">
+            {activeEvents.length === 0
+              ? <li className="px-5 py-10 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
+              : activeEvents.map(renderEvent)}
+          </ul>
+        </DashboardModal>
       )}
     </div>
   )
@@ -267,6 +307,17 @@ interface TodayHomeworkItem {
   completed: boolean
 }
 
+interface ManagementStudent {
+  studentId: string
+  name: string
+  className: string
+  retestCount: number
+  homeworkMissingCount: number
+  homeworkBadCount: number
+  total: number
+  reasons: string[]
+}
+
 function TodayFocusPanel({
   rows,
   onCompleteRetest,
@@ -280,52 +331,87 @@ function TodayFocusPanel({
   const dailyTotal = rows.reduce((sum, row) => sum + row.dailyRetests.length, 0)
   const homeworkTotal = rows.reduce((sum, row) => sum + row.homeworkTargets.length, 0)
   const total = vocabTotal + dailyTotal + homeworkTotal
+  const [isOpen, setIsOpen] = useState(false)
+  const previewRows = rows.slice(0, 2)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+    <div className="h-80 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
         <CheckCircle size={15} className="text-blue-500" />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">오늘 확인</h2>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${total > 0 ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
           대상 {total}
         </span>
+        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+          전체 보기
+        </button>
       </div>
       {rows.length === 0 ? (
-        <div className="px-5 py-4 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+        <div className="px-5 py-28 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
       ) : (
-        <div className="divide-y divide-slate-50">
-          {rows.map(row => (
-            <div key={row.classId} className="px-5 py-3">
-              <div className="mb-2 space-y-1">
-                <span className="block whitespace-nowrap text-sm font-semibold text-slate-700">{row.className}</span>
-                {row.homeworkDescription && (
-                  <span className="block truncate text-xs text-slate-400">{row.homeworkDescription}</span>
-                )}
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <TodayRetestGroup label="단어 재시험" items={row.vocabRetests} color="purple" onComplete={onCompleteRetest} />
-                <TodayRetestGroup label="Daily 재시험" items={row.dailyRetests} color="blue" onComplete={onCompleteRetest} />
-                <div>
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-500">숙제검사</span>
-                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${row.homeworkTargets.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
-                      {row.homeworkTargets.length}
-                    </span>
-                  </div>
-                  <TodayHomeworkList items={row.homeworkTargets} onComplete={onCompleteHomework} />
-                  {(row.homeworkBadNames.length > 0 || row.homeworkMissingNames.length > 0) && (
-                    <div className="mt-2 space-y-1">
-                      <HomeworkStatusLine label="미흡" names={row.homeworkBadNames} color="orange" />
-                      <HomeworkStatusLine label="미제출" names={row.homeworkMissingNames} color="red" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="h-[272px] divide-y divide-slate-50 overflow-hidden">
+          <TodayFocusRows rows={previewRows} onCompleteRetest={onCompleteRetest} onCompleteHomework={onCompleteHomework} />
+          {rows.length > previewRows.length && (
+            <div className="px-5 py-2 text-center text-xs text-slate-400">+{rows.length - previewRows.length}개 반 더 있음</div>
+          )}
         </div>
       )}
+      {isOpen && (
+        <DashboardModal title="오늘 확인 전체" count={total} onClose={() => setIsOpen(false)}>
+          {rows.length === 0 ? (
+            <div className="px-5 py-10 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              <TodayFocusRows rows={rows} onCompleteRetest={onCompleteRetest} onCompleteHomework={onCompleteHomework} />
+            </div>
+          )}
+        </DashboardModal>
+      )}
     </div>
+  )
+}
+
+function TodayFocusRows({
+  rows,
+  onCompleteRetest,
+  onCompleteHomework,
+}: {
+  rows: TodayTaskRow[]
+  onCompleteRetest: (item: TodayRetestItem) => void
+  onCompleteHomework: (item: TodayHomeworkItem) => void
+}) {
+  return (
+    <>
+      {rows.map(row => (
+        <div key={row.classId} className="px-5 py-3">
+          <div className="mb-2 space-y-1">
+            <span className="block whitespace-nowrap text-sm font-semibold text-slate-700">{row.className}</span>
+            {row.homeworkDescription && (
+              <span className="block truncate text-xs text-slate-400">{row.homeworkDescription}</span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <TodayRetestGroup label="단어 재시험" items={row.vocabRetests} color="purple" onComplete={onCompleteRetest} />
+            <TodayRetestGroup label="Daily 재시험" items={row.dailyRetests} color="blue" onComplete={onCompleteRetest} />
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-500">숙제검사</span>
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${row.homeworkTargets.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
+                  {row.homeworkTargets.length}
+                </span>
+              </div>
+              <TodayHomeworkList items={row.homeworkTargets} onComplete={onCompleteHomework} />
+              {(row.homeworkBadNames.length > 0 || row.homeworkMissingNames.length > 0) && (
+                <div className="mt-2 space-y-1">
+                  <HomeworkStatusLine label="미흡" names={row.homeworkBadNames} color="orange" />
+                  <HomeworkStatusLine label="미제출" names={row.homeworkMissingNames} color="red" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 
@@ -665,6 +751,90 @@ export default function DashboardPage() {
       .filter((row): row is TodayTaskRow => row !== null)
   }, [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr])
 
+  const classPopulationRows = useMemo(() => {
+    return state.classes
+      .map(cls => {
+        const activeCount = state.students.filter(s => s.active && s.classId === cls.id).length
+        const inactiveCount = state.students.filter(s => !s.active && s.classId === cls.id).length
+        return {
+          classId: cls.id,
+          className: cls.name,
+          classDays: cls.days,
+          activeCount,
+          inactiveCount,
+        }
+      })
+      .sort((a, b) => b.activeCount - a.activeCount || a.className.localeCompare(b.className, 'ko'))
+  }, [state.classes, state.students])
+
+  const managementStudents = useMemo<ManagementStudent[]>(() => {
+    const activeStudents = state.students.filter(s => s.active)
+    const map = new Map<string, ManagementStudent>()
+
+    for (const student of activeStudents) {
+      const cls = state.classes.find(c => c.id === student.classId)
+      map.set(student.id, {
+        studentId: student.id,
+        name: student.name,
+        className: cls?.name ?? '',
+        retestCount: 0,
+        homeworkMissingCount: 0,
+        homeworkBadCount: 0,
+        total: 0,
+        reasons: [],
+      })
+    }
+
+    for (const retest of state.retests) {
+      if (retest.passed !== null) continue
+      const target = map.get(retest.studentId)
+      if (!target) continue
+      target.retestCount += 1
+    }
+
+    const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1, '제출': 0 }
+    for (const hw of state.homeworks) {
+      const worstByStudent = new Map<string, number>()
+      for (const item of hw.items ?? []) {
+        for (const ss of item.studentStatuses ?? []) {
+          if (!map.has(ss.studentId)) continue
+          const rank = statusRank[ss.status] ?? 0
+          if (rank > (worstByStudent.get(ss.studentId) ?? 0)) worstByStudent.set(ss.studentId, rank)
+        }
+      }
+      for (const [studentId, rank] of worstByStudent) {
+        const target = map.get(studentId)
+        if (!target) continue
+        if (rank === 3) target.homeworkMissingCount += 1
+        if (rank === 2) target.homeworkBadCount += 1
+      }
+    }
+
+    for (const grade of state.grades) {
+      if (grade.homeworkDone !== '미흡') continue
+      const target = map.get(grade.studentId)
+      if (!target) continue
+      target.homeworkBadCount += 1
+    }
+
+    return [...map.values()]
+      .map(student => {
+        const homeworkIssueCount = student.homeworkMissingCount + student.homeworkBadCount
+        const reasons: string[] = []
+        if (student.retestCount >= 3) reasons.push(`재시험 ${student.retestCount}회`)
+        if (student.homeworkMissingCount >= 3) reasons.push(`숙제 미제출 ${student.homeworkMissingCount}회`)
+        if (student.homeworkBadCount >= 3) reasons.push(`숙제 미흡 ${student.homeworkBadCount}회`)
+        if (homeworkIssueCount >= 3 && student.homeworkMissingCount < 3 && student.homeworkBadCount < 3) reasons.push(`숙제 문제 ${homeworkIssueCount}회`)
+        return {
+          ...student,
+          total: student.retestCount + homeworkIssueCount,
+          reasons,
+        }
+      })
+      .filter(student => student.reasons.length > 0)
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
+  }, [state.classes, state.students, state.retests, state.homeworks, state.grades])
+
   const completeTodayRetest = (item: TodayRetestItem) => {
     if (!confirm(`${item.name} 재시험을 통과 처리하겠습니까?`)) return
     dispatch({ type: 'SAVE_RETEST', payload: { id: item.id, retestScore: null, passed: true } })
@@ -812,11 +982,11 @@ export default function DashboardPage() {
   const isAllTab = true
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-16">
+    <div className="max-w-7xl mx-auto space-y-6 pb-16">
 
       {/* 상단: 일정 패널 + 달력 */}
-      <div className="grid grid-cols-3 gap-4 items-start">
-        <div className="col-span-2 space-y-3">
+      <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-3">
+        <div className="space-y-3 xl:col-span-2">
           <SchedulePanel
             title="업무 공지"
             icon={Megaphone}
@@ -830,6 +1000,11 @@ export default function DashboardPage() {
           <TodayFocusPanel rows={todayTaskRows} onCompleteRetest={completeTodayRetest} onCompleteHomework={completeTodayHomework} />
         </div>
         <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <ClassPopulationPanel rows={classPopulationRows} />
+        <ManagementNeededPanel students={managementStudents} />
       </div>
 
       {/* 헤더 */}
@@ -1091,6 +1266,103 @@ export default function DashboardPage() {
         </div>
       </section>
     </div>
+  )
+}
+
+function ClassPopulationPanel({
+  rows,
+}: {
+  rows: { classId: string; className: string; classDays: string; activeCount: number; inactiveCount: number }[]
+}) {
+  const total = rows.reduce((sum, row) => sum + row.activeCount, 0)
+  const previewRows = rows.slice(0, 6)
+
+  return (
+    <section className="h-72 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
+        <Users size={15} className="text-blue-500" />
+        <h2 className="font-semibold text-slate-800 text-sm flex-1">반별 인원 현황</h2>
+        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">전체 {total}명</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-20 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {previewRows.map(row => (
+            <div key={row.classId} className="flex items-center gap-3 px-5 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-slate-800">{row.className}</div>
+                <div className="mt-0.5 text-xs text-slate-400">{getClassDaysLabel(row.classDays)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-slate-800">{row.activeCount}명</div>
+                {row.inactiveCount > 0 && <div className="text-[11px] text-slate-400">퇴원 {row.inactiveCount}</div>}
+              </div>
+            </div>
+          ))}
+          {rows.length > previewRows.length && (
+            <div className="px-5 py-2 text-center text-xs text-slate-400">+{rows.length - previewRows.length}개 반 더 있음</div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ManagementNeededPanel({ students }: { students: ManagementStudent[] }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const previewStudents = students.slice(0, 5)
+
+  const renderStudent = (student: ManagementStudent) => (
+    <div key={student.studentId} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
+      <span className={`h-2.5 w-2.5 rounded-full ${student.total >= 5 ? 'bg-red-500' : 'bg-orange-400'}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-slate-800">{student.name}</span>
+          <span className="text-xs text-slate-400">{student.className}</span>
+        </div>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {student.reasons.map(reason => (
+            <span key={reason} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">{reason}</span>
+          ))}
+        </div>
+      </div>
+      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">{student.total}회</span>
+    </div>
+  )
+
+  return (
+    <section className="h-72 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
+        <AlertTriangle size={15} className="text-orange-500" />
+        <h2 className="font-semibold text-slate-800 text-sm flex-1">관리 필요 학생</h2>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${students.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+          {students.length}명
+        </span>
+        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+          전체 보기
+        </button>
+      </div>
+      {students.length === 0 ? (
+        <div className="px-5 py-20 text-center text-xs text-slate-400">관리 기준에 해당하는 학생이 없습니다</div>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {previewStudents.map(renderStudent)}
+          {students.length > previewStudents.length && (
+            <div className="px-5 py-2 text-center text-xs text-slate-400">+{students.length - previewStudents.length}명 더 있음</div>
+          )}
+        </div>
+      )}
+      {isOpen && (
+        <DashboardModal title="관리 필요 학생 전체" count={students.length} onClose={() => setIsOpen(false)}>
+          {students.length === 0 ? (
+            <div className="px-5 py-10 text-center text-xs text-slate-400">관리 기준에 해당하는 학생이 없습니다</div>
+          ) : (
+            <div className="divide-y divide-slate-50">{students.map(renderStudent)}</div>
+          )}
+        </DashboardModal>
+      )}
+    </section>
   )
 }
 

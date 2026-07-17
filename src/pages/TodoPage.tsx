@@ -12,6 +12,10 @@ function isImportantTodo(todo: TodoItem) {
   return todo.priority === 'important' || todo.priority === 'important-urgent'
 }
 
+function ImportantDot() {
+  return <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" aria-label="중요" />
+}
+
 function addDays(dateStr: string, amount: number) {
   const date = new Date(`${dateStr}T00:00:00`)
   date.setDate(date.getDate() + amount)
@@ -189,6 +193,7 @@ export default function TodoPage() {
                     className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100"
                   />
                   <button
+                    type="button"
                     onClick={() => setImportant(v => !v)}
                     className={`rounded-lg border px-3 py-2 text-xs font-semibold ${important ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
                     title="중요 표시"
@@ -196,12 +201,14 @@ export default function TodoPage() {
                     중요
                   </button>
                   <button
+                    type="button"
                     onClick={() => setShowMemo(v => !v)}
                     className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
                   >
                     메모추가
                   </button>
                   <button
+                    type="button"
                     onClick={submitTodo}
                     disabled={!title.trim()}
                     className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
@@ -361,6 +368,7 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
           />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
+              type="button"
               onClick={() => setEditImportant(v => !v)}
               className={`rounded-lg border px-3 py-2 text-xs font-semibold ${editImportant ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
             >
@@ -368,6 +376,7 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
             </button>
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={saveEdit}
                 disabled={!editTitle.trim()}
                 className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
@@ -375,12 +384,14 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
                 저장
               </button>
               <button
+                type="button"
                 onClick={cancelEdit}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
               >
                 취소
               </button>
               <button
+                type="button"
                 onClick={() => dispatch({ type: 'REMOVE_TODO', payload: todo.id })}
                 className="rounded-lg border border-red-100 bg-white px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50"
               >
@@ -397,6 +408,7 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
     <div className={`rounded-lg border px-3 py-2 ${important ? 'border-red-100 bg-red-50/30' : 'border-slate-100 bg-white'}`}>
       <div className="flex items-start gap-2">
         <button
+          type="button"
           onClick={() => dispatch({ type: 'TOGGLE_TODO', payload: todo.id })}
           className={`mt-0.5 shrink-0 rounded border ${todo.completed ? 'border-blue-300 bg-blue-500 text-white' : 'border-slate-300 bg-white text-transparent hover:border-blue-400'}`}
           aria-label="완료"
@@ -405,7 +417,7 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            {important && <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-label="중요" />}
+            {important && <ImportantDot />}
             <span className={`truncate text-sm font-medium ${todo.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{todo.title}</span>
           </div>
           {!compact && todo.memo && <p className="mt-1 text-xs text-slate-500 whitespace-pre-wrap">{todo.memo}</p>}
@@ -417,6 +429,7 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
+            type="button"
             onClick={startEdit}
             className="rounded-lg p-1.5 text-slate-300 hover:bg-slate-50 hover:text-slate-600"
             aria-label="수정"
@@ -424,6 +437,7 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
             <Pencil size={13} />
           </button>
           <button
+            type="button"
             onClick={() => dispatch({ type: 'REMOVE_TODO', payload: todo.id })}
             className="rounded-lg p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500"
             aria-label="삭제"
@@ -570,7 +584,7 @@ function MiniTodo({ todo }: { todo: TodoItem }) {
   return (
     <div className={`flex items-center gap-1 rounded px-1.5 py-1 text-[11px] ${todo.completed ? 'bg-slate-50 text-slate-400 line-through' : 'bg-white text-slate-700 border border-slate-100'}`}>
       {important ? (
-        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-label="중요" />
+        <ImportantDot />
       ) : (
         <Circle size={8} className={todo.completed ? 'fill-slate-300 text-slate-300' : 'text-slate-300'} />
       )}
