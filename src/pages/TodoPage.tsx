@@ -413,7 +413,7 @@ function DayColumn({
   return (
     <button
       onClick={onSelect}
-      className={`min-h-52 rounded-xl border p-3 text-left transition-colors ${selected ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100 bg-white hover:bg-slate-50'}`}
+      className={`flex min-h-52 flex-col items-stretch justify-start rounded-xl border p-3 text-left align-top transition-colors ${selected ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100 bg-white hover:bg-slate-50'}`}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
@@ -451,7 +451,7 @@ function MonthCell({
   return (
     <button
       onClick={onSelect}
-      className={`min-h-32 rounded-lg border p-2 text-left transition-colors ${selected ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100 bg-white hover:bg-slate-50'} ${muted ? 'opacity-50' : ''}`}
+      className={`flex min-h-32 flex-col items-stretch justify-start rounded-lg border p-2 text-left align-top transition-colors ${selected ? 'border-blue-300 bg-blue-50/40' : 'border-slate-100 bg-white hover:bg-slate-50'} ${muted ? 'opacity-50' : ''}`}
     >
       <div className="mb-2 text-right text-xs font-semibold text-slate-400">{dateObj.getDate()}</div>
       <div className="space-y-1">
