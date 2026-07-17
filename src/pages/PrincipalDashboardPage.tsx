@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getDoc, getDocs, query, where } from 'firebase/firestore'
-import { BarChart3, Loader2, TrendingDown, TrendingUp, Users } from 'lucide-react'
+import { BarChart3, Loader2, PieChart, TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import type { Class, Student } from '../types'
 import { appDataDoc, registrationsCollection } from '../utils/firestorePaths'
@@ -39,10 +39,6 @@ interface TeacherAppData {
   classes: Class[]
 }
 
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-}
-
 function monthLabel(ym: string) {
   const [year, month] = ym.split('-').map(Number)
   return `${year}년 ${month}월`
@@ -67,16 +63,14 @@ function percent(part: number, total: number) {
   return Math.round((part / total) * 100)
 }
 
-function previousMonths(baseYM: string, count: number) {
-  const [year, month] = baseYM.split('-').map(Number)
-  return Array.from({ length: count }, (_, index) => {
-    const date = new Date(year, month - 1 - (count - 1 - index), 1)
-    return monthKey(date)
-  })
-}
-
 function shortMonthLabel(ym: string) {
   return `${Number(ym.slice(5, 7))}월`
+}
+
+function yearMonthsUntil(year: number) {
+  const now = new Date()
+  const lastMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12
+  return Array.from({ length: lastMonth }, (_, index) => `${year}-${String(index + 1).padStart(2, '0')}`)
 }
 
 export default function PrincipalDashboardPage() {
@@ -84,7 +78,7 @@ export default function PrincipalDashboardPage() {
   const [teachers, setTeachers] = useState<TeacherInfo[]>([])
   const [dataByTeacher, setDataByTeacher] = useState<Record<string, TeacherAppData>>({})
   const [loading, setLoading] = useState(true)
-  const [selectedYM, setSelectedYM] = useState(() => monthKey(new Date()))
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
 
   useEffect(() => {
     if (!user) return
@@ -131,21 +125,34 @@ export default function PrincipalDashboardPage() {
     }
   }, [user])
 
-  const availableMonths = useMemo(() => {
-    const months = new Set<string>([monthKey(new Date())])
-    for (let i = 1; i <= 5; i++) {
-      months.add(monthKey(new Date(new Date().getFullYear(), new Date().getMonth() - i, 1)))
-    }
+  const availableYears = useMemo(() => {
+    const years = new Set<number>([new Date().getFullYear()])
     Object.values(dataByTeacher).flatMap(data => data.students).forEach(student => {
-      const registered = student.registeredAt?.slice(0, 7)
-      const withdrawn = student.withdrawnAt?.slice(0, 7)
-      if (registered) months.add(registered)
-      if (withdrawn) months.add(withdrawn)
+      const registered = student.registeredAt ? Number(student.registeredAt.slice(0, 4)) : null
+      const withdrawn = student.withdrawnAt ? Number(student.withdrawnAt.slice(0, 4)) : null
+      if (registered) years.add(registered)
+      if (withdrawn) years.add(withdrawn)
     })
-    return [...months].sort().reverse()
+    return [...years].sort((a, b) => b - a)
   }, [dataByTeacher])
 
+  const selectedYM = `${selectedYear}-${String(selectedYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12).padStart(2, '0')}`
   const { start, end } = monthBounds(selectedYM)
+  const yearStart = `${selectedYear}-01-01`
+  const yearEnd = fmtDate(new Date(selectedYear, selectedYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12, 0))
+
+  const withdrawalReasons = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const student of Object.values(dataByTeacher).flatMap(data => data.students)) {
+      if (!inRange(student.withdrawnAt, yearStart, yearEnd)) continue
+      const reason = student.withdrawalReason ?? '알 수 없음'
+      counts.set(reason, (counts.get(reason) ?? 0) + 1)
+    }
+    const total = [...counts.values()].reduce((sum, count) => sum + count, 0)
+    return [...counts.entries()]
+      .map(([reason, count]) => ({ reason, count, rate: percent(count, total) }))
+      .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, 'ko'))
+  }, [dataByTeacher, yearEnd, yearStart])
 
   const metrics = useMemo<TeacherMetric[]>(() => teachers.map(teacher => {
     const students = dataByTeacher[teacher.uid]?.students ?? []
@@ -169,7 +176,7 @@ export default function PrincipalDashboardPage() {
     }),
     { active: 0, withdrawn: 0, registeredInPeriod: 0, withdrawnInPeriod: 0 }
   )
-  const yearMonths = useMemo(() => previousMonths(selectedYM, 12), [selectedYM])
+  const yearMonths = useMemo(() => yearMonthsUntil(selectedYear), [selectedYear])
 
   const yearlyWithdrawalRows = useMemo(() => teachers.map(teacher => {
     const students = dataByTeacher[teacher.uid]?.students ?? []
@@ -220,11 +227,11 @@ export default function PrincipalDashboardPage() {
           <p className="text-sm text-slate-500 mt-1">선생님별 등록·퇴원 흐름과 재원 현황</p>
         </div>
         <select
-          value={selectedYM}
-          onChange={e => setSelectedYM(e.target.value)}
+          value={selectedYear}
+          onChange={e => setSelectedYear(Number(e.target.value))}
           className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
         >
-          {availableMonths.map(ym => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+          {availableYears.map(year => <option key={year} value={year}>{year}년</option>)}
         </select>
       </div>
 
@@ -238,7 +245,7 @@ export default function PrincipalDashboardPage() {
       <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
           <h2 className="font-semibold text-slate-800">선생님별 월별 퇴원율</h2>
-          <p className="text-xs text-slate-400 mt-1">선택 월 기준 최근 12개월, 월별 퇴원 수 / 해당 월 재원+퇴원 수 기준입니다</p>
+          <p className="text-xs text-slate-400 mt-1">{selectedYear}년 1월부터 진행된 달까지, 월별 퇴원 수 / 해당 월 재원+퇴원 수 기준입니다</p>
         </div>
         {loading ? (
           <div className="py-12 flex items-center justify-center text-slate-400 text-sm gap-2">
@@ -249,6 +256,34 @@ export default function PrincipalDashboardPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {yearlyWithdrawalRows.map(row => <WithdrawalYearChart key={row.uid} row={row} />)}
+          </div>
+        )}
+      </section>
+
+      <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h2 className="font-semibold text-slate-800">퇴원 사유별 비율</h2>
+          <p className="text-xs text-slate-400 mt-1">{selectedYear}년에 퇴원 처리된 학생의 사유 기준입니다</p>
+        </div>
+        {withdrawalReasons.length === 0 ? (
+          <p className="py-10 text-center text-sm text-slate-400">퇴원 사유 데이터가 없습니다</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
+            {withdrawalReasons.map(reason => (
+              <div key={reason.reason} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <PieChart size={15} className="shrink-0 text-rose-500" />
+                    <span className="truncate text-sm font-semibold text-slate-800">{reason.reason}</span>
+                  </div>
+                  <span className="text-sm font-bold text-rose-600">{reason.rate}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white">
+                  <div className="h-full rounded-full bg-rose-400" style={{ width: `${reason.rate}%` }} />
+                </div>
+                <div className="mt-2 text-xs text-slate-400">{reason.count}명</div>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -343,6 +378,18 @@ function WithdrawalYearChart({
   row: { uid: string; name: string; months: { ym: string; withdrawn: number; rate: number }[] }
 }) {
   const maxRate = Math.max(10, ...row.months.map(month => month.rate))
+  const chartWidth = 720
+  const chartHeight = 150
+  const paddingX = 28
+  const paddingY = 18
+  const plotWidth = chartWidth - paddingX * 2
+  const plotHeight = chartHeight - paddingY * 2
+  const points = row.months.map((month, index) => {
+    const x = row.months.length === 1 ? chartWidth / 2 : paddingX + (plotWidth / (row.months.length - 1)) * index
+    const y = paddingY + plotHeight - (month.rate / maxRate) * plotHeight
+    return { ...month, x, y }
+  })
+  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
 
   return (
     <div className="px-5 py-4">
@@ -352,20 +399,32 @@ function WithdrawalYearChart({
           평균 {percent(row.months.reduce((sum, month) => sum + month.rate, 0), row.months.length)}%
         </span>
       </div>
-      <div className="grid grid-cols-12 items-end gap-2">
-        {row.months.map(month => (
-          <div key={month.ym} className="min-w-0">
-            <div className="flex h-24 items-end rounded bg-slate-50 px-1">
-              <div
-                className="w-full rounded-t bg-rose-400"
-                style={{ height: `${Math.max(4, (month.rate / maxRate) * 100)}%` }}
-                title={`${monthLabel(month.ym)} 퇴원율 ${month.rate}% / 퇴원 ${month.withdrawn}명`}
-              />
-            </div>
-            <div className="mt-1 truncate text-center text-[10px] font-medium text-slate-400">{shortMonthLabel(month.ym)}</div>
-            <div className="text-center text-[10px] font-semibold text-slate-600">{month.rate}%</div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[720px]">
+          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-40 w-full rounded-lg bg-slate-50">
+            {[0, 0.5, 1].map(ratio => {
+              const y = paddingY + plotHeight * ratio
+              return <line key={ratio} x1={paddingX} x2={chartWidth - paddingX} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+            })}
+            {path && <path d={path} fill="none" stroke="#fb7185" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+            {points.map(point => (
+              <g key={point.ym}>
+                <circle cx={point.x} cy={point.y} r="4.5" fill="#fb7185">
+                  <title>{`${monthLabel(point.ym)} 퇴원율 ${point.rate}% / 퇴원 ${point.withdrawn}명`}</title>
+                </circle>
+                <text x={point.x} y={point.y - 10} textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold">{point.rate}%</text>
+              </g>
+            ))}
+          </svg>
+          <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${row.months.length}, minmax(0, 1fr))` }}>
+            {row.months.map(month => (
+              <div key={month.ym} className="text-center">
+                <div className="text-[11px] font-medium text-slate-400">{shortMonthLabel(month.ym)}</div>
+                <div className="text-[10px] font-semibold text-slate-600">{month.withdrawn}명</div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
     </div>
   )
