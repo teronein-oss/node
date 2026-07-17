@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getDoc, getDocs, query, where } from 'firebase/firestore'
+import { getDoc, getDocs } from 'firebase/firestore'
 import { BarChart3, Loader2, PieChart, TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import type { Class, Student } from '../types'
 import { appDataDoc, registrationsCollection } from '../utils/firestorePaths'
+import { normalizeAcademyId } from '../utils/academy'
 import { displayName } from '../utils/displayName'
 import { fmtDate, getClassDaysLabel } from '../utils/helpers'
 
@@ -92,14 +93,13 @@ export default function PrincipalDashboardPage() {
         if (!cancelled) setLoading(false)
         return
       }
-      const regQuery = query(registrationsCollection(), where('academyId', '==', academyId))
-      const regSnap = await getDocs(regQuery)
+      const regSnap = await getDocs(registrationsCollection(academyId))
       const teacherList: TeacherInfo[] = []
       regSnap.forEach(docSnap => {
         const data = docSnap.data()
         if (data.status !== 'approved') return
         if (!['선생님', '관리자', '원장'].includes(data.role)) return
-        if ((data.academyId ?? academyId) !== academyId) return
+        if (normalizeAcademyId(data.academyId) !== academyId) return
         teacherList.push({
           uid: data.uid ?? docSnap.id,
           name: displayName(data.displayName),
@@ -432,13 +432,15 @@ function WithdrawalYearChart({
 }) {
   const maxRate = Math.max(10, ...row.months.map(month => month.rate))
   const chartWidth = 720
-  const chartHeight = 150
-  const paddingX = 28
+  const chartHeight = 210
+  const paddingX = 44
   const paddingY = 18
-  const plotHeight = chartHeight - paddingY * 2
-  const columnWidth = (chartWidth - paddingX * 2) / Math.max(1, row.months.length)
+  const labelTop = 162
+  const countTop = 184
+  const plotHeight = 126
+  const plotWidth = chartWidth - paddingX * 2
   const points = row.months.map((month, index) => {
-    const x = paddingX + columnWidth * index + columnWidth / 2
+    const x = row.months.length === 1 ? chartWidth / 2 : paddingX + (plotWidth / (row.months.length - 1)) * index
     const y = paddingY + plotHeight - (month.rate / maxRate) * plotHeight
     return { ...month, x, y }
   })
@@ -454,7 +456,7 @@ function WithdrawalYearChart({
       </div>
       <div className="overflow-x-auto">
         <div className="min-w-[720px]">
-          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-40 w-full rounded-lg bg-slate-50">
+          <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="h-56 w-full rounded-lg bg-slate-50">
             {[0, 0.5, 1].map(ratio => {
               const y = paddingY + plotHeight * ratio
               return <line key={ratio} x1={paddingX} x2={chartWidth - paddingX} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />
@@ -468,15 +470,13 @@ function WithdrawalYearChart({
                 <text x={point.x} y={point.y - 10} textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold">{point.rate}%</text>
               </g>
             ))}
-          </svg>
-          <div className="mt-2 grid px-[28px]" style={{ gridTemplateColumns: `repeat(${row.months.length}, minmax(0, 1fr))` }}>
-            {row.months.map(month => (
-              <div key={month.ym} className="text-center">
-                <div className="text-[11px] font-medium text-slate-400">{shortMonthLabel(month.ym)}</div>
-                <div className="text-[10px] font-semibold text-slate-600">{month.withdrawn}명</div>
-              </div>
+            {points.map(point => (
+              <g key={`label-${point.ym}`}>
+                <text x={point.x} y={labelTop} textAnchor="middle" className="fill-slate-400 text-[11px] font-semibold">{shortMonthLabel(point.ym)}</text>
+                <text x={point.x} y={countTop} textAnchor="middle" className="fill-slate-600 text-[10px] font-semibold">{point.withdrawn}명</text>
+              </g>
             ))}
-          </div>
+          </svg>
         </div>
       </div>
     </div>
