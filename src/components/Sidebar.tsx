@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3 } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, CheckSquare } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/homework', icon: ClipboardList, label: '숙제관리' },
   { to: '/students', icon: Users, label: '학생관리' },
   { to: '/clinic', icon: Stethoscope, label: '보충/클리닉' },
+  { to: '/todo', icon: CheckSquare, label: 'ToDo' },
   { to: '/schedule', icon: CalendarDays, label: '업무 일정표' },
   { to: '/student-dashboard', icon: TableProperties, label: '학생 대시보드' },
 ]

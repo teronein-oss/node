@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, type ReactNode } from 'react'
-import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
+import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, TodoItem, TodoPriority, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
 import { CLASS_NAME_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions, getClassDate } from '../utils/helpers'
 import { useAppPersistence } from './useAppPersistence'
@@ -21,7 +21,7 @@ export interface AppState {
   vocabTotal: number
   dailyTotal: number
   notices: NoticeItem[]
-  todos: NoticeItem[]
+  todos: TodoItem[]
   examInfo: ExamInfo[]
   weeklyProgress: WeeklyProgress[]
   scheduleEvents: ScheduleEvent[]
@@ -59,7 +59,8 @@ export type Action =
   | { type: 'ADD_NOTICE'; payload: { message: string; deadline?: string } }
   | { type: 'TOGGLE_NOTICE'; payload: string }
   | { type: 'REMOVE_NOTICE'; payload: string }
-  | { type: 'ADD_TODO'; payload: { message: string; deadline?: string } }
+  | { type: 'ADD_TODO'; payload: { title: string; date: string; priority: TodoPriority; memo?: string } }
+  | { type: 'UPDATE_TODO'; payload: { id: string; title?: string; date?: string; priority?: TodoPriority; memo?: string } }
   | { type: 'TOGGLE_TODO'; payload: string }
   | { type: 'REMOVE_TODO'; payload: string }
   | { type: 'SAVE_EXAM_INFO'; payload: ExamInfo }
@@ -543,9 +544,39 @@ function reducer(state: AppState, action: Action): AppState {
     case 'REMOVE_NOTICE':
       return { ...state, notices: state.notices.filter(n => n.id !== action.payload) }
     case 'ADD_TODO':
-      return { ...state, todos: [...state.todos, { id: genId(), message: action.payload.message, completed: false, deadline: action.payload.deadline }] }
+      return {
+        ...state,
+        todos: [
+          ...state.todos,
+          {
+            id: genId(),
+            title: action.payload.title,
+            date: action.payload.date,
+            priority: action.payload.priority,
+            memo: action.payload.memo,
+            completed: false,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      }
+    case 'UPDATE_TODO':
+      return {
+        ...state,
+        todos: state.todos.map(todo =>
+          todo.id === action.payload.id
+            ? { ...todo, ...action.payload }
+            : todo
+        ),
+      }
     case 'TOGGLE_TODO':
-      return { ...state, todos: state.todos.map(n => n.id === action.payload ? { ...n, completed: !n.completed } : n) }
+      return {
+        ...state,
+        todos: state.todos.map(todo =>
+          todo.id === action.payload
+            ? { ...todo, completed: !todo.completed, completedAt: todo.completed ? undefined : new Date().toISOString() }
+            : todo
+        ),
+      }
     case 'REMOVE_TODO':
       return { ...state, todos: state.todos.filter(n => n.id !== action.payload) }
 
@@ -722,7 +753,16 @@ export function normalizeState(parsed: AppState): AppState {
     vocabTotal: parsed.vocabTotal ?? 100,
     dailyTotal: parsed.dailyTotal ?? 100,
     notices: parsed.notices ?? [{ id: '1', message: 'Test', completed: false }],
-    todos: parsed.todos ?? [],
+    todos: (parsed.todos ?? []).map((todo: TodoItem & { message?: string; deadline?: string }) => ({
+      id: todo.id ?? genId(),
+      title: todo.title ?? todo.message ?? '',
+      date: todo.date ?? todo.deadline ?? new Date().toISOString().slice(0, 10),
+      priority: todo.priority ?? 'none',
+      completed: todo.completed ?? false,
+      memo: todo.memo,
+      createdAt: todo.createdAt ?? new Date().toISOString(),
+      completedAt: todo.completedAt,
+    })),
     examInfo: (parsed.examInfo ?? []).map((e: ExamInfo & { semester?: string }) => ({
       ...e,
       semester: e.semester ?? '1학기 중간',

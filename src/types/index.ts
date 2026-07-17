@@ -16,6 +16,19 @@ export interface NoticeItem {
   deadline?: string  // YYYY-MM-DD
 }
 
+export type TodoPriority = 'important-urgent' | 'important' | 'urgent' | 'none'
+
+export interface TodoItem {
+  id: string
+  title: string
+  date: string       // YYYY-MM-DD
+  priority: TodoPriority
+  completed: boolean
+  memo?: string
+  createdAt: string
+  completedAt?: string
+}
+
 export type WithdrawalReason =
   | '방학 휴원'
   | '성적불만'
