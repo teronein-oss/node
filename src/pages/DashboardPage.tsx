@@ -121,7 +121,6 @@ function SchedulePanel({
     [events, todayStr]
   )
   const todayCount = activeEvents.filter(e => e.startDate <= todayStr && e.endDate >= todayStr).length
-  const previewEvents = activeEvents.slice(0, 4)
 
   const renderEvent = (e: ScheduleEvent) => {
     const span = diffDays(e.startDate, e.endDate)
@@ -167,8 +166,12 @@ function SchedulePanel({
   }
 
   return (
-    <div className="h-64 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="flex w-full items-center gap-2 px-5 py-3 border-b border-slate-100 text-left">
+    <div className="bg-white rounded-xl shadow-sm border border-amber-200 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen(open => !open)}
+        className="flex w-full items-center gap-2 bg-amber-50/60 px-5 py-3 text-left hover:bg-amber-50 transition-colors"
+      >
         <Icon size={15} className={iconColor} />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">{title}</h2>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${todayCount > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -177,26 +180,74 @@ function SchedulePanel({
         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
           전체 {activeEvents.length}
         </span>
-        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
-          전체 보기
-        </button>
-      </div>
-      <ul className="h-[208px] divide-y divide-slate-50 overflow-hidden">
-        {activeEvents.length === 0 && (
-          <li className="px-5 py-16 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
-        )}
-        {previewEvents.map(renderEvent)}
-        {activeEvents.length > previewEvents.length && (
-          <li className="px-5 py-2 text-center text-xs text-slate-400">+{activeEvents.length - previewEvents.length}개 더 있음</li>
-        )}
-      </ul>
+        {isOpen ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronRight size={15} className="text-slate-400" />}
+      </button>
       {isOpen && (
-        <DashboardModal title={title} count={activeEvents.length} onClose={() => setIsOpen(false)}>
-          <ul className="divide-y divide-slate-50">
+        <ul className="max-h-72 divide-y divide-slate-50 overflow-y-auto">
+          {activeEvents.length === 0
+            ? <li className="px-5 py-10 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
+            : activeEvents.map(renderEvent)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function ScheduleListPanel({
+  events,
+  todayStr,
+}: {
+  events: ScheduleEvent[]
+  todayStr: string
+}) {
+  const activeEvents = useMemo(
+    () => events
+      .filter(e => e.endDate >= todayStr)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title, 'ko')),
+    [events, todayStr]
+  )
+  const previewEvents = activeEvents.slice(0, 3)
+  const [isOpen, setIsOpen] = useState(false)
+
+  const renderEvent = (event: ScheduleEvent) => {
+    const isToday = event.startDate <= todayStr && event.endDate >= todayStr
+    return (
+      <div key={event.id} className="flex items-center gap-3 px-4 py-3">
+        <span className={`h-2.5 w-2.5 rounded-full ${event.type === 'all' ? 'bg-red-400' : 'bg-emerald-400'}`} />
+        <span className={`text-xs font-semibold ${event.type === 'all' ? 'text-red-500' : 'text-emerald-600'}`}>
+          {event.type === 'all' ? '전체' : '개인'}
+        </span>
+        <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${isToday ? 'text-slate-900' : 'text-slate-700'}`}>{event.title}</span>
+        <span className="shrink-0 text-xs text-slate-400">
+          {event.time ? event.time : event.startDate}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="divide-y divide-slate-50">
+        {previewEvents.length === 0 ? (
+          <div className="px-4 py-8 text-center text-xs text-slate-400">예정된 일정이 없습니다</div>
+        ) : (
+          previewEvents.map(renderEvent)
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="flex w-full items-center gap-1.5 border-t border-slate-100 px-4 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
+      >
+        전체 일정표 보기 <ChevronRight size={13} />
+      </button>
+      {isOpen && (
+        <DashboardModal title="전체 일정표" count={activeEvents.length} onClose={() => setIsOpen(false)}>
+          <div className="divide-y divide-slate-50">
             {activeEvents.length === 0
-              ? <li className="px-5 py-10 text-xs text-slate-400 text-center">진행 중인 업무가 없습니다</li>
+              ? <div className="px-5 py-10 text-center text-xs text-slate-400">예정된 일정이 없습니다</div>
               : activeEvents.map(renderEvent)}
-          </ul>
+          </div>
         </DashboardModal>
       )}
     </div>
@@ -770,6 +821,10 @@ export default function DashboardPage() {
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
     const map = new Map<string, ManagementStudent>()
+    const monthStart = `${selectedYM}-01`
+    const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
+    const classById = new Map(state.classes.map(cls => [cls.id, cls]))
+    const studentById = new Map(state.students.map(student => [student.id, student]))
 
     for (const student of activeStudents) {
       const cls = state.classes.find(c => c.id === student.classId)
@@ -787,6 +842,10 @@ export default function DashboardPage() {
 
     for (const retest of state.retests) {
       if (retest.passed !== null) continue
+      const student = studentById.get(retest.studentId)
+      const cls = student ? classById.get(student.classId) : undefined
+      const basisDate = retest.retestDate ?? (cls ? getClassDate(retest.sessionNum, cls.days, cls.weekdays) : '')
+      if (basisDate < monthStart || basisDate > monthEnd) continue
       const target = map.get(retest.studentId)
       if (!target) continue
       target.retestCount += 1
@@ -794,6 +853,9 @@ export default function DashboardPage() {
 
     const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1, '제출': 0 }
     for (const hw of state.homeworks) {
+      const cls = classById.get(hw.classId)
+      const checkDate = cls ? getClassDate(hw.sessionNum + 1, cls.days, cls.weekdays) : hw.weekStart
+      if (checkDate < monthStart || checkDate > monthEnd) continue
       const worstByStudent = new Map<string, number>()
       for (const item of hw.items ?? []) {
         for (const ss of item.studentStatuses ?? []) {
@@ -812,6 +874,10 @@ export default function DashboardPage() {
 
     for (const grade of state.grades) {
       if (grade.homeworkDone !== '미흡') continue
+      const student = studentById.get(grade.studentId)
+      const cls = student ? classById.get(student.classId) : undefined
+      const basisDate = cls ? getClassDate(grade.sessionNum, cls.days, cls.weekdays) : grade.weekStart
+      if (basisDate < monthStart || basisDate > monthEnd) continue
       const target = map.get(grade.studentId)
       if (!target) continue
       target.homeworkBadCount += 1
@@ -833,7 +899,7 @@ export default function DashboardPage() {
       })
       .filter(student => student.reasons.length > 0)
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
-  }, [state.classes, state.students, state.retests, state.homeworks, state.grades])
+  }, [state.classes, state.students, state.retests, state.homeworks, state.grades, selectedYM, selectedYear, selectedMonth])
 
   const completeTodayRetest = (item: TodayRetestItem) => {
     if (!confirm(`${item.name} 재시험을 통과 처리하겠습니까?`)) return
@@ -983,30 +1049,6 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-16">
-
-      {/* 상단: 일정 패널 + 달력 */}
-      <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-3">
-        <div className="space-y-3 xl:col-span-2">
-          <SchedulePanel
-            title="업무 공지"
-            icon={Megaphone}
-            iconColor="text-amber-500"
-            events={allEvents}
-            todayStr={todayStr}
-            onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
-            onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
-            readOnly={isJogyo}
-          />
-          <TodayFocusPanel rows={todayTaskRows} onCompleteRetest={completeTodayRetest} onCompleteHomework={completeTodayHomework} />
-        </div>
-        <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <ClassPopulationPanel rows={classPopulationRows} />
-        <ManagementNeededPanel students={managementStudents} />
-      </div>
-
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -1036,6 +1078,32 @@ export default function DashboardPage() {
             <ChevronRight size={16} />
           </button>
         </div>
+      </div>
+
+      {/* 상단: 오늘 확인 + 달력/일정 */}
+      <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
+        <div className="space-y-3">
+          <SchedulePanel
+            title="업무 공지"
+            icon={Megaphone}
+            iconColor="text-amber-500"
+            events={allEvents}
+            todayStr={todayStr}
+            onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
+            onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
+            readOnly={isJogyo}
+          />
+          <TodayFocusPanel rows={todayTaskRows} onCompleteRetest={completeTodayRetest} onCompleteHomework={completeTodayHomework} />
+        </div>
+        <div className="space-y-3">
+          <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
+          <ScheduleListPanel events={scheduleEvents} todayStr={todayStr} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <ClassPopulationPanel rows={classPopulationRows} />
+        <ManagementNeededPanel students={managementStudents} />
       </div>
 
       {/* 주간 미통과 현황 */}
@@ -1275,7 +1343,6 @@ function ClassPopulationPanel({
   rows: { classId: string; className: string; classDays: string; activeCount: number; inactiveCount: number }[]
 }) {
   const total = rows.reduce((sum, row) => sum + row.activeCount, 0)
-  const previewRows = rows.slice(0, 6)
 
   return (
     <section className="h-72 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -1287,8 +1354,8 @@ function ClassPopulationPanel({
       {rows.length === 0 ? (
         <div className="px-5 py-20 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
       ) : (
-        <div className="divide-y divide-slate-50">
-          {previewRows.map(row => (
+        <div className="max-h-[216px] divide-y divide-slate-50 overflow-y-auto">
+          {rows.map(row => (
             <div key={row.classId} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold text-slate-800">{row.className}</div>
@@ -1300,9 +1367,6 @@ function ClassPopulationPanel({
               </div>
             </div>
           ))}
-          {rows.length > previewRows.length && (
-            <div className="px-5 py-2 text-center text-xs text-slate-400">+{rows.length - previewRows.length}개 반 더 있음</div>
-          )}
         </div>
       )}
     </section>
@@ -1311,8 +1375,6 @@ function ClassPopulationPanel({
 
 function ManagementNeededPanel({ students }: { students: ManagementStudent[] }) {
   const [isOpen, setIsOpen] = useState(false)
-  const previewStudents = students.slice(0, 5)
-
   const renderStudent = (student: ManagementStudent) => (
     <div key={student.studentId} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
       <span className={`h-2.5 w-2.5 rounded-full ${student.total >= 5 ? 'bg-red-500' : 'bg-orange-400'}`} />
@@ -1346,11 +1408,8 @@ function ManagementNeededPanel({ students }: { students: ManagementStudent[] }) 
       {students.length === 0 ? (
         <div className="px-5 py-20 text-center text-xs text-slate-400">관리 기준에 해당하는 학생이 없습니다</div>
       ) : (
-        <div className="divide-y divide-slate-50">
-          {previewStudents.map(renderStudent)}
-          {students.length > previewStudents.length && (
-            <div className="px-5 py-2 text-center text-xs text-slate-400">+{students.length - previewStudents.length}명 더 있음</div>
-          )}
+        <div className="max-h-[216px] divide-y divide-slate-50 overflow-y-auto">
+          {students.map(renderStudent)}
         </div>
       )}
       {isOpen && (
