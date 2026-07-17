@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Circle, Clock, ListChecks, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Circle, Clock, ListChecks, Pencil, Plus, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import type { ScheduleEvent, TodoItem } from '../types'
 import { fmtDate } from '../utils/helpers'
@@ -295,6 +295,104 @@ export default function TodoPage() {
 function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; compact?: boolean; showDate?: boolean }) {
   const { dispatch } = useApp()
   const important = isImportantTodo(todo)
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(todo.title)
+  const [editDate, setEditDate] = useState(todo.date)
+  const [editImportant, setEditImportant] = useState(important)
+  const [editMemo, setEditMemo] = useState(todo.memo ?? '')
+
+  const startEdit = () => {
+    setEditTitle(todo.title)
+    setEditDate(todo.date)
+    setEditImportant(isImportantTodo(todo))
+    setEditMemo(todo.memo ?? '')
+    setEditing(true)
+  }
+
+  const cancelEdit = () => {
+    setEditTitle(todo.title)
+    setEditDate(todo.date)
+    setEditImportant(isImportantTodo(todo))
+    setEditMemo(todo.memo ?? '')
+    setEditing(false)
+  }
+
+  const saveEdit = () => {
+    const trimmed = editTitle.trim()
+    if (!trimmed) return
+    dispatch({
+      type: 'UPDATE_TODO',
+      payload: {
+        id: todo.id,
+        title: trimmed,
+        date: editDate,
+        priority: editImportant ? 'important' : 'none',
+        memo: editMemo.trim() || undefined,
+      },
+    })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className={`rounded-lg border px-3 py-2 ${editImportant ? 'border-red-100 bg-red-50/30' : 'border-slate-100 bg-white'}`}>
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveEdit()}
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100"
+              placeholder="할 일을 입력하세요"
+            />
+            <input
+              type="date"
+              value={editDate}
+              onChange={e => setEditDate(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+          <textarea
+            value={editMemo}
+            onChange={e => setEditMemo(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100"
+            placeholder="메모"
+            rows={compact ? 2 : 3}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              onClick={() => setEditImportant(v => !v)}
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold ${editImportant ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
+            >
+              중요
+            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={saveEdit}
+                disabled={!editTitle.trim()}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                저장
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => dispatch({ type: 'REMOVE_TODO', payload: todo.id })}
+                className="rounded-lg border border-red-100 bg-white px-3 py-2 text-xs font-semibold text-red-500 hover:bg-red-50"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`rounded-lg border px-3 py-2 ${important ? 'border-red-100 bg-red-50/30' : 'border-slate-100 bg-white'}`}>
       <div className="flex items-start gap-2">
@@ -317,6 +415,22 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
             </div>
           )}
         </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={startEdit}
+            className="rounded-lg p-1.5 text-slate-300 hover:bg-slate-50 hover:text-slate-600"
+            aria-label="수정"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'REMOVE_TODO', payload: todo.id })}
+            className="rounded-lg p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500"
+            aria-label="삭제"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -337,7 +451,6 @@ function DayList({
   doneOpen: boolean
   setDoneOpen: (open: boolean) => void
 }) {
-  const { dispatch } = useApp()
   return (
     <div className="space-y-3">
       {scheduleEvents.length > 0 && (
@@ -375,18 +488,7 @@ function DayList({
           <div className="space-y-2 border-t border-slate-100 p-3">
             {doneTodos.length === 0 ? (
               <p className="py-4 text-center text-xs text-slate-400">완료된 일이 없습니다</p>
-            ) : doneTodos.map(todo => (
-              <div key={todo.id} className="flex items-center gap-2">
-                <div className="flex-1"><TodoRow todo={todo} showDate={false} compact /></div>
-                <button
-                  onClick={() => dispatch({ type: 'REMOVE_TODO', payload: todo.id })}
-                  className="rounded-lg p-2 text-slate-300 hover:bg-red-50 hover:text-red-500"
-                  aria-label="삭제"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
+            ) : doneTodos.map(todo => <TodoRow key={todo.id} todo={todo} showDate={false} compact />)}
           </div>
         )}
       </div>
