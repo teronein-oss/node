@@ -79,6 +79,7 @@ export default function PrincipalDashboardPage() {
   const [dataByTeacher, setDataByTeacher] = useState<Record<string, TeacherAppData>>({})
   const [loading, setLoading] = useState(true)
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear())
+  const [selectedTeacherUid, setSelectedTeacherUid] = useState<'all' | string>('all')
 
   useEffect(() => {
     if (!user) return
@@ -86,23 +87,31 @@ export default function PrincipalDashboardPage() {
 
     const load = async () => {
       setLoading(true)
-      const regQuery = query(registrationsCollection(), where('academyId', '==', user.academyId))
+      const academyId = user.academyId
+      if (!academyId) {
+        if (!cancelled) setLoading(false)
+        return
+      }
+      const regQuery = query(registrationsCollection(), where('academyId', '==', academyId))
       const regSnap = await getDocs(regQuery)
       const teacherList: TeacherInfo[] = []
       regSnap.forEach(docSnap => {
         const data = docSnap.data()
         if (data.status !== 'approved') return
         if (!['선생님', '관리자', '원장'].includes(data.role)) return
+        if ((data.academyId ?? academyId) !== academyId) return
         teacherList.push({
           uid: data.uid ?? docSnap.id,
           name: displayName(data.displayName),
           role: data.role,
-          academyId: data.academyId ?? user.academyId,
+          academyId,
         })
       })
 
       const entries = await Promise.all(teacherList.map(async teacher => {
-        const snap = await getDoc(appDataDoc(teacher.uid, teacher.academyId ?? user.academyId))
+        // 원장 대시보드는 로그인한 원장의 academyId 문서만 읽는다.
+        // 다른 학원 academyId로 fallback하거나 교차 조회하지 않는다.
+        const snap = await getDoc(appDataDoc(teacher.uid, academyId))
         const data = snap.exists() ? snap.data() : {}
         return [teacher.uid, {
           students: (data.students ?? []) as Student[],
@@ -136,6 +145,11 @@ export default function PrincipalDashboardPage() {
     return [...years].sort((a, b) => b - a)
   }, [dataByTeacher])
 
+  const scopedTeachers = useMemo(
+    () => selectedTeacherUid === 'all' ? teachers : teachers.filter(teacher => teacher.uid === selectedTeacherUid),
+    [selectedTeacherUid, teachers]
+  )
+
   const selectedYM = `${selectedYear}-${String(selectedYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12).padStart(2, '0')}`
   const { start, end } = monthBounds(selectedYM)
   const yearStart = `${selectedYear}-01-01`
@@ -143,7 +157,8 @@ export default function PrincipalDashboardPage() {
 
   const withdrawalReasons = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const student of Object.values(dataByTeacher).flatMap(data => data.students)) {
+    const students = scopedTeachers.flatMap(teacher => dataByTeacher[teacher.uid]?.students ?? [])
+    for (const student of students) {
       if (!inRange(student.withdrawnAt, yearStart, yearEnd)) continue
       const reason = student.withdrawalReason ?? '알 수 없음'
       counts.set(reason, (counts.get(reason) ?? 0) + 1)
@@ -152,9 +167,9 @@ export default function PrincipalDashboardPage() {
     return [...counts.entries()]
       .map(([reason, count]) => ({ reason, count, rate: percent(count, total) }))
       .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, 'ko'))
-  }, [dataByTeacher, yearEnd, yearStart])
+  }, [dataByTeacher, scopedTeachers, yearEnd, yearStart])
 
-  const metrics = useMemo<TeacherMetric[]>(() => teachers.map(teacher => {
+  const metrics = useMemo<TeacherMetric[]>(() => scopedTeachers.map(teacher => {
     const students = dataByTeacher[teacher.uid]?.students ?? []
     return {
       uid: teacher.uid,
@@ -165,7 +180,7 @@ export default function PrincipalDashboardPage() {
       registeredInPeriod: students.filter(student => inRange(student.registeredAt, start, end)).length,
       withdrawnInPeriod: students.filter(student => inRange(student.withdrawnAt, start, end)).length,
     }
-  }), [dataByTeacher, end, start, teachers])
+  }), [dataByTeacher, end, scopedTeachers, start])
 
   const totals = metrics.reduce(
     (acc, metric) => ({
@@ -178,7 +193,7 @@ export default function PrincipalDashboardPage() {
   )
   const yearMonths = useMemo(() => yearMonthsUntil(selectedYear), [selectedYear])
 
-  const yearlyWithdrawalRows = useMemo(() => teachers.map(teacher => {
+  const yearlyWithdrawalRows = useMemo(() => scopedTeachers.map(teacher => {
     const students = dataByTeacher[teacher.uid]?.students ?? []
     return {
       uid: teacher.uid,
@@ -198,10 +213,10 @@ export default function PrincipalDashboardPage() {
         }
       }),
     }
-  }), [dataByTeacher, teachers, yearMonths])
+  }), [dataByTeacher, scopedTeachers, yearMonths])
 
   const classPopulationRows = useMemo<TeacherClassPopulation[]>(() => {
-    return teachers.flatMap(teacher => {
+    return scopedTeachers.flatMap(teacher => {
       const data = dataByTeacher[teacher.uid] ?? { students: [], classes: [] }
       return data.classes.map(cls => ({
         teacherUid: teacher.uid,
@@ -217,14 +232,15 @@ export default function PrincipalDashboardPage() {
         ).length,
       }))
     }).sort((a, b) => a.teacherName.localeCompare(b.teacherName, 'ko') || b.active - a.active || a.className.localeCompare(b.className, 'ko'))
-  }, [dataByTeacher, end, start, teachers])
+  }, [dataByTeacher, end, scopedTeachers, start])
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">원장 대시보드</h1>
-          <p className="text-sm text-slate-500 mt-1">선생님별 등록·퇴원 흐름과 재원 현황</p>
+          <p className="text-sm text-slate-500 mt-1">학원 내부 선생님별 등록·퇴원 흐름과 재원 현황</p>
+          <p className="text-xs text-slate-400 mt-1">조회 범위는 현재 로그인한 원장의 학원 데이터로만 제한됩니다.</p>
         </div>
         <select
           value={selectedYear}
@@ -233,6 +249,26 @@ export default function PrincipalDashboardPage() {
         >
           {availableYears.map(year => <option key={year} value={year}>{year}년</option>)}
         </select>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setSelectedTeacherUid('all')}
+          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${selectedTeacherUid === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+        >
+          전체 선생님
+        </button>
+        {teachers.map(teacher => (
+          <button
+            key={teacher.uid}
+            type="button"
+            onClick={() => setSelectedTeacherUid(teacher.uid)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${selectedTeacherUid === teacher.uid ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}
+          >
+            {teacher.name}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -255,7 +291,14 @@ export default function PrincipalDashboardPage() {
           <p className="py-12 text-center text-sm text-slate-400">그래프로 볼 데이터가 없습니다</p>
         ) : (
           <div className="divide-y divide-slate-100">
-            {yearlyWithdrawalRows.map(row => <WithdrawalYearChart key={row.uid} row={row} />)}
+            {yearlyWithdrawalRows.map(row => (
+              <WithdrawalYearChart
+                key={row.uid}
+                row={row}
+                selected={selectedTeacherUid === row.uid}
+                onSelect={() => setSelectedTeacherUid(row.uid)}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -351,7 +394,13 @@ export default function PrincipalDashboardPage() {
                   return (
                     <tr key={metric.uid} className="hover:bg-slate-50">
                       <td className="px-5 py-3">
-                        <div className="font-medium text-slate-800">{metric.name}</div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTeacherUid(metric.uid)}
+                          className="font-medium text-slate-800 hover:text-blue-600"
+                        >
+                          {metric.name}
+                        </button>
                         <div className="text-xs text-slate-400">{metric.role}</div>
                       </td>
                       <td className="px-4 py-3 text-right text-slate-700">{metric.active}</td>
@@ -374,30 +423,34 @@ export default function PrincipalDashboardPage() {
 
 function WithdrawalYearChart({
   row,
+  selected,
+  onSelect,
 }: {
   row: { uid: string; name: string; months: { ym: string; withdrawn: number; rate: number }[] }
+  selected: boolean
+  onSelect: () => void
 }) {
   const maxRate = Math.max(10, ...row.months.map(month => month.rate))
   const chartWidth = 720
   const chartHeight = 150
   const paddingX = 28
   const paddingY = 18
-  const plotWidth = chartWidth - paddingX * 2
   const plotHeight = chartHeight - paddingY * 2
+  const columnWidth = (chartWidth - paddingX * 2) / Math.max(1, row.months.length)
   const points = row.months.map((month, index) => {
-    const x = row.months.length === 1 ? chartWidth / 2 : paddingX + (plotWidth / (row.months.length - 1)) * index
+    const x = paddingX + columnWidth * index + columnWidth / 2
     const y = paddingY + plotHeight - (month.rate / maxRate) * plotHeight
     return { ...month, x, y }
   })
   const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
 
   return (
-    <div className="px-5 py-4">
+    <div className={`px-5 py-4 ${selected ? 'bg-blue-50/40' : ''}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-800">{row.name}</h3>
-        <span className="text-xs text-slate-400">
-          평균 {percent(row.months.reduce((sum, month) => sum + month.rate, 0), row.months.length)}%
-        </span>
+        <button type="button" onClick={onSelect} className="text-sm font-semibold text-slate-800 hover:text-blue-600">
+          {row.name}
+        </button>
+        <span className="text-xs text-slate-400">클릭하면 이 선생님만 보기</span>
       </div>
       <div className="overflow-x-auto">
         <div className="min-w-[720px]">
@@ -416,7 +469,7 @@ function WithdrawalYearChart({
               </g>
             ))}
           </svg>
-          <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${row.months.length}, minmax(0, 1fr))` }}>
+          <div className="mt-2 grid px-[28px]" style={{ gridTemplateColumns: `repeat(${row.months.length}, minmax(0, 1fr))` }}>
             {row.months.map(month => (
               <div key={month.ym} className="text-center">
                 <div className="text-[11px] font-medium text-slate-400">{shortMonthLabel(month.ym)}</div>
