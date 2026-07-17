@@ -1,22 +1,15 @@
 import { useMemo, useState } from 'react'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Circle, Clock, ListChecks, Plus, Trash2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import type { ScheduleEvent, TodoItem, TodoPriority } from '../types'
+import type { ScheduleEvent, TodoItem } from '../types'
 import { fmtDate } from '../utils/helpers'
 
 type ViewMode = 'day' | 'week' | 'month'
 
-const PRIORITIES: { key: TodoPriority; label: string; short: string; className: string; cardClassName: string }[] = [
-  { key: 'important-urgent', label: '중요·긴급', short: '중긴', className: 'bg-rose-100 text-rose-700 border-rose-200', cardClassName: 'border-rose-100 bg-rose-50/50' },
-  { key: 'important', label: '중요', short: '중요', className: 'bg-amber-100 text-amber-700 border-amber-200', cardClassName: 'border-amber-100 bg-amber-50/50' },
-  { key: 'urgent', label: '긴급', short: '긴급', className: 'bg-blue-100 text-blue-700 border-blue-200', cardClassName: 'border-blue-100 bg-blue-50/50' },
-  { key: 'none', label: '보통', short: '보통', className: 'bg-slate-100 text-slate-500 border-slate-200', cardClassName: 'border-slate-100 bg-white' },
-]
-
 const WEEK_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 
-function priorityInfo(priority: TodoPriority) {
-  return PRIORITIES.find(p => p.key === priority) ?? PRIORITIES[3]
+function isImportantTodo(todo: TodoItem) {
+  return todo.priority === 'important' || todo.priority === 'important-urgent'
 }
 
 function addDays(dateStr: string, amount: number) {
@@ -72,8 +65,7 @@ function eventTouchesDate(event: ScheduleEvent, date: string) {
 }
 
 function sortTodos(a: TodoItem, b: TodoItem) {
-  const rank: Record<TodoPriority, number> = { 'important-urgent': 0, important: 1, urgent: 2, none: 3 }
-  return rank[a.priority] - rank[b.priority] || a.createdAt.localeCompare(b.createdAt)
+  return Number(!isImportantTodo(a)) - Number(!isImportantTodo(b)) || a.createdAt.localeCompare(b.createdAt)
 }
 
 export default function TodoPage() {
@@ -82,7 +74,7 @@ export default function TodoPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('day')
   const [selectedDate, setSelectedDate] = useState(today)
   const [title, setTitle] = useState('')
-  const [priority, setPriority] = useState<TodoPriority>('none')
+  const [important, setImportant] = useState(false)
   const [showMemo, setShowMemo] = useState(false)
   const [memo, setMemo] = useState('')
   const [showSchedule, setShowSchedule] = useState(false)
@@ -110,11 +102,11 @@ export default function TodoPage() {
   const submitTodo = () => {
     const trimmed = title.trim()
     if (!trimmed) return
-    dispatch({ type: 'ADD_TODO', payload: { title: trimmed, date: selectedDate, priority, memo: memo.trim() || undefined } })
+    dispatch({ type: 'ADD_TODO', payload: { title: trimmed, date: selectedDate, priority: important ? 'important' : 'none', memo: memo.trim() || undefined } })
     setTitle('')
     setMemo('')
     setShowMemo(false)
-    setPriority('none')
+    setImportant(false)
   }
 
   const move = (direction: -1 | 1) => {
@@ -196,18 +188,13 @@ export default function TodoPage() {
                     placeholder="할 일을 입력하세요"
                     className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100"
                   />
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRIORITIES.map(item => (
-                      <button
-                        key={item.key}
-                        onClick={() => setPriority(item.key)}
-                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${priority === item.key ? item.className : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
-                        title={item.label}
-                      >
-                        {item.short}
-                      </button>
-                    ))}
-                  </div>
+                  <button
+                    onClick={() => setImportant(v => !v)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${important ? 'border-red-200 bg-red-50 text-red-600' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}`}
+                    title="중요 표시"
+                  >
+                    중요
+                  </button>
                   <button
                     onClick={() => setShowMemo(v => !v)}
                     className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50"
@@ -307,9 +294,9 @@ export default function TodoPage() {
 
 function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; compact?: boolean; showDate?: boolean }) {
   const { dispatch } = useApp()
-  const info = priorityInfo(todo.priority)
+  const important = isImportantTodo(todo)
   return (
-    <div className={`rounded-lg border px-3 py-2 ${info.cardClassName}`}>
+    <div className={`rounded-lg border px-3 py-2 ${important ? 'border-red-100 bg-red-50/30' : 'border-slate-100 bg-white'}`}>
       <div className="flex items-start gap-2">
         <button
           onClick={() => dispatch({ type: 'TOGGLE_TODO', payload: todo.id })}
@@ -320,8 +307,8 @@ function TodoRow({ todo, compact = false, showDate = true }: { todo: TodoItem; c
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
+            {important && <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-label="중요" />}
             <span className={`truncate text-sm font-medium ${todo.completed ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{todo.title}</span>
-            <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${info.className}`}>{info.short}</span>
           </div>
           {!compact && todo.memo && <p className="mt-1 text-xs text-slate-500 whitespace-pre-wrap">{todo.memo}</p>}
           {showDate && (
@@ -477,12 +464,15 @@ function MonthCell({
 }
 
 function MiniTodo({ todo }: { todo: TodoItem }) {
-  const info = priorityInfo(todo.priority)
+  const important = isImportantTodo(todo)
   return (
     <div className={`flex items-center gap-1 rounded px-1.5 py-1 text-[11px] ${todo.completed ? 'bg-slate-50 text-slate-400 line-through' : 'bg-white text-slate-700 border border-slate-100'}`}>
-      <Circle size={8} className={todo.completed ? 'fill-slate-300 text-slate-300' : 'text-slate-300'} />
+      {important ? (
+        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-label="중요" />
+      ) : (
+        <Circle size={8} className={todo.completed ? 'fill-slate-300 text-slate-300' : 'text-slate-300'} />
+      )}
       <span className="truncate">{todo.title}</span>
-      {!todo.completed && <span className={`ml-auto shrink-0 rounded px-1 text-[9px] ${info.className}`}>{info.short}</span>}
     </div>
   )
 }
