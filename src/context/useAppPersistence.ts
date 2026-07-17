@@ -116,8 +116,13 @@ export function useAppPersistence({
           // 우리가 직접 저장한 onSnapshot 반응 — in-memory 상태를 덮어쓰지 않음
           pendingWriteCount.current--
         } else {
-          const normalized = normalizeState(snap.data() as AppState)
+          const rawState = snap.data() as AppState
+          const normalized = normalizeState(rawState)
           baseDispatch({ type: 'LOAD', payload: normalized })
+          if ((rawState.students ?? []).some(student => student.active === false && !student.withdrawnAt)) {
+            setDoc(firestoreDoc, toFirestoreData(normalized), { merge: true })
+              .catch(err => console.error('❌ 퇴원일 마이그레이션 실패:', err?.code))
+          }
           // 관리자 계정 로드 시 기존 전체 공지 일정도 즉시 동기화
           if (isAdmin) {
             setDoc(

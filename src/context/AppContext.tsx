@@ -102,14 +102,16 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       }
 
-    case 'DELETE_CLASS':
+    case 'DELETE_CLASS': {
+      const deletedAt = new Date().toISOString()
       return {
         ...state,
         classes: state.classes.filter(c => c.id !== action.payload),
         students: state.students.map(s =>
-          s.classId === action.payload ? { ...s, active: false } : s
+          s.classId === action.payload ? { ...s, active: false, withdrawnAt: s.withdrawnAt ?? deletedAt } : s
         ),
       }
+    }
 
     case 'ADD_STUDENT':
       return {
@@ -721,9 +723,15 @@ const DEFAULT_STATE: AppState = {
 }
 
 export function normalizeState(parsed: AppState): AppState {
+  const normalizedAt = new Date().toISOString()
   return {
     ...parsed,
-    students: parsed.students ?? [],
+    students: (parsed.students ?? []).map(s => ({
+      ...s,
+      active: s.active ?? true,
+      registeredAt: s.registeredAt,
+      withdrawnAt: s.active === false ? (s.withdrawnAt ?? normalizedAt) : s.withdrawnAt,
+    })),
     retests: parsed.retests ?? [],
     homeworks: (parsed.homeworks ?? []).map((h: HomeworkAssignment & { classId?: string }) => {
       const existingItems: HomeworkItem[] = Array.isArray(h.items) ? h.items : []
