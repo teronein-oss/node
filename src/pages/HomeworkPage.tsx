@@ -113,6 +113,12 @@ export default function HomeworkPage() {
     setConfirmClearSession(null)
   }, [selectedClass, selectedYM])
 
+  useEffect(() => {
+    if (classDates.length === 0) return
+    if (classDates.some(d => d.sessionNum === selectedSession)) return
+    setSelectedSession(classDates[classDates.length - 1].sessionNum)
+  }, [classDates, selectedSession, setSelectedSession])
+
   const toggleSession = (sessionNum: number) => {
     setExpandedSessions(prev => {
       const next = new Set(prev)
@@ -183,6 +189,30 @@ export default function HomeworkPage() {
   const getClassName = (classId: string) =>
     state.classes.find(c => c.id === classId)?.name ?? classId
 
+  const selectedDateInfo = classDates.find(d => d.sessionNum === selectedSession) ?? classDates[classDates.length - 1]
+  const selectedDate = selectedDateInfo?.date ?? todayStr
+  const selectedSessionNum = selectedDateInfo?.sessionNum ?? selectedSession
+  const selectedCheckHw = state.homeworks.find(h => h.sessionNum === selectedSessionNum - 1 && h.classId === selectedClass)
+  const selectedAssignHw = state.homeworks.find(h => h.sessionNum === selectedSessionNum && h.classId === selectedClass)
+  const selectedCheckItems = selectedCheckHw?.items ?? []
+  const selectedAssignItems = selectedAssignHw?.items ?? []
+  const selectedSummary = summary.find(group => group.sessionNum === selectedSessionNum)
+  const selectedIssueEntries = selectedSummary?.entries ?? []
+  const selectedFlaggedStudents = selectedCheckHw ? flaggedStudents(selectedCheckHw) : []
+  const selectedIsToday = selectedDate === todayStr
+
+  const markSelectedAllSubmitted = () => {
+    if (!selectedCheckHw) return
+    for (const item of selectedCheckItems) {
+      for (const student of classStudents) {
+        dispatch({
+          type: 'SET_ITEM_STUDENT_STATUS',
+          payload: { assignmentId: selectedCheckHw.id, itemId: item.id, studentId: student.id, status: null },
+        })
+      }
+    }
+  }
+
   // 지난 숙제 검사 — 학생별 제출 상태 그리드
   const renderCheckGrid = (checkHw: HomeworkAssignment, item: HomeworkItem, checkSession: number) => (
     <div className="ml-7 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
@@ -249,10 +279,10 @@ export default function HomeworkPage() {
   )
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="max-w-6xl mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">숙제관리</h1>
-        <p className="text-sm text-slate-500 mt-1">검사일 기준 숙제 검사·출제 및 미제출 현황</p>
+        <p className="text-sm text-slate-500 mt-1">오늘 검사할 숙제와 새로 출제할 숙제를 한 화면에서 관리합니다</p>
       </div>
 
       {/* 필터 바 */}
@@ -299,66 +329,297 @@ export default function HomeworkPage() {
         <span className="ml-auto text-xs text-slate-400">{getClassName(selectedClass)}</span>
       </div>
 
-      {/* 미제출 현황 요약 패널 */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <button
-          onClick={() => setShowSummary(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors text-left"
-        >
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={15} className={outstandingTotal > 0 ? 'text-orange-500' : 'text-slate-300'} />
-            <span className="text-sm font-semibold text-slate-700">미제출 현황</span>
-            {outstandingTotal > 0 ? (
-              <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-medium">{outstandingTotal}건 미확인</span>
-            ) : (
-              <span className="text-xs text-slate-400">모두 확인됨</span>
-            )}
-          </div>
-          {showSummary
-            ? <ChevronUp size={15} className="text-slate-400 shrink-0" />
-            : <ChevronDown size={15} className="text-slate-400 shrink-0" />
-          }
-        </button>
-        {showSummary && (
-          <div className="px-5 pb-4 border-t border-slate-100">
-            {summary.length === 0 ? (
-              <p className="text-center py-6 text-slate-400 text-sm">미제출·미흡 학생이 없습니다</p>
-            ) : (
-              <div className="space-y-4 pt-4">
-                {summary.map(group => (
-                  <div key={group.sessionNum}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-semibold text-slate-700">{formatDateKo(group.date)} 검사</span>
-                      <span className="text-xs text-slate-400">{formatDateKo(group.assignDate)} 출제분</span>
-                      {group.resolvedCount > 0 && (
-                        <span className="text-xs text-blue-500">· 재확인완료 {group.resolvedCount}</span>
-                      )}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 px-4 py-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {[...classDates].reverse().map(({ date, sessionNum }) => {
+            const checkHw = state.homeworks.find(h => h.sessionNum === sessionNum - 1 && h.classId === selectedClass)
+            const assignHw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)
+            const issueCount = summary.find(group => group.sessionNum === sessionNum)?.entries.length ?? 0
+            const isSelected = sessionNum === selectedSessionNum
+            return (
+              <button
+                key={sessionNum}
+                onClick={() => setSelectedSession(sessionNum)}
+                className={`min-w-28 rounded-lg border px-3 py-2 text-left transition-colors ${
+                  isSelected
+                    ? 'border-blue-300 bg-blue-50 text-blue-700'
+                    : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-white'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold">{formatDateKo(date)}</span>
+                  {date === todayStr && <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">오늘</span>}
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-[11px]">
+                  <span>검사 {checkHw?.items?.length ?? 0}</span>
+                  <span>출제 {assignHw?.items?.length ?? 0}</span>
+                  {issueCount > 0 && <span className="font-bold text-red-500">미확인 {issueCount}</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {classDates.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 py-20 text-center text-sm text-slate-400">
+          이 달 수업 일정이 없습니다
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-5 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-800">오늘 검사</h2>
+                    {selectedIsToday && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">오늘</span>}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">{formatDateKo(selectedDate)} 검사 · {formatDateKo(prevDate(selectedSessionNum))} 출제분</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedIssueEntries.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    미확인 {selectedIssueEntries.length}
+                  </span>
+                  {selectedCheckItems.length > 0 && (
+                    <button
+                      onClick={markSelectedAllSubmitted}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-emerald-200 hover:text-emerald-600"
+                    >
+                      전체 제출
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-5 py-5">
+                {selectedCheckHw && selectedCheckItems.length > 0 ? (
+                  <div className="space-y-5">
+                    {selectedCheckItems.map((item, idx) => (
+                      <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50/50 px-4 py-3">
+                        <div className="mb-3 flex items-center gap-2">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-400">{idx + 1}</span>
+                          <span className="min-w-0 flex-1 text-sm font-semibold text-slate-800">{item.text}</span>
+                        </div>
+                        {classStudents.length > 0 ? renderCheckGrid(selectedCheckHw, item, selectedSessionNum) : (
+                          <p className="text-xs text-slate-400">등록된 학생이 없습니다</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-200 py-12 text-center">
+                    <p className="text-sm font-medium text-slate-400">지난 수업에 출제된 숙제가 없습니다</p>
+                  </div>
+                )}
+
+                {selectedFlaggedStudents.length > 0 && selectedCheckHw && (
+                  <div className="mt-5 border-t border-slate-100 pt-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-500">재확인 일정</span>
+                      <span className="text-xs text-slate-400">미흡·미제출 학생 다시 확인할 날짜</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 ml-1">
-                      {group.entries.map(e => (
-                        <div key={`${e.itemId}-${e.studentId}`} className="flex items-center gap-2 text-sm">
-                          <span className="font-medium text-slate-700 w-14 shrink-0 truncate">{e.studentName}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${e.status === '미제출' ? 'text-red-600 bg-red-50' : 'text-orange-600 bg-orange-50'}`}>{e.status}</span>
-                          <span className="text-xs text-slate-500 truncate flex-1">{e.itemText}</span>
-                          <button
-                            onClick={() => dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: e.assignmentId, itemId: e.itemId, studentId: e.studentId, status: '재확인완료' } })}
-                            className="text-xs px-1.5 py-0.5 rounded border border-slate-200 text-slate-400 hover:text-blue-500 hover:border-blue-300 font-medium shrink-0 transition-colors"
-                          >
-                            재확인완료
-                          </button>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {selectedFlaggedStudents.map(({ student, status }) => {
+                        const fallback = nextClassDate(selectedSessionNum)
+                        const recheckDate = selectedCheckHw.recheckDates?.find(rd => rd.studentId === student.id)?.date ?? fallback
+                        return (
+                          <div key={student.id} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                            <span className="w-14 shrink-0 truncate text-sm font-semibold text-slate-700">{student.name}</span>
+                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${status === '미제출' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{status}</span>
+                            <select
+                              value={recheckDate}
+                              onChange={e => dispatch({ type: 'SET_HOMEWORK_RECHECK_DATE', payload: { assignmentId: selectedCheckHw.id, studentId: student.id, date: e.target.value } })}
+                              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:ring-1 focus:ring-blue-300"
+                            >
+                              {[...new Set([...dateRangeOptions(selectedDate), recheckDate])].sort().map(d => (
+                                <option key={d} value={d}>{formatDateKo(d)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+              <div className="border-b border-slate-100 px-5 py-4">
+                <h2 className="text-base font-bold text-slate-800">오늘 출제</h2>
+                <p className="mt-1 text-xs text-slate-400">다음 수업에 검사할 숙제를 입력합니다</p>
+              </div>
+              <div className="px-5 py-5">
+                {selectedAssignItems.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedAssignItems.map((item, idx) => (
+                      <div key={item.id} className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 group">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-50 text-xs font-bold text-slate-400">{idx + 1}</span>
+                        {editingItemId === item.id ? (
+                          <>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={editingItemText}
+                              onChange={e => setEditingItemText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleSaveItemEdit(selectedAssignHw!, item.id)
+                                if (e.key === 'Escape') { setEditingItemId(null); setEditingItemText('') }
+                              }}
+                              className="min-w-0 flex-1 rounded-lg border border-blue-300 px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                            />
+                            <button onClick={() => handleSaveItemEdit(selectedAssignHw!, item.id)} className="p-1 text-blue-500 hover:text-blue-700 shrink-0">
+                              <Check size={14} />
+                            </button>
+                            <button onClick={() => { setEditingItemId(null); setEditingItemText('') }} className="p-1 text-slate-400 hover:text-slate-600 shrink-0">
+                              <X size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="min-w-0 flex-1 text-sm text-slate-700">{item.text}</span>
+                            <button
+                              onClick={() => { setEditingItemId(item.id); setEditingItemText(item.text) }}
+                              className="p-1 text-slate-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveItem(selectedAssignHw!, item.id)}
+                              className="p-1 text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">아직 출제된 숙제가 없습니다</p>
+                )}
+
+                <div className="mt-4 flex gap-2">
+                  <input
+                    type="text"
+                    value={newItemTexts[selectedSessionNum] ?? ''}
+                    onChange={e => setNewItemTexts(prev => ({ ...prev, [selectedSessionNum]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && handleAddItem(selectedSessionNum)}
+                    placeholder="숙제 항목 추가..."
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                  <button
+                    onClick={() => handleAddItem(selectedSessionNum)}
+                    disabled={!(newItemTexts[selectedSessionNum] ?? '').trim()}
+                    className="flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
+                  >
+                    <Plus size={14} />
+                    추가
+                  </button>
+                </div>
+
+                {selectedAssignHw && (
+                  <div className="mt-2 flex justify-end">
+                    {confirmClearSession === selectedSessionNum ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500">삭제할까요?</span>
+                        <button
+                          onClick={() => { dispatch({ type: 'DELETE_HOMEWORK', payload: selectedAssignHw.id }); setConfirmClearSession(null) }}
+                          className="rounded-md bg-red-500 px-2 py-1 text-xs text-white transition-colors hover:bg-red-600"
+                        >
+                          확인
+                        </button>
+                        <button
+                          onClick={() => setConfirmClearSession(null)}
+                          className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-200"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmClearSession(selectedSessionNum)}
+                        className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-red-400"
+                      >
+                        <RotateCcw size={11} />
+                        출제분 전체 삭제
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+
+          <aside className="space-y-4">
+            <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+              <button
+                onClick={() => setShowSummary(v => !v)}
+                className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={15} className={outstandingTotal > 0 ? 'text-orange-500' : 'text-slate-300'} />
+                  <span className="text-sm font-bold text-slate-800">미확인 학생</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${outstandingTotal > 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>{outstandingTotal}</span>
+                </div>
+                {showSummary ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronDown size={15} className="text-slate-400" />}
+              </button>
+              {showSummary && (
+                <div className="max-h-[420px] overflow-y-auto px-4 py-3">
+                  {summary.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-slate-400">미제출·미흡 학생이 없습니다</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {summary.map(group => (
+                        <div key={group.sessionNum}>
+                          <div className="mb-2 flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedSession(group.sessionNum)}
+                              className="text-xs font-bold text-slate-600 hover:text-blue-600"
+                            >
+                              {formatDateKo(group.date)}
+                            </button>
+                            {group.resolvedCount > 0 && <span className="text-[11px] text-blue-500">완료 {group.resolvedCount}</span>}
+                          </div>
+                          <div className="space-y-1.5">
+                            {group.entries.map(e => (
+                              <div key={`${e.itemId}-${e.studentId}`} className="rounded-lg bg-slate-50 px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">{e.studentName}</span>
+                                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${e.status === '미제출' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'}`}>{e.status}</span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-2">
+                                  <span className="min-w-0 flex-1 truncate text-xs text-slate-400">{e.itemText}</span>
+                                  <button
+                                    onClick={() => dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: e.assignmentId, itemId: e.itemId, studentId: e.studentId, status: '재확인완료' } })}
+                                    className="shrink-0 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-semibold text-slate-400 transition-colors hover:border-blue-300 hover:text-blue-500"
+                                  >
+                                    완료
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                  )}
+                </div>
+              )}
+            </section>
+          </aside>
+        </div>
+      )}
 
       {/* 검사일별 아코디언 */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 divide-y divide-slate-100 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800">이전 기록</h2>
+            <p className="mt-0.5 text-xs text-slate-400">날짜별 검사·출제 기록을 펼쳐서 확인합니다</p>
+          </div>
+        </div>
         {classDates.length === 0 ? (
           <p className="text-center py-12 text-slate-400 text-sm">이 달 수업 일정이 없습니다</p>
         ) : (
