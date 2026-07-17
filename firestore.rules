@@ -42,7 +42,7 @@ service cloud.firestore {
         || (
           isApproved()
           && myAcademyId() == academyId
-          && myRegistration().role == '관리자'
+          && (myRegistration().role == '관리자' || myRegistration().role == '원장')
         );
     }
 
@@ -110,18 +110,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
-      allow read, write: if isDefaultMember() && myRegistration().role == '관리자';
+      allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
     }
 
     match /config/{docId} {
       allow read: if isDefaultMember();
-      allow write: if isSuperAdmin() || (isDefaultMember() && myRegistration().role == '관리자');
+      allow write: if isSuperAdmin() || (isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장'));
     }
 
     match /appData/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
-      allow read, write: if isDefaultMember() && myRegistration().role == '관리자';
+      allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
       allow read, write: if isDefaultMember() && isAssignedJogyo(userId);
       allow read: if isDefaultMember()
         && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
@@ -131,7 +131,7 @@ service cloud.firestore {
       allow read: if isDefaultMember();
       allow write: if isSuperAdmin()
         || (signedIn() && request.auth.uid == userId)
-        || (isDefaultMember() && myRegistration().role == '관리자')
+        || (isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장'))
         || (isDefaultMember() && isAssignedJogyo(userId));
     }
 

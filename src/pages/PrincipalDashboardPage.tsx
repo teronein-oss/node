@@ -53,7 +53,7 @@ function percent(part: number, total: number) {
 }
 
 export default function PrincipalDashboardPage() {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
   const [teachers, setTeachers] = useState<TeacherInfo[]>([])
   const [studentsByTeacher, setStudentsByTeacher] = useState<Record<string, Student[]>>({})
   const [loading, setLoading] = useState(true)
@@ -65,9 +65,7 @@ export default function PrincipalDashboardPage() {
 
     const load = async () => {
       setLoading(true)
-      const regQuery = isAdmin
-        ? registrationsCollection()
-        : query(registrationsCollection(), where('academyId', '==', user.academyId))
+      const regQuery = query(registrationsCollection(), where('academyId', '==', user.academyId))
       const regSnap = await getDocs(regQuery)
       const teacherList: TeacherInfo[] = []
       regSnap.forEach(docSnap => {
@@ -101,7 +99,7 @@ export default function PrincipalDashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [isAdmin, user])
+  }, [user])
 
   const availableMonths = useMemo(() => {
     const months = new Set<string>([monthKey(new Date())])
