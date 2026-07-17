@@ -34,6 +34,12 @@ function diffDays(start: string, end: string): number {
   )
 }
 
+function inRange(date: string | undefined, start: string, end: string) {
+  if (!date) return false
+  const day = date.slice(0, 10)
+  return day >= start && day <= end
+}
+
 function DashboardModal({
   title,
   count,
@@ -803,20 +809,26 @@ export default function DashboardPage() {
   }, [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr])
 
   const classPopulationRows = useMemo(() => {
+    const monthStart = `${selectedYM}-01`
+    const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
     return state.classes
       .map(cls => {
         const activeCount = state.students.filter(s => s.active && s.classId === cls.id).length
-        const inactiveCount = state.students.filter(s => !s.active && s.classId === cls.id).length
+        const withdrawnInMonth = state.students.filter(s =>
+          !s.active &&
+          s.classId === cls.id &&
+          inRange(s.withdrawnAt, monthStart, monthEnd)
+        ).length
         return {
           classId: cls.id,
           className: cls.name,
           classDays: cls.days,
           activeCount,
-          inactiveCount,
+          withdrawnInMonth,
         }
       })
       .sort((a, b) => b.activeCount - a.activeCount || a.className.localeCompare(b.className, 'ko'))
-  }, [state.classes, state.students])
+  }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students])
 
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
@@ -1340,7 +1352,7 @@ export default function DashboardPage() {
 function ClassPopulationPanel({
   rows,
 }: {
-  rows: { classId: string; className: string; classDays: string; activeCount: number; inactiveCount: number }[]
+  rows: { classId: string; className: string; classDays: string; activeCount: number; withdrawnInMonth: number }[]
 }) {
   const total = rows.reduce((sum, row) => sum + row.activeCount, 0)
 
@@ -1363,7 +1375,7 @@ function ClassPopulationPanel({
               </div>
               <div className="text-right">
                 <div className="text-sm font-bold text-slate-800">{row.activeCount}명</div>
-                {row.inactiveCount > 0 && <div className="text-[11px] text-slate-400">퇴원 {row.inactiveCount}</div>}
+                <div className="text-[11px] text-slate-400">월 퇴원 {row.withdrawnInMonth}</div>
               </div>
             </div>
           ))}
