@@ -214,7 +214,7 @@ export default function HomeworkPage() {
 
   // 지난 숙제 검사 — 학생별 제출 상태 그리드
   const renderCheckGrid = (checkHw: HomeworkAssignment, item: HomeworkItem, checkSession: number) => (
-    <div className="ml-7 grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-2">
+    <div className="ml-7 grid grid-cols-1 sm:grid-cols-[repeat(2,max-content)] xl:grid-cols-[repeat(3,max-content)] gap-x-6 gap-y-2">
       {classStudents.map(student => {
         const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSession)
         const isAbsent = checkGrade?.attendance === '결석'
@@ -226,8 +226,8 @@ export default function HomeworkPage() {
         const setStatus = (status: '제출' | '미흡' | '미제출' | '재확인완료' | null) =>
           dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: checkHw.id, itemId: item.id, studentId: student.id, status } })
         return (
-          <div key={student.id} className="flex items-center gap-1">
-            <div className="flex items-center gap-1 w-12 shrink-0">
+          <div key={student.id} className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 w-16 shrink-0">
               <span className="text-xs text-slate-600 truncate">{student.name}</span>
               {isAbsent && <span className="text-xs text-red-400 font-medium shrink-0">결석</span>}
             </div>
@@ -260,7 +260,7 @@ export default function HomeworkPage() {
                     ? 'text-red-600 bg-red-50 border-red-200'
                     : 'text-slate-300 border-slate-200 hover:text-red-500 hover:border-red-300'}`}
               >
-                미제
+                미제출
               </button>
               {showRecheck && (
                 <button
