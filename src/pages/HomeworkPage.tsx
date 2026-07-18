@@ -224,7 +224,7 @@ export default function HomeworkPage() {
             <div className="flex gap-1">
               <button
                 onClick={() => setStatus(null)}
-                className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                className={`min-w-12 whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                   ${displayStatus === '제출'
                     ? 'text-green-700 bg-green-50 border-green-200'
                     : 'text-slate-300 border-slate-200 hover:text-green-600 hover:border-green-300'}`}
@@ -233,7 +233,7 @@ export default function HomeworkPage() {
               </button>
               <button
                 onClick={() => setStatus(itemStatus === '미흡' ? null : '미흡')}
-                className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                className={`min-w-12 whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                   ${displayStatus === '미흡'
                     ? 'text-orange-600 bg-orange-50 border-orange-200'
                     : 'text-slate-300 border-slate-200 hover:text-orange-500 hover:border-orange-300'}`}
@@ -242,7 +242,7 @@ export default function HomeworkPage() {
               </button>
               <button
                 onClick={() => setStatus(itemStatus === '미제출' ? null : '미제출')}
-                className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                className={`min-w-14 whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                   ${displayStatus === '미제출'
                     ? 'text-red-600 bg-red-50 border-red-200'
                     : 'text-slate-300 border-slate-200 hover:text-red-500 hover:border-red-300'}`}
@@ -252,7 +252,7 @@ export default function HomeworkPage() {
               {showRecheck && (
                 <button
                   onClick={() => { if (itemStatus !== '재확인완료') setStatus('재확인완료') }}
-                  className={`text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
+                  className={`min-w-14 whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                     ${itemStatus === '재확인완료'
                       ? 'text-blue-600 bg-blue-50 border-blue-200 cursor-default'
                       : 'text-slate-300 border-slate-200 hover:text-blue-500 hover:border-blue-300'}`}
