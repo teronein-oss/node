@@ -202,9 +202,19 @@ export default function HomeworkPage() {
     }
   }
 
+  const assignSelectedRecheckDate = (date: string) => {
+    if (!date || !selectedCheckHw) return
+    for (const { student } of selectedFlaggedStudents) {
+      dispatch({
+        type: 'SET_HOMEWORK_RECHECK_DATE',
+        payload: { assignmentId: selectedCheckHw.id, studentId: student.id, date },
+      })
+    }
+  }
+
   // 지난 숙제 검사 — 학생별 제출 상태 그리드
   const renderCheckGrid = (checkHw: HomeworkAssignment, item: HomeworkItem, checkSession: number) => (
-    <div className="ml-7 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+    <div className="ml-7 grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-2">
       {classStudents.map(student => {
         const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSession)
         const isAbsent = checkGrade?.attendance === '결석'
@@ -216,8 +226,8 @@ export default function HomeworkPage() {
         const setStatus = (status: '제출' | '미흡' | '미제출' | '재확인완료' | null) =>
           dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: checkHw.id, itemId: item.id, studentId: student.id, status } })
         return (
-          <div key={student.id} className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 w-16 shrink-0">
+          <div key={student.id} className="flex items-center gap-1">
+            <div className="flex items-center gap-1 w-12 shrink-0">
               <span className="text-xs text-slate-600 truncate">{student.name}</span>
               {isAbsent && <span className="text-xs text-red-400 font-medium shrink-0">결석</span>}
             </div>
@@ -225,7 +235,7 @@ export default function HomeworkPage() {
               <button
                 title="제출"
                 onClick={() => setStatus(null)}
-                className={`whitespace-nowrap text-xs px-2 py-0.5 rounded border font-medium transition-colors
+                className={`whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                   ${displayStatus === '제출'
                     ? 'text-green-700 bg-green-50 border-green-200'
                     : 'text-slate-300 border-slate-200 hover:text-green-600 hover:border-green-300'}`}
@@ -235,7 +245,7 @@ export default function HomeworkPage() {
               <button
                 title="미흡"
                 onClick={() => setStatus(itemStatus === '미흡' ? null : '미흡')}
-                className={`whitespace-nowrap text-xs px-2 py-0.5 rounded border font-medium transition-colors
+                className={`whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                   ${displayStatus === '미흡'
                     ? 'text-orange-600 bg-orange-50 border-orange-200'
                     : 'text-slate-300 border-slate-200 hover:text-orange-500 hover:border-orange-300'}`}
@@ -245,7 +255,7 @@ export default function HomeworkPage() {
               <button
                 title="미제출"
                 onClick={() => setStatus(itemStatus === '미제출' ? null : '미제출')}
-                className={`whitespace-nowrap text-xs px-2 py-0.5 rounded border font-medium transition-colors
+                className={`whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                   ${displayStatus === '미제출'
                     ? 'text-red-600 bg-red-50 border-red-200'
                     : 'text-slate-300 border-slate-200 hover:text-red-500 hover:border-red-300'}`}
@@ -256,7 +266,7 @@ export default function HomeworkPage() {
                 <button
                   title={itemStatus === '재확인완료' ? '재확인완료' : '재확인'}
                   onClick={() => { if (itemStatus !== '재확인완료') setStatus('재확인완료') }}
-                  className={`whitespace-nowrap text-xs px-2 py-0.5 rounded border font-medium transition-colors
+                  className={`whitespace-nowrap text-xs px-1.5 py-0.5 rounded border font-medium transition-colors
                     ${itemStatus === '재확인완료'
                       ? 'text-blue-600 bg-blue-50 border-blue-200 cursor-default'
                       : 'text-slate-300 border-slate-200 hover:text-blue-500 hover:border-blue-300'}`}
@@ -408,9 +418,25 @@ export default function HomeworkPage() {
 
                 {selectedFlaggedStudents.length > 0 && selectedCheckHw && (
                   <div className="mt-5 border-t border-slate-100 pt-4">
-                    <div className="mb-3 flex items-center gap-2">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-slate-500">재확인 일정</span>
-                      <span className="text-xs text-slate-400">미흡·미제출 학생 다시 확인할 날짜</span>
+                      <span className="min-w-0 flex-1 text-xs text-slate-400">미흡·미제출 학생 다시 확인할 날짜</span>
+                      <label className="flex shrink-0 items-center gap-1.5">
+                        <span className="text-xs font-semibold text-slate-500">일괄배정</span>
+                        <select
+                          value=""
+                          onChange={e => {
+                            assignSelectedRecheckDate(e.target.value)
+                            e.currentTarget.value = ''
+                          }}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:ring-1 focus:ring-blue-300"
+                        >
+                          <option value="">날짜 선택</option>
+                          {dateRangeOptions(selectedDate).map(d => (
+                            <option key={d} value={d}>{formatDateKo(d)}</option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {selectedFlaggedStudents.map(({ student, status }) => {
