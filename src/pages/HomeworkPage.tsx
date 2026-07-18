@@ -78,7 +78,7 @@ export default function HomeworkPage() {
   // 검사일별 미제출/미흡 현황 (재확인완료 제외)
   const summary = useMemo(() => {
     const studentName = (id: string) => classStudents.find(s => s.id === id)?.name ?? '?'
-    return [...classDates].reverse().map(({ date, sessionNum }) => {
+    return classDates.map(({ date, sessionNum }) => {
       const checkHw = state.homeworks.find(h => h.sessionNum === sessionNum - 1 && h.classId === selectedClass)
       const entries: { studentId: string; studentName: string; itemId: string; itemText: string; status: '미흡' | '미제출'; assignmentId: string }[] = []
       let resolvedCount = 0
@@ -98,7 +98,6 @@ export default function HomeworkPage() {
   const outstandingTotal = summary.reduce((n, g) => n + g.entries.length, 0)
 
   // 아코디언 상태
-  const [expandedSessions, setExpandedSessions] = useState<Set<number>>(() => new Set([selectedSession]))
   const [newItemTexts, setNewItemTexts] = useState<Record<number, string>>({})
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [editingItemText, setEditingItemText] = useState('')
@@ -118,16 +117,6 @@ export default function HomeworkPage() {
     if (classDates.some(d => d.sessionNum === selectedSession)) return
     setSelectedSession(classDates[classDates.length - 1].sessionNum)
   }, [classDates, selectedSession, setSelectedSession])
-
-  const toggleSession = (sessionNum: number) => {
-    setExpandedSessions(prev => {
-      const next = new Set(prev)
-      if (next.has(sessionNum)) next.delete(sessionNum)
-      else next.add(sessionNum)
-      return next
-    })
-    setSelectedSession(sessionNum)
-  }
 
   const handleAddItem = (sessionNum: number) => {
     const text = (newItemTexts[sessionNum] ?? '').trim()
@@ -331,7 +320,7 @@ export default function HomeworkPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 px-4 py-3">
         <div className="flex items-center gap-2 overflow-x-auto">
-          {[...classDates].reverse().map(({ date, sessionNum }) => {
+          {classDates.map(({ date, sessionNum }) => {
             const checkHw = state.homeworks.find(h => h.sessionNum === sessionNum - 1 && h.classId === selectedClass)
             const assignHw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)
             const issueCount = summary.find(group => group.sessionNum === sessionNum)?.entries.length ?? 0
@@ -612,232 +601,6 @@ export default function HomeworkPage() {
         </div>
       )}
 
-      {/* 검사일별 아코디언 */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 divide-y divide-slate-100 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5">
-          <div>
-            <h2 className="text-sm font-bold text-slate-800">이전 기록</h2>
-            <p className="mt-0.5 text-xs text-slate-400">날짜별 검사·출제 기록을 펼쳐서 확인합니다</p>
-          </div>
-        </div>
-        {classDates.length === 0 ? (
-          <p className="text-center py-12 text-slate-400 text-sm">이 달 수업 일정이 없습니다</p>
-        ) : (
-          [...classDates].reverse().map(({ date, sessionNum }) => {
-            const checkHw = state.homeworks.find(h => h.sessionNum === sessionNum - 1 && h.classId === selectedClass)
-            const assignHw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)
-            const checkItems = checkHw?.items ?? []
-            const assignItems = assignHw?.items ?? []
-            const isExpanded = expandedSessions.has(sessionNum)
-            const isToday = date === todayStr
-
-            return (
-              <div key={sessionNum}>
-                {/* 날짜 헤더 */}
-                <button
-                  onClick={() => toggleSession(sessionNum)}
-                  className={`w-full flex items-center justify-between px-5 py-3.5 transition-colors text-left
-                    ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`text-sm font-semibold ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>
-                      {formatDateKo(date)}
-                    </span>
-                    {isToday && (
-                      <span className="text-xs bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
-                    )}
-                    {checkItems.length > 0 && (
-                      <span className="text-xs text-slate-400">검사 {checkItems.length}</span>
-                    )}
-                    {assignItems.length > 0 && (
-                      <span className="text-xs text-slate-400">출제 {assignItems.length}</span>
-                    )}
-                    {checkItems.length === 0 && assignItems.length === 0 && (
-                      <span className="text-xs text-slate-300">숙제 없음</span>
-                    )}
-                  </div>
-                  {isExpanded
-                    ? <ChevronUp size={15} className="text-slate-400 shrink-0" />
-                    : <ChevronDown size={15} className="text-slate-400 shrink-0" />
-                  }
-                </button>
-
-                {/* 펼쳐진 내용 */}
-                {isExpanded && (
-                  <div className="border-t border-slate-100">
-
-                    {/* 지난 숙제 검사 */}
-                    <div className="px-5 py-4 bg-slate-50/40">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">지난 숙제 검사</span>
-                        <span className="text-xs text-slate-400">{formatDateKo(prevDate(sessionNum))} 출제분</span>
-                      </div>
-                      {checkHw && checkItems.length > 0 ? (
-                        <div className="space-y-5">
-                          {checkItems.map((item, idx) => (
-                            <div key={item.id}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xs font-bold text-slate-400 w-5 shrink-0 text-right">{idx + 1}</span>
-                                <span className="flex-1 text-sm font-semibold text-slate-700">{item.text}</span>
-                              </div>
-                              {classStudents.length > 0 && renderCheckGrid(checkHw, item, sessionNum)}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">지난 수업에 출제된 숙제가 없습니다</p>
-                      )}
-
-                      {/* 재확인 일정 — 미흡/미제출 학생별 날짜 */}
-                      {checkHw && (() => {
-                        const flagged = flaggedStudents(checkHw)
-                        if (flagged.length === 0) return null
-                        const fallback = nextClassDate(sessionNum)
-                        return (
-                          <div className="mt-5 pt-4 border-t border-slate-200/70">
-                            <div className="flex items-center gap-2 mb-2.5">
-                              <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">재확인 일정</span>
-                              <span className="text-xs text-slate-400">미흡·미제출 학생 다시 확인할 날짜</span>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-                              {flagged.map(({ student, status }) => {
-                                const recheckDate = checkHw.recheckDates?.find(rd => rd.studentId === student.id)?.date ?? fallback
-                                return (
-                                  <div key={student.id} className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-slate-700 w-14 shrink-0 truncate">{student.name}</span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${status === '미제출' ? 'text-red-600 bg-red-50' : 'text-orange-600 bg-orange-50'}`}>{status}</span>
-                                    <select
-                                      value={recheckDate}
-                                      onChange={e => dispatch({ type: 'SET_HOMEWORK_RECHECK_DATE', payload: { assignmentId: checkHw.id, studentId: student.id, date: e.target.value } })}
-                                      className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-slate-700"
-                                    >
-                                      {[...new Set([...dateRangeOptions(date), recheckDate])].sort().map(d => (
-                                        <option key={d} value={d}>{formatDateKo(d)}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )
-                      })()}
-                    </div>
-
-                    {/* 오늘 출제 */}
-                    <div className="px-5 py-4 border-t border-slate-100">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">오늘 출제</span>
-                        <span className="text-xs text-slate-400">다음 수업에 검사</span>
-                      </div>
-
-                      {assignItems.length > 0 ? (
-                        <div className="space-y-2">
-                          {assignItems.map((item, idx) => (
-                            <div key={item.id} className="flex items-center gap-2 group">
-                              <span className="text-xs font-bold text-slate-400 w-5 shrink-0 text-right">{idx + 1}</span>
-                              {editingItemId === item.id ? (
-                                <>
-                                  <input
-                                    autoFocus
-                                    type="text"
-                                    value={editingItemText}
-                                    onChange={e => setEditingItemText(e.target.value)}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') handleSaveItemEdit(assignHw!, item.id)
-                                      if (e.key === 'Escape') { setEditingItemId(null); setEditingItemText('') }
-                                    }}
-                                    className="flex-1 border border-blue-300 rounded-lg px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-                                  />
-                                  <button onClick={() => handleSaveItemEdit(assignHw!, item.id)} className="p-1 text-blue-500 hover:text-blue-700 shrink-0">
-                                    <Check size={14} />
-                                  </button>
-                                  <button onClick={() => { setEditingItemId(null); setEditingItemText('') }} className="p-1 text-slate-400 hover:text-slate-600 shrink-0">
-                                    <X size={14} />
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="flex-1 text-sm text-slate-700">{item.text}</span>
-                                  <button
-                                    onClick={() => { setEditingItemId(item.id); setEditingItemText(item.text) }}
-                                    className="p-1 text-slate-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                  >
-                                    <Pencil size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemoveItem(assignHw!, item.id)}
-                                    className="p-1 text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">항목을 추가해주세요</p>
-                      )}
-
-                      {/* 항목 추가 입력 */}
-                      <div className="flex gap-2 mt-4">
-                        <input
-                          type="text"
-                          value={newItemTexts[sessionNum] ?? ''}
-                          onChange={e => setNewItemTexts(prev => ({ ...prev, [sessionNum]: e.target.value }))}
-                          onKeyDown={e => e.key === 'Enter' && handleAddItem(sessionNum)}
-                          placeholder="숙제 항목 추가..."
-                          className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-                        />
-                        <button
-                          onClick={() => handleAddItem(sessionNum)}
-                          disabled={!(newItemTexts[sessionNum] ?? '').trim()}
-                          className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0"
-                        >
-                          <Plus size={14} />
-                          추가
-                        </button>
-                      </div>
-
-                      {/* 출제분 전체 삭제 */}
-                      {assignHw && (
-                        <div className="flex justify-end mt-2">
-                          {confirmClearSession === sessionNum ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500">삭제할까요?</span>
-                              <button
-                                onClick={() => { dispatch({ type: 'DELETE_HOMEWORK', payload: assignHw.id }); setConfirmClearSession(null) }}
-                                className="text-xs px-2 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-                              >
-                                확인
-                              </button>
-                              <button
-                                onClick={() => setConfirmClearSession(null)}
-                                className="text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors"
-                              >
-                                취소
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmClearSession(sessionNum)}
-                              className="flex items-center gap-1 text-xs text-slate-400 hover:text-red-400 transition-colors"
-                            >
-                              <RotateCcw size={11} />
-                              출제분 전체 삭제
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })
-        )}
-      </div>
     </div>
   )
 }
