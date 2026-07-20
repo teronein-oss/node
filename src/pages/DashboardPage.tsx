@@ -34,10 +34,34 @@ function diffDays(start: string, end: string): number {
   )
 }
 
-function inRange(date: string | undefined, start: string, end: string) {
-  if (!date) return false
-  const day = date.slice(0, 10)
+type DateValue = string | number | Date | { seconds?: number; _seconds?: number; toDate?: () => Date } | undefined | null
+
+function toDateKey(date: DateValue): string | undefined {
+  if (!date) return undefined
+  if (date instanceof Date) return fmtDate(date)
+  if (typeof date === 'number') return fmtDate(new Date(date))
+  if (typeof date === 'object') {
+    if (typeof date.toDate === 'function') return fmtDate(date.toDate())
+    const seconds = date.seconds ?? date._seconds
+    if (typeof seconds === 'number') return fmtDate(new Date(seconds * 1000))
+  }
+  const raw = String(date).trim()
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
+  const ko = raw.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})/)
+  if (ko) return `${ko[1]}-${ko[2].padStart(2, '0')}-${ko[3].padStart(2, '0')}`
+  return undefined
+}
+
+function inRange(date: DateValue, start: string, end: string) {
+  const day = toDateKey(date)
+  if (!day) return false
   return day >= start && day <= end
+}
+
+function getWithdrawnDate(student: { active: boolean; withdrawnAt?: DateValue }, fallbackDate: string) {
+  if (student.active) return undefined
+  return toDateKey(student.withdrawnAt) ?? fallbackDate
 }
 
 function DashboardModal({
@@ -414,8 +438,6 @@ function TodayFocusPanel({
     for (const item of row.homeworkTargets) getTask(item.studentId, item.name).homework = item
     return [...taskMap.values()]
   })
-  const previewTasks = studentTasks.slice(0, 6)
-
   const taskButtonClass = "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
   const renderTaskButton = (
     label: string,
@@ -437,11 +459,11 @@ function TodayFocusPanel({
   }
 
   const renderTask = (task: TodayStudentTask) => (
-    <div key={task.key} className="grid grid-cols-[minmax(150px,190px)_max-content] items-center justify-start gap-4 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
-        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">{task.className}</span>
-      </div>
+    <div key={task.key} className="grid grid-cols-[72px_90px_max-content] items-center justify-start gap-3 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
+      <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
+      <span className="truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-semibold text-slate-500">
+        {task.className}
+      </span>
       <div className="flex gap-1.5">
         {renderTaskButton('단어', task.vocab, 'purple', () => task.vocab && onCompleteRetest(task.vocab, '단어 재시험'))}
         {renderTaskButton('Daily', task.daily, 'blue', () => task.daily && onCompleteRetest(task.daily, 'Daily 재시험'))}
@@ -476,15 +498,13 @@ function TodayFocusPanel({
       {studentTasks.length === 0 ? (
         <div className="px-5 py-20 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
       ) : (
-        <div className="h-[242px] overflow-hidden">
-          <div className="grid grid-cols-[minmax(150px,190px)_max-content] justify-start gap-4 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
-            <span>학생 · 반</span>
+        <div className="h-[242px] overflow-y-auto">
+          <div className="sticky top-0 z-10 grid grid-cols-[72px_90px_max-content] justify-start gap-3 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+            <span>학생</span>
+            <span className="text-center">반</span>
             <span>처리 항목</span>
           </div>
-          {previewTasks.map(renderTask)}
-          {studentTasks.length > previewTasks.length && (
-            <div className="px-5 py-2 text-center text-xs text-slate-400">+{studentTasks.length - previewTasks.length}명 더 있음</div>
-          )}
+          {studentTasks.map(renderTask)}
         </div>
       )}
       {isOpen && (
@@ -493,8 +513,9 @@ function TodayFocusPanel({
             <div className="px-5 py-10 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
           ) : (
             <div>
-              <div className="grid grid-cols-[minmax(150px,190px)_max-content] justify-start gap-4 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
-                <span>학생 · 반</span>
+              <div className="grid grid-cols-[72px_90px_max-content] justify-start gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+                <span>학생</span>
+                <span className="text-center">반</span>
                 <span>처리 항목</span>
               </div>
               {studentTasks.map(renderTask)}
@@ -776,8 +797,8 @@ export default function DashboardPage() {
       .map(cls => {
         const activeCount = state.students.filter(s => s.active && s.classId === cls.id).length
         const withdrawnInMonth = state.students.filter(s => {
-          const withdrawnAt = s.withdrawnAt ?? (!s.active ? todayStr : undefined)
-          return !s.active && s.classId === cls.id && inRange(withdrawnAt, monthStart, monthEnd)
+          const withdrawnAt = getWithdrawnDate(s, todayStr)
+          return s.classId === cls.id && inRange(withdrawnAt, monthStart, monthEnd)
         }).length
         return {
           classId: cls.id,
@@ -796,8 +817,8 @@ export default function DashboardPage() {
     return {
       registered: state.students.filter(s => inRange(s.registeredAt, monthStart, monthEnd)).length,
       withdrawn: state.students.filter(s => {
-        const withdrawnAt = s.withdrawnAt ?? (!s.active ? todayStr : undefined)
-        return !s.active && inRange(withdrawnAt, monthStart, monthEnd)
+        const withdrawnAt = getWithdrawnDate(s, todayStr)
+        return inRange(withdrawnAt, monthStart, monthEnd)
       }).length,
     }
   }, [selectedMonth, selectedYM, selectedYear, state.students, todayStr])
