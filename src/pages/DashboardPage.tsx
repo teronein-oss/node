@@ -473,33 +473,20 @@ function TodayFocusPanel({
   )
 
   return (
-    <div className="h-[390px] bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
+    <div className="flex h-[390px] flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+      <div className="flex shrink-0 items-center gap-2 px-5 py-4 border-b border-slate-100">
         <CheckCircle size={15} className="text-blue-500" />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">오늘 확인</h2>
+        <span className="hidden text-[11px] font-medium text-slate-400 sm:inline">항목을 누르면 완료됩니다</span>
         <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
           전체 보기
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-3 px-5 py-4">
-        <div className="rounded-lg border border-purple-100 bg-purple-50/50 px-4 py-3">
-          <div className="text-xs font-semibold text-purple-600">재시험</div>
-          <div className="mt-1 text-xl font-bold text-slate-900">{vocabTotal + dailyTotal}명</div>
-        </div>
-        <div className="rounded-lg border border-orange-100 bg-orange-50/50 px-4 py-3">
-          <div className="text-xs font-semibold text-orange-600">숙제</div>
-          <div className="mt-1 text-xl font-bold text-slate-900">{homeworkTotal}명</div>
-        </div>
-        <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
-          <div className="text-xs font-semibold text-emerald-600">전체</div>
-          <div className="mt-1 text-xl font-bold text-slate-900">{total}명</div>
-        </div>
-      </div>
       {studentTasks.length === 0 ? (
-        <div className="px-5 py-20 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
       ) : (
-        <div className="h-[242px] overflow-y-auto">
-          <div className="sticky top-0 z-10 grid grid-cols-[72px_90px_max-content] justify-start gap-3 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="sticky top-0 z-10 grid grid-cols-[72px_90px_max-content] justify-start gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
             <span>학생</span>
             <span className="text-center">반</span>
             <span>처리 항목</span>
