@@ -351,6 +351,7 @@ interface TodayTaskRow {
 
 interface TodayRetestItem {
   id: string
+  studentId: string
   name: string
   passed: boolean | null
 }
@@ -364,34 +365,14 @@ interface TodayHomeworkItem {
   completed: boolean
 }
 
-type TodayFlatTask =
-  | {
-      id: string
-      name: string
-      className: string
-      type: '단어'
-      color: 'purple'
-      dueLabel: string
-      retest: TodayRetestItem
-    }
-  | {
-      id: string
-      name: string
-      className: string
-      type: 'Daily'
-      color: 'blue'
-      dueLabel: string
-      retest: TodayRetestItem
-    }
-  | {
-      id: string
-      name: string
-      className: string
-      type: '숙제'
-      color: 'orange'
-      dueLabel: string
-      homework: TodayHomeworkItem
-    }
+interface TodayStudentTask {
+  key: string
+  name: string
+  className: string
+  vocab?: TodayRetestItem
+  daily?: TodayRetestItem
+  homework?: TodayHomeworkItem
+}
 
 interface ManagementStudent {
   studentId: string
@@ -410,7 +391,7 @@ function TodayFocusPanel({
   onCompleteHomework,
 }: {
   rows: TodayTaskRow[]
-  onCompleteRetest: (item: TodayRetestItem) => void
+  onCompleteRetest: (item: TodayRetestItem, label?: string) => void
   onCompleteHomework: (item: TodayHomeworkItem) => void
 }) {
   const vocabTotal = rows.reduce((sum, row) => sum + row.vocabRetests.length, 0)
@@ -418,64 +399,55 @@ function TodayFocusPanel({
   const homeworkTotal = rows.reduce((sum, row) => sum + row.homeworkTargets.length, 0)
   const total = vocabTotal + dailyTotal + homeworkTotal
   const [isOpen, setIsOpen] = useState(false)
-  const flatTasks: TodayFlatTask[] = rows.flatMap(row => [
-    ...row.vocabRetests.map(item => ({
-      id: `vocab-${item.id}`,
-      name: item.name,
-      className: row.className,
-      type: '단어' as const,
-      color: 'purple' as const,
-      dueLabel: '오늘 확인',
-      retest: item,
-    })),
-    ...row.dailyRetests.map(item => ({
-      id: `daily-${item.id}`,
-      name: item.name,
-      className: row.className,
-      type: 'Daily' as const,
-      color: 'blue' as const,
-      dueLabel: '오늘 확인',
-      retest: item,
-    })),
-    ...row.homeworkTargets.map(item => ({
-      id: `homework-${item.assignmentId ?? item.sessionNum}-${item.studentId}`,
-      name: item.name,
-      className: row.className,
-      type: '숙제' as const,
-      color: 'orange' as const,
-      dueLabel: '재확인',
-      homework: item,
-    })),
-  ])
-  const previewTasks = flatTasks.slice(0, 6)
+  const studentTasks = rows.flatMap(row => {
+    const taskMap = new Map<string, TodayStudentTask>()
+    const getTask = (studentId: string, name: string) => {
+      const key = `${row.classId}-${studentId}`
+      const prev = taskMap.get(key)
+      if (prev) return prev
+      const next: TodayStudentTask = { key, name, className: row.className }
+      taskMap.set(key, next)
+      return next
+    }
+    for (const item of row.vocabRetests) getTask(item.studentId, item.name).vocab = item
+    for (const item of row.dailyRetests) getTask(item.studentId, item.name).daily = item
+    for (const item of row.homeworkTargets) getTask(item.studentId, item.name).homework = item
+    return [...taskMap.values()]
+  })
+  const previewTasks = studentTasks.slice(0, 6)
 
-  const renderTask = (task: TodayFlatTask) => {
-    const typeStyle = {
-      purple: 'bg-purple-50 text-purple-700 border-purple-100',
-      blue: 'bg-blue-50 text-blue-700 border-blue-100',
-      orange: 'bg-orange-50 text-orange-700 border-orange-100',
-    }[task.color]
-
+  const taskButtonClass = "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-25"
+  const renderTaskButton = (
+    label: string,
+    item: TodayRetestItem | TodayHomeworkItem | undefined,
+    color: 'purple' | 'blue' | 'orange',
+    onClick: () => void
+  ) => {
+    const styles = {
+      purple: item ? 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' : 'border-slate-100 bg-slate-50 text-slate-300',
+      blue: item ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-slate-100 bg-slate-50 text-slate-300',
+      orange: item ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100' : 'border-slate-100 bg-slate-50 text-slate-300',
+    }[color]
     return (
-      <div key={task.id} className="grid grid-cols-[minmax(80px,1fr)_80px_minmax(88px,1fr)_72px] items-center gap-3 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-800">{task.name}</div>
-          <div className="mt-0.5 text-[11px] text-slate-400">{task.className}</div>
-        </div>
-        <span className={`w-fit rounded-md border px-2 py-0.5 text-xs font-semibold ${typeStyle}`}>{task.type}</span>
-        <span className="truncate text-xs font-medium text-slate-500">{task.dueLabel}</span>
-        {'retest' in task ? (
-          <button onClick={() => onCompleteRetest(task.retest)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-            완료
-          </button>
-        ) : (
-          <button onClick={() => onCompleteHomework(task.homework)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-            완료
-          </button>
-        )}
-      </div>
+      <button type="button" disabled={!item} onClick={onClick} className={`${taskButtonClass} ${styles}`}>
+        {label}
+      </button>
     )
   }
+
+  const renderTask = (task: TodayStudentTask) => (
+    <div key={task.key} className="grid grid-cols-[minmax(90px,1fr)_minmax(190px,auto)] items-center gap-3 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-slate-800">{task.name}</div>
+        <div className="mt-0.5 text-[11px] text-slate-400">{task.className}</div>
+      </div>
+      <div className="flex justify-end gap-1.5">
+        {renderTaskButton('단어', task.vocab, 'purple', () => task.vocab && onCompleteRetest(task.vocab, '단어 재시험'))}
+        {renderTaskButton('Daily', task.daily, 'blue', () => task.daily && onCompleteRetest(task.daily, 'Daily 재시험'))}
+        {renderTaskButton('숙제', task.homework, 'orange', () => task.homework && onCompleteHomework(task.homework))}
+      </div>
+    </div>
+  )
 
   return (
     <div className="h-[390px] bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -500,35 +472,31 @@ function TodayFocusPanel({
           <div className="mt-1 text-xl font-bold text-slate-900">{total}명</div>
         </div>
       </div>
-      {flatTasks.length === 0 ? (
+      {studentTasks.length === 0 ? (
         <div className="px-5 py-20 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
       ) : (
         <div className="h-[242px] overflow-hidden">
-          <div className="grid grid-cols-[minmax(80px,1fr)_80px_minmax(88px,1fr)_72px] gap-3 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+          <div className="grid grid-cols-[minmax(90px,1fr)_minmax(190px,auto)] gap-3 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
             <span>학생</span>
-            <span>유형</span>
-            <span>상태</span>
-            <span className="text-center">처리</span>
+            <span className="text-right">처리 항목</span>
           </div>
           {previewTasks.map(renderTask)}
-          {flatTasks.length > previewTasks.length && (
-            <div className="px-5 py-2 text-center text-xs text-slate-400">+{flatTasks.length - previewTasks.length}명 더 있음</div>
+          {studentTasks.length > previewTasks.length && (
+            <div className="px-5 py-2 text-center text-xs text-slate-400">+{studentTasks.length - previewTasks.length}명 더 있음</div>
           )}
         </div>
       )}
       {isOpen && (
         <DashboardModal title="오늘 확인 전체" count={total} onClose={() => setIsOpen(false)}>
-          {flatTasks.length === 0 ? (
+          {studentTasks.length === 0 ? (
             <div className="px-5 py-10 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
           ) : (
             <div>
-              <div className="grid grid-cols-[minmax(80px,1fr)_80px_minmax(88px,1fr)_72px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+              <div className="grid grid-cols-[minmax(90px,1fr)_minmax(190px,auto)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
                 <span>학생</span>
-                <span>유형</span>
-                <span>상태</span>
-                <span className="text-center">처리</span>
+                <span className="text-right">처리 항목</span>
               </div>
-              {flatTasks.map(renderTask)}
+              {studentTasks.map(renderTask)}
             </div>
           )}
         </DashboardModal>
@@ -716,10 +684,10 @@ export default function DashboardPage() {
         )
         const vocabRetests = retests
           .filter(r => r.type === 'vocab')
-          .map(r => ({ id: r.id, name: getStudentName(r.studentId), passed: r.passed }))
+          .map(r => ({ id: r.id, studentId: r.studentId, name: getStudentName(r.studentId), passed: r.passed }))
         const dailyRetests = retests
           .filter(r => r.type === 'daily')
-          .map(r => ({ id: r.id, name: getStudentName(r.studentId), passed: r.passed }))
+          .map(r => ({ id: r.id, studentId: r.studentId, name: getStudentName(r.studentId), passed: r.passed }))
         const dueHomeworks = state.homeworks.filter(
           h => h.classId === cls.id || h.classId === ''
         )
@@ -806,11 +774,10 @@ export default function DashboardPage() {
     return state.classes
       .map(cls => {
         const activeCount = state.students.filter(s => s.active && s.classId === cls.id).length
-        const withdrawnInMonth = state.students.filter(s =>
-          !s.active &&
-          s.classId === cls.id &&
-          inRange(s.withdrawnAt, monthStart, monthEnd)
-        ).length
+        const withdrawnInMonth = state.students.filter(s => {
+          const withdrawnAt = s.withdrawnAt ?? (!s.active ? todayStr : undefined)
+          return !s.active && s.classId === cls.id && inRange(withdrawnAt, monthStart, monthEnd)
+        }).length
         return {
           classId: cls.id,
           className: cls.name,
@@ -820,16 +787,19 @@ export default function DashboardPage() {
         }
       })
       .sort((a, b) => b.activeCount - a.activeCount || a.className.localeCompare(b.className, 'ko'))
-  }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students])
+  }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students, todayStr])
 
   const monthlyFlow = useMemo(() => {
     const monthStart = `${selectedYM}-01`
     const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
     return {
       registered: state.students.filter(s => inRange(s.registeredAt, monthStart, monthEnd)).length,
-      withdrawn: state.students.filter(s => !s.active && inRange(s.withdrawnAt, monthStart, monthEnd)).length,
+      withdrawn: state.students.filter(s => {
+        const withdrawnAt = s.withdrawnAt ?? (!s.active ? todayStr : undefined)
+        return !s.active && inRange(withdrawnAt, monthStart, monthEnd)
+      }).length,
     }
-  }, [selectedMonth, selectedYM, selectedYear, state.students])
+  }, [selectedMonth, selectedYM, selectedYear, state.students, todayStr])
 
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
@@ -914,8 +884,8 @@ export default function DashboardPage() {
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
   }, [state.classes, state.students, state.retests, state.homeworks, state.grades, selectedYM, selectedYear, selectedMonth])
 
-  const completeTodayRetest = (item: TodayRetestItem) => {
-    if (!confirm(`${item.name} 재시험을 통과 처리하겠습니까?`)) return
+  const completeTodayRetest = (item: TodayRetestItem, label = '재시험') => {
+    if (!confirm(`${item.name} ${label}을 통과 처리하겠습니까?`)) return
     dispatch({ type: 'SAVE_RETEST', payload: { id: item.id, retestScore: null, passed: true } })
   }
 
