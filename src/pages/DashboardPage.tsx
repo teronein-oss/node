@@ -416,32 +416,33 @@ function TodayFocusPanel({
   })
   const previewTasks = studentTasks.slice(0, 6)
 
-  const taskButtonClass = "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors disabled:cursor-default disabled:opacity-25"
+  const taskButtonClass = "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
   const renderTaskButton = (
     label: string,
     item: TodayRetestItem | TodayHomeworkItem | undefined,
     color: 'purple' | 'blue' | 'orange',
     onClick: () => void
   ) => {
+    if (!item) return null
     const styles = {
-      purple: item ? 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100' : 'border-slate-100 bg-slate-50 text-slate-300',
-      blue: item ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-slate-100 bg-slate-50 text-slate-300',
-      orange: item ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100' : 'border-slate-100 bg-slate-50 text-slate-300',
+      purple: 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100',
+      blue: 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+      orange: 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100',
     }[color]
     return (
-      <button type="button" disabled={!item} onClick={onClick} className={`${taskButtonClass} ${styles}`}>
+      <button type="button" onClick={onClick} className={`${taskButtonClass} ${styles}`}>
         {label}
       </button>
     )
   }
 
   const renderTask = (task: TodayStudentTask) => (
-    <div key={task.key} className="grid grid-cols-[minmax(90px,1fr)_minmax(190px,auto)] items-center gap-3 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
-      <div className="min-w-0">
-        <div className="truncate text-sm font-semibold text-slate-800">{task.name}</div>
-        <div className="mt-0.5 text-[11px] text-slate-400">{task.className}</div>
+    <div key={task.key} className="grid grid-cols-[minmax(150px,190px)_max-content] items-center justify-start gap-4 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
+        <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">{task.className}</span>
       </div>
-      <div className="flex justify-end gap-1.5">
+      <div className="flex gap-1.5">
         {renderTaskButton('단어', task.vocab, 'purple', () => task.vocab && onCompleteRetest(task.vocab, '단어 재시험'))}
         {renderTaskButton('Daily', task.daily, 'blue', () => task.daily && onCompleteRetest(task.daily, 'Daily 재시험'))}
         {renderTaskButton('숙제', task.homework, 'orange', () => task.homework && onCompleteHomework(task.homework))}
@@ -476,9 +477,9 @@ function TodayFocusPanel({
         <div className="px-5 py-20 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
       ) : (
         <div className="h-[242px] overflow-hidden">
-          <div className="grid grid-cols-[minmax(90px,1fr)_minmax(190px,auto)] gap-3 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
-            <span>학생</span>
-            <span className="text-right">처리 항목</span>
+          <div className="grid grid-cols-[minmax(150px,190px)_max-content] justify-start gap-4 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+            <span>학생 · 반</span>
+            <span>처리 항목</span>
           </div>
           {previewTasks.map(renderTask)}
           {studentTasks.length > previewTasks.length && (
@@ -492,9 +493,9 @@ function TodayFocusPanel({
             <div className="px-5 py-10 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
           ) : (
             <div>
-              <div className="grid grid-cols-[minmax(90px,1fr)_minmax(190px,auto)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
-                <span>학생</span>
-                <span className="text-right">처리 항목</span>
+              <div className="grid grid-cols-[minmax(150px,190px)_max-content] justify-start gap-4 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+                <span>학생 · 반</span>
+                <span>처리 항목</span>
               </div>
               {studentTasks.map(renderTask)}
             </div>
