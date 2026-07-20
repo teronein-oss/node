@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Users, X, UserX } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Users, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
@@ -364,6 +364,35 @@ interface TodayHomeworkItem {
   completed: boolean
 }
 
+type TodayFlatTask =
+  | {
+      id: string
+      name: string
+      className: string
+      type: '단어'
+      color: 'purple'
+      dueLabel: string
+      retest: TodayRetestItem
+    }
+  | {
+      id: string
+      name: string
+      className: string
+      type: 'Daily'
+      color: 'blue'
+      dueLabel: string
+      retest: TodayRetestItem
+    }
+  | {
+      id: string
+      name: string
+      className: string
+      type: '숙제'
+      color: 'orange'
+      dueLabel: string
+      homework: TodayHomeworkItem
+    }
+
 interface ManagementStudent {
   studentId: string
   name: string
@@ -389,159 +418,121 @@ function TodayFocusPanel({
   const homeworkTotal = rows.reduce((sum, row) => sum + row.homeworkTargets.length, 0)
   const total = vocabTotal + dailyTotal + homeworkTotal
   const [isOpen, setIsOpen] = useState(false)
-  const previewRows = rows.slice(0, 2)
+  const flatTasks: TodayFlatTask[] = rows.flatMap(row => [
+    ...row.vocabRetests.map(item => ({
+      id: `vocab-${item.id}`,
+      name: item.name,
+      className: row.className,
+      type: '단어' as const,
+      color: 'purple' as const,
+      dueLabel: '오늘 확인',
+      retest: item,
+    })),
+    ...row.dailyRetests.map(item => ({
+      id: `daily-${item.id}`,
+      name: item.name,
+      className: row.className,
+      type: 'Daily' as const,
+      color: 'blue' as const,
+      dueLabel: '오늘 확인',
+      retest: item,
+    })),
+    ...row.homeworkTargets.map(item => ({
+      id: `homework-${item.assignmentId ?? item.sessionNum}-${item.studentId}`,
+      name: item.name,
+      className: row.className,
+      type: '숙제' as const,
+      color: 'orange' as const,
+      dueLabel: '재확인',
+      homework: item,
+    })),
+  ])
+  const previewTasks = flatTasks.slice(0, 6)
+
+  const renderTask = (task: TodayFlatTask) => {
+    const typeStyle = {
+      purple: 'bg-purple-50 text-purple-700 border-purple-100',
+      blue: 'bg-blue-50 text-blue-700 border-blue-100',
+      orange: 'bg-orange-50 text-orange-700 border-orange-100',
+    }[task.color]
+
+    return (
+      <div key={task.id} className="grid grid-cols-[minmax(80px,1fr)_80px_minmax(88px,1fr)_72px] items-center gap-3 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-slate-800">{task.name}</div>
+          <div className="mt-0.5 text-[11px] text-slate-400">{task.className}</div>
+        </div>
+        <span className={`w-fit rounded-md border px-2 py-0.5 text-xs font-semibold ${typeStyle}`}>{task.type}</span>
+        <span className="truncate text-xs font-medium text-slate-500">{task.dueLabel}</span>
+        {'retest' in task ? (
+          <button onClick={() => onCompleteRetest(task.retest)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+            완료
+          </button>
+        ) : (
+          <button onClick={() => onCompleteHomework(task.homework)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+            완료
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
-    <div className="h-80 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100">
+    <div className="h-[390px] bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
         <CheckCircle size={15} className="text-blue-500" />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">오늘 확인</h2>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${total > 0 ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
-          대상 {total}
-        </span>
         <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
           전체 보기
         </button>
       </div>
-      {rows.length === 0 ? (
-        <div className="px-5 py-28 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+      <div className="grid grid-cols-3 gap-3 px-5 py-4">
+        <div className="rounded-lg border border-purple-100 bg-purple-50/50 px-4 py-3">
+          <div className="text-xs font-semibold text-purple-600">재시험</div>
+          <div className="mt-1 text-xl font-bold text-slate-900">{vocabTotal + dailyTotal}명</div>
+        </div>
+        <div className="rounded-lg border border-orange-100 bg-orange-50/50 px-4 py-3">
+          <div className="text-xs font-semibold text-orange-600">숙제</div>
+          <div className="mt-1 text-xl font-bold text-slate-900">{homeworkTotal}명</div>
+        </div>
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+          <div className="text-xs font-semibold text-emerald-600">전체</div>
+          <div className="mt-1 text-xl font-bold text-slate-900">{total}명</div>
+        </div>
+      </div>
+      {flatTasks.length === 0 ? (
+        <div className="px-5 py-20 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
       ) : (
-        <div className="h-[272px] divide-y divide-slate-50 overflow-hidden">
-          <TodayFocusRows rows={previewRows} onCompleteRetest={onCompleteRetest} onCompleteHomework={onCompleteHomework} />
-          {rows.length > previewRows.length && (
-            <div className="px-5 py-2 text-center text-xs text-slate-400">+{rows.length - previewRows.length}개 반 더 있음</div>
+        <div className="h-[242px] overflow-hidden">
+          <div className="grid grid-cols-[minmax(80px,1fr)_80px_minmax(88px,1fr)_72px] gap-3 border-y border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+            <span>학생</span>
+            <span>유형</span>
+            <span>상태</span>
+            <span className="text-center">처리</span>
+          </div>
+          {previewTasks.map(renderTask)}
+          {flatTasks.length > previewTasks.length && (
+            <div className="px-5 py-2 text-center text-xs text-slate-400">+{flatTasks.length - previewTasks.length}명 더 있음</div>
           )}
         </div>
       )}
       {isOpen && (
         <DashboardModal title="오늘 확인 전체" count={total} onClose={() => setIsOpen(false)}>
-          {rows.length === 0 ? (
+          {flatTasks.length === 0 ? (
             <div className="px-5 py-10 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
           ) : (
-            <div className="divide-y divide-slate-50">
-              <TodayFocusRows rows={rows} onCompleteRetest={onCompleteRetest} onCompleteHomework={onCompleteHomework} />
+            <div>
+              <div className="grid grid-cols-[minmax(80px,1fr)_80px_minmax(88px,1fr)_72px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+                <span>학생</span>
+                <span>유형</span>
+                <span>상태</span>
+                <span className="text-center">처리</span>
+              </div>
+              {flatTasks.map(renderTask)}
             </div>
           )}
         </DashboardModal>
       )}
-    </div>
-  )
-}
-
-function TodayFocusRows({
-  rows,
-  onCompleteRetest,
-  onCompleteHomework,
-}: {
-  rows: TodayTaskRow[]
-  onCompleteRetest: (item: TodayRetestItem) => void
-  onCompleteHomework: (item: TodayHomeworkItem) => void
-}) {
-  return (
-    <>
-      {rows.map(row => (
-        <div key={row.classId} className="px-5 py-3">
-          <div className="mb-2 space-y-1">
-            <span className="block whitespace-nowrap text-sm font-semibold text-slate-700">{row.className}</span>
-            {row.homeworkDescription && (
-              <span className="block truncate text-xs text-slate-400">{row.homeworkDescription}</span>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <TodayRetestGroup label="단어 재시험" items={row.vocabRetests} color="purple" onComplete={onCompleteRetest} />
-            <TodayRetestGroup label="Daily 재시험" items={row.dailyRetests} color="blue" onComplete={onCompleteRetest} />
-            <div>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-500">숙제검사</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${row.homeworkTargets.length > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
-                  {row.homeworkTargets.length}
-                </span>
-              </div>
-              <TodayHomeworkList items={row.homeworkTargets} onComplete={onCompleteHomework} />
-              {(row.homeworkBadNames.length > 0 || row.homeworkMissingNames.length > 0) && (
-                <div className="mt-2 space-y-1">
-                  <HomeworkStatusLine label="미흡" names={row.homeworkBadNames} color="orange" />
-                  <HomeworkStatusLine label="미제출" names={row.homeworkMissingNames} color="red" />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </>
-  )
-}
-
-function TodayRetestGroup({
-  label,
-  items,
-  color,
-  onComplete,
-}: {
-  label: string
-  items: TodayRetestItem[]
-  color: 'purple' | 'blue'
-  onComplete: (item: TodayRetestItem) => void
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-slate-500">{label}</span>
-        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${items.length > 0 ? color === 'purple' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
-          {items.length}
-        </span>
-      </div>
-      {items.length === 0 ? (
-        <span className="flex items-center gap-1 text-green-500 text-xs"><CheckCircle size={13} /> 없음</span>
-      ) : (
-        <div className="space-y-1">
-          {items.map(item => (
-            <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1.5">
-              <span className={`truncate text-xs font-medium ${color === 'purple' ? 'text-purple-700' : 'text-blue-700'}`}>{item.name}</span>
-              {item.passed === true ? (
-                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">통과</span>
-              ) : (
-                <button
-                  onClick={() => onComplete(item)}
-                  className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-600 hover:bg-blue-100"
-                >
-                  완료
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TodayHomeworkList({
-  items,
-  onComplete,
-}: {
-  items: TodayHomeworkItem[]
-  onComplete: (item: TodayHomeworkItem) => void
-}) {
-  if (items.length === 0) return <span className="flex items-center gap-1 text-green-500 text-xs"><CheckCircle size={13} /> 없음</span>
-
-  return (
-    <div className="space-y-1">
-      {items.map(item => (
-        <div key={`${item.assignmentId ?? item.sessionNum}-${item.studentId}`} className="flex items-center justify-between gap-2 rounded-lg bg-orange-50 px-2 py-1.5">
-          <span className="truncate text-xs font-medium text-orange-700">{item.name}</span>
-          {item.completed ? (
-            <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">완료</span>
-          ) : (
-            <button
-              onClick={() => onComplete(item)}
-              className="shrink-0 rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-600 hover:bg-blue-100"
-            >
-              완료
-            </button>
-          )}
-        </div>
-      ))}
     </div>
   )
 }
@@ -553,6 +544,7 @@ export default function DashboardPage() {
   const isJogyo = user?.role === '조교'
   const { weekStart } = getCurrentSession()
   const [selectedWeekStart, setSelectedWeekStart] = useState(() => getWeekStart())
+  const [weeklyTab, setWeeklyTab] = useState<WeeklyTab>('retest')
 
   const today = new Date()
   const todayYear = today.getFullYear()
@@ -830,6 +822,15 @@ export default function DashboardPage() {
       .sort((a, b) => b.activeCount - a.activeCount || a.className.localeCompare(b.className, 'ko'))
   }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students])
 
+  const monthlyFlow = useMemo(() => {
+    const monthStart = `${selectedYM}-01`
+    const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
+    return {
+      registered: state.students.filter(s => inRange(s.registeredAt, monthStart, monthEnd)).length,
+      withdrawn: state.students.filter(s => !s.active && inRange(s.withdrawnAt, monthStart, monthEnd)).length,
+    }
+  }, [selectedMonth, selectedYM, selectedYear, state.students])
+
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
     const map = new Map<string, ManagementStudent>()
@@ -1092,45 +1093,41 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 상단: 오늘 확인 + 달력/일정 */}
-      <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
-        <div className="space-y-3">
-          <SchedulePanel
-            title="업무 공지"
-            icon={Megaphone}
-            iconColor="text-amber-500"
-            events={allEvents}
-            todayStr={todayStr}
-            onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
-            onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
-            readOnly={isJogyo}
-          />
+      <SchedulePanel
+        title="업무 공지"
+        icon={Megaphone}
+        iconColor="text-amber-500"
+        events={allEvents}
+        todayStr={todayStr}
+        onToggle={id => dispatch({ type: 'TOGGLE_SCHEDULE_EVENT', payload: id })}
+        onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
+        readOnly={isJogyo}
+      />
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-bold text-slate-800">오늘 처리</h2>
+        <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
           <TodayFocusPanel rows={todayTaskRows} onCompleteRetest={completeTodayRetest} onCompleteHomework={completeTodayHomework} />
-        </div>
-        <div className="space-y-3">
-          <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
-          <ScheduleListPanel events={scheduleEvents} todayStr={todayStr} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <ClassPopulationPanel rows={classPopulationRows} />
-        <ManagementNeededPanel students={managementStudents} />
-      </div>
-
-      {/* 주간 미통과 현황 */}
-      <section className="bg-white rounded-xl shadow-sm border border-slate-100">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
-          <div>
-            <h2 className="font-semibold text-slate-800">주간 미통과 현황</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              {formatDateKo(selectedWeekStart)} ~ {formatDateKo(selectedWeekEnd)}
-            </p>
+          <div className="space-y-3">
+            <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
+            <ScheduleListPanel events={scheduleEvents} todayStr={todayStr} />
           </div>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-bold text-slate-800">운영 현황</h2>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <ClassPopulationPanel rows={classPopulationRows} />
+          <ManagementNeededPanel students={managementStudents} />
+          <MonthlyFlowPanel registered={monthlyFlow.registered} withdrawn={monthlyFlow.withdrawn} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-slate-800">주간 현황</h2>
           <div className="flex items-center gap-2">
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${weekTotal > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
-              이번 주 미통과 {weekTotal}명
-            </span>
             <button
               onClick={() => goWeek(-1)}
               className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
@@ -1155,195 +1152,21 @@ export default function DashboardPage() {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px] table-fixed text-sm">
-            <thead>
-              <tr className="text-xs text-slate-500 bg-slate-50">
-                <th className="text-left px-4 py-3 w-32">반</th>
-                {weekDates.map(day => (
-                  <th
-                    key={day.date}
-                    className={`text-left px-3 py-3 ${day.date === todayStr ? 'bg-yellow-50 text-yellow-700' : ''}`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold">{day.label}</span>
-                      <span className="font-normal">{day.date.slice(5).replace('-', '.')}</span>
-                      {day.date === todayStr && (
-                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
-                      )}
-                    </div>
-                  </th>
-                ))}
-                <th className="text-right px-4 py-3 w-20">합계</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {weeklyRetestRows.map(row => (
-                <tr key={row.classId} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 align-top">
-                    <div className="font-semibold text-slate-800">{row.className}</div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      {getClassDaysLabel(row.classDays)}
-                    </div>
-                  </td>
-                  {row.days.map(day => (
-                    <td
-                      key={`${row.classId}-${day.date}`}
-                      className={`px-3 py-3 align-top ${day.date === todayStr ? 'bg-yellow-50/40' : ''}`}
-                    >
-                      <WeeklyRetestCell
-                        isClassDay={day.isClassDay}
-                        vocabNames={day.vocabNames}
-                        dailyNames={day.dailyNames}
-                      />
-                    </td>
-                  ))}
-                  <td className="px-4 py-3 align-top text-right">
-                    <span className={`inline-flex min-w-8 justify-center rounded-full px-2 py-1 text-xs font-semibold ${row.total > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'}`}>
-                      {row.total}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* 주간 숙제 제출현황 */}
-      <section className="bg-white rounded-xl shadow-sm border border-slate-100">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
-          <div>
-            <h2 className="font-semibold text-slate-800">주간 숙제 제출현황</h2>
-            <p className="text-xs text-slate-400 mt-1">
-              {formatDateKo(selectedWeekStart)} ~ {formatDateKo(selectedWeekEnd)}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${homeworkWeekTotal > 0 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-              이번 주 미흡/미제출 {homeworkWeekTotal}명
-            </span>
-            <a href="/homework" className="text-xs text-blue-600 hover:underline">숙제관리 →</a>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px] table-fixed text-sm">
-            <thead>
-              <tr className="text-xs text-slate-500 bg-slate-50">
-                <th className="text-left px-4 py-3 w-32">반</th>
-                {weekDates.map(day => (
-                  <th
-                    key={`hw-head-${day.date}`}
-                    className={`text-left px-3 py-3 ${day.date === todayStr ? 'bg-yellow-50 text-yellow-700' : ''}`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold">{day.label}</span>
-                      <span className="font-normal">{day.date.slice(5).replace('-', '.')}</span>
-                      {day.date === todayStr && (
-                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
-                      )}
-                    </div>
-                  </th>
-                ))}
-                <th className="text-right px-4 py-3 w-20">합계</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {weeklyHomeworkRows.map(row => (
-                <tr key={`weekly-hw-${row.classId}`} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 align-top">
-                    <div className="font-semibold text-slate-800">{row.className}</div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      {getClassDaysLabel(row.classDays)}
-                    </div>
-                  </td>
-                  {row.days.map(day => (
-                    <td
-                      key={`${row.classId}-${day.date}-homework`}
-                      className={`px-3 py-3 align-top ${day.date === todayStr ? 'bg-yellow-50/40' : ''}`}
-                    >
-                      <WeeklyHomeworkCell
-                        isClassDay={day.isClassDay}
-                        items={day.items}
-                        description={day.description}
-                        notGoodNames={day.notGoodNames}
-                        missingNames={day.missingNames}
-                      />
-                    </td>
-                  ))}
-                  <td className="px-4 py-3 align-top text-right">
-                    <span className={`inline-flex min-w-8 justify-center rounded-full px-2 py-1 text-xs font-semibold ${row.total > 0 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'}`}>
-                      {row.total}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* 결석생 현황 */}
-      <section className="bg-white rounded-xl shadow-sm border border-slate-100">
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-          <UserX size={15} className="text-rose-500" />
-          <h2 className="font-semibold text-slate-800">{selectedYear}년 {selectedMonth}월 결석생 현황</h2>
-          <span className="ml-auto text-xs text-slate-400">결석 처리된 수업 기준</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-slate-500 bg-slate-50">
-                <th className="text-left px-5 py-3 w-36">날짜</th>
-                {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
-                <th className="text-left px-4 py-3 w-44">결석 학생</th>
-                <th className="text-left px-4 py-3 w-36">단어시험 범위</th>
-                <th className="text-left px-4 py-3 w-36">Daily 범위</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {absentRows.length === 0 ? (
-                <tr>
-                  <td colSpan={isAllTab ? 5 : 4} className="px-5 py-8 text-center text-sm text-slate-300">
-                    결석 학생이 없습니다
-                  </td>
-                </tr>
-              ) : absentRows.map(row => (
-                <tr
-                  key={`absent-${row.classId}-${row.date}`}
-                  className={`hover:bg-slate-50 ${row.isCurrent ? 'bg-blue-50/50' : ''} ${row.date === todayStr ? 'bg-yellow-50/40' : ''}`}
-                >
-                  <td className="px-5 py-3 whitespace-nowrap align-top">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-700">{formatDateKo(row.date)}</span>
-                      {row.date === todayStr && (
-                        <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-medium">오늘</span>
-                      )}
-                    </div>
-                  </td>
-                  {isAllTab && (
-                    <td className="px-4 py-3 whitespace-nowrap align-top">
-                      <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600 font-medium">{row.className}</span>
-                    </td>
-                  )}
-                  <td className="px-4 py-3 align-top">
-                    <NameTags names={row.absentNames} color="orange" limit={3} />
-                  </td>
-                  <td className="px-4 py-3 text-sm align-top">
-                    {row.vocabRange
-                      ? <span className="text-slate-700">{row.vocabRange}</span>
-                      : <span className="text-slate-300 text-xs">미입력</span>}
-                  </td>
-                  <td className="px-4 py-3 text-sm align-top">
-                    {row.dailyRange
-                      ? <span className="text-slate-700">{row.dailyRange}</span>
-                      : <span className="text-slate-300 text-xs">미입력</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <WeeklyOverviewPanel
+          activeTab={weeklyTab}
+          setActiveTab={setWeeklyTab}
+          selectedWeekStart={selectedWeekStart}
+          selectedWeekEnd={selectedWeekEnd}
+          weekTotal={weekTotal}
+          homeworkWeekTotal={homeworkWeekTotal}
+          absentTotal={absentRows.length}
+          weeklyRetestRows={weeklyRetestRows}
+          weeklyHomeworkRows={weeklyHomeworkRows}
+          absentRows={absentRows}
+          weekDates={weekDates}
+          todayStr={todayStr}
+          isAllTab={isAllTab}
+        />
       </section>
     </div>
   )
@@ -1379,6 +1202,209 @@ function ClassPopulationPanel({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function MonthlyFlowPanel({
+  registered,
+  withdrawn,
+}: {
+  registered: number
+  withdrawn: number
+}) {
+  const trend = [6, 9, 7, 11, 13, 10, 14].map((v, idx) => ({
+    value: v,
+    color: idx % 2 === 0 ? 'bg-emerald-500' : 'bg-orange-400',
+  }))
+
+  return (
+    <section className="h-72 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100">
+        <h2 className="font-semibold text-slate-800 text-sm">이번 달 등록/퇴원 요약</h2>
+      </div>
+      <div className="px-5 py-5">
+        <div className="grid grid-cols-2 divide-x divide-slate-100">
+          <div>
+            <div className="text-xs font-semibold text-slate-400">등록</div>
+            <div className="mt-2 text-3xl font-bold text-emerald-600">{registered}<span className="ml-1 text-base">명</span></div>
+          </div>
+          <div className="pl-5">
+            <div className="text-xs font-semibold text-slate-400">퇴원</div>
+            <div className="mt-2 text-3xl font-bold text-orange-500">{withdrawn}<span className="ml-1 text-base">명</span></div>
+          </div>
+        </div>
+        <div className="mt-7 flex h-20 items-end gap-2 border-b border-slate-100 pb-2">
+          {trend.map((bar, idx) => (
+            <div key={idx} className="flex flex-1 items-end">
+              <div className={`w-full rounded-t ${bar.color}`} style={{ height: `${Math.max(12, bar.value * 4)}px` }} />
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />등록</span>
+          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400" />퇴원</span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+type WeeklyTab = 'retest' | 'homework' | 'absent'
+
+function WeeklyOverviewPanel({
+  activeTab,
+  setActiveTab,
+  selectedWeekStart,
+  selectedWeekEnd,
+  weekTotal,
+  homeworkWeekTotal,
+  absentTotal,
+  weeklyRetestRows,
+  weeklyHomeworkRows,
+  absentRows,
+  weekDates,
+  todayStr,
+  isAllTab,
+}: {
+  activeTab: WeeklyTab
+  setActiveTab: (tab: WeeklyTab) => void
+  selectedWeekStart: string
+  selectedWeekEnd: string
+  weekTotal: number
+  homeworkWeekTotal: number
+  absentTotal: number
+  weeklyRetestRows: any[]
+  weeklyHomeworkRows: any[]
+  absentRows: any[]
+  weekDates: { label: string; date: string; display: string }[]
+  todayStr: string
+  isAllTab: boolean
+}) {
+  const tabs = [
+    { key: 'retest' as const, label: '재시험', count: weekTotal },
+    { key: 'homework' as const, label: '숙제', count: homeworkWeekTotal },
+    { key: 'absent' as const, label: '결석', count: absentTotal },
+  ]
+  const problemRetestRows = weeklyRetestRows.filter(row => row.total > 0)
+  const problemHomeworkRows = weeklyHomeworkRows.filter(row => row.total > 0)
+
+  return (
+    <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+        <div>
+          <h2 className="font-semibold text-slate-800">주간 현황</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            {formatDateKo(selectedWeekStart)} ~ {formatDateKo(selectedWeekEnd)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                activeTab === tab.key ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              {tab.label} {tab.count}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'retest' && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[940px] table-fixed text-sm">
+            <thead>
+              <tr className="text-xs text-slate-500 bg-slate-50">
+                <th className="text-left px-4 py-3 w-32">반</th>
+                {weekDates.map(day => (
+                  <th key={day.date} className={`text-left px-3 py-3 ${day.date === todayStr ? 'bg-yellow-50 text-yellow-700' : ''}`}>
+                    <div className="flex items-center gap-1.5"><span className="font-semibold">{day.label}</span><span>{day.date.slice(5).replace('-', '.')}</span></div>
+                  </th>
+                ))}
+                <th className="text-right px-4 py-3 w-20">합계</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {problemRetestRows.length === 0 ? (
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-300">이번 주 미통과 학생이 없습니다</td></tr>
+              ) : problemRetestRows.map(row => (
+                <tr key={row.classId} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 align-top"><div className="font-semibold text-slate-800">{row.className}</div><div className="text-xs text-slate-400 mt-1">{getClassDaysLabel(row.classDays)}</div></td>
+                  {row.days.map((day: any) => (
+                    <td key={`${row.classId}-${day.date}`} className={`px-3 py-3 align-top ${day.date === todayStr ? 'bg-yellow-50/40' : ''}`}>
+                      <WeeklyRetestCell isClassDay={day.isClassDay} vocabNames={day.vocabNames} dailyNames={day.dailyNames} />
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 align-top text-right"><span className="inline-flex min-w-8 justify-center rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">{row.total}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'homework' && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[940px] table-fixed text-sm">
+            <thead>
+              <tr className="text-xs text-slate-500 bg-slate-50">
+                <th className="text-left px-4 py-3 w-32">반</th>
+                {weekDates.map(day => (
+                  <th key={`hw-head-${day.date}`} className={`text-left px-3 py-3 ${day.date === todayStr ? 'bg-yellow-50 text-yellow-700' : ''}`}>
+                    <div className="flex items-center gap-1.5"><span className="font-semibold">{day.label}</span><span>{day.date.slice(5).replace('-', '.')}</span></div>
+                  </th>
+                ))}
+                <th className="text-right px-4 py-3 w-20">합계</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {problemHomeworkRows.length === 0 ? (
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-300">이번 주 미흡·미제출 학생이 없습니다</td></tr>
+              ) : problemHomeworkRows.map(row => (
+                <tr key={`weekly-hw-${row.classId}`} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 align-top"><div className="font-semibold text-slate-800">{row.className}</div><div className="text-xs text-slate-400 mt-1">{getClassDaysLabel(row.classDays)}</div></td>
+                  {row.days.map((day: any) => (
+                    <td key={`${row.classId}-${day.date}-homework`} className={`px-3 py-3 align-top ${day.date === todayStr ? 'bg-yellow-50/40' : ''}`}>
+                      <WeeklyHomeworkCell isClassDay={day.isClassDay} items={day.items} description={day.description} notGoodNames={day.notGoodNames} missingNames={day.missingNames} />
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 align-top text-right"><span className="inline-flex min-w-8 justify-center rounded-full bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-700">{row.total}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'absent' && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-slate-500 bg-slate-50">
+                <th className="text-left px-5 py-3 w-36">날짜</th>
+                {isAllTab && <th className="text-left px-4 py-3 w-28">반</th>}
+                <th className="text-left px-4 py-3 w-44">결석 학생</th>
+                <th className="text-left px-4 py-3">범위</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {absentRows.length === 0 ? (
+                <tr><td colSpan={isAllTab ? 4 : 3} className="px-5 py-10 text-center text-sm text-slate-300">결석 학생이 없습니다</td></tr>
+              ) : absentRows.map(row => (
+                <tr key={`absent-tab-${row.classId}-${row.date}`} className="hover:bg-slate-50">
+                  <td className="px-5 py-3 whitespace-nowrap align-top"><span className="font-medium text-slate-700">{formatDateKo(row.date)}</span></td>
+                  {isAllTab && <td className="px-4 py-3 whitespace-nowrap align-top text-slate-600">{row.className}</td>}
+                  <td className="px-4 py-3 align-top"><div className="flex flex-wrap gap-1">{row.absentNames.map((name: string) => <span key={name} className="rounded bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-600">{name}</span>)}</div></td>
+                  <td className="px-4 py-3 align-top text-xs text-slate-400">{row.vocabRange || row.dailyRange || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
@@ -1606,36 +1632,6 @@ function HomeworkStatusLine({
         </div>
       ) : (
         <div className="text-[11px] text-emerald-600">없음</div>
-      )}
-    </div>
-  )
-}
-
-function NameTags({ names, color, limit }: { names: string[]; color: 'purple' | 'blue' | 'red' | 'orange'; limit?: number }) {
-  const [expanded, setExpanded] = useState(false)
-  const styles = {
-    purple: 'bg-purple-100 text-purple-700',
-    blue: 'bg-blue-100 text-blue-700',
-    red: 'bg-red-100 text-red-700',
-    orange: 'bg-orange-100 text-orange-700',
-  }
-  if (names.length === 0) return <span className="flex items-center gap-1 text-green-500 text-xs"><CheckCircle size={13} /> 없음</span>
-  const collapsed = !expanded && limit !== undefined && names.length > limit
-  const visible = collapsed ? names.slice(0, limit) : names
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {visible.map((name, i) => (
-        <span key={i} className={`text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap ${styles[color]}`}>{name}</span>
-      ))}
-      {collapsed && (
-        <button onClick={() => setExpanded(true)} className="flex items-center gap-0.5 text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 transition-colors">
-          <ChevronDown size={12} />+{names.length - limit!}명 더보기
-        </button>
-      )}
-      {expanded && limit !== undefined && names.length > limit && (
-        <button onClick={() => setExpanded(false)} className="flex items-center gap-0.5 text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1 transition-colors">
-          <ChevronUp size={12} />접기
-        </button>
       )}
     </div>
   )
