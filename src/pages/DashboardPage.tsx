@@ -67,6 +67,10 @@ function getWithdrawnDate(student: { active: boolean; withdrawnAt?: DateValue },
   return toDateKey(student.withdrawnAt) ?? fallbackDate
 }
 
+function isInMonth(date: DateValue, ym: string) {
+  return toDateKey(date)?.startsWith(`${ym}-`) ?? false
+}
+
 function DashboardModal({
   title,
   count,
@@ -869,10 +873,9 @@ export default function DashboardPage() {
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
     const map = new Map<string, ManagementStudent>()
-    const monthStart = `${selectedYM}-01`
-    const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
     const classById = new Map(state.classes.map(cls => [cls.id, cls]))
     const studentById = new Map(state.students.map(student => [student.id, student]))
+    const homeworkIssueKeys = new Set<string>()
 
     for (const student of activeStudents) {
       const cls = state.classes.find(c => c.id === student.classId)
@@ -890,10 +893,8 @@ export default function DashboardPage() {
 
     for (const retest of state.retests) {
       if (retest.passed !== null) continue
-      const student = studentById.get(retest.studentId)
-      const cls = student ? classById.get(student.classId) : undefined
-      const basisDate = retest.retestDate ?? (cls ? getClassDate(retest.sessionNum, cls.days, cls.weekdays) : '')
-      if (basisDate < monthStart || basisDate > monthEnd) continue
+      const basisDate = retest.retestDate ?? retest.createdAt
+      if (!isInMonth(basisDate, selectedYM)) continue
       const target = map.get(retest.studentId)
       if (!target) continue
       target.retestCount += 1
@@ -903,7 +904,7 @@ export default function DashboardPage() {
     for (const hw of state.homeworks) {
       const cls = classById.get(hw.classId)
       const checkDate = cls ? getClassDate(hw.sessionNum + 1, cls.days, cls.weekdays) : hw.weekStart
-      if (checkDate < monthStart || checkDate > monthEnd) continue
+      if (!isInMonth(checkDate, selectedYM)) continue
       const worstByStudent = new Map<string, number>()
       for (const item of hw.items ?? []) {
         for (const ss of item.studentStatuses ?? []) {
@@ -915,6 +916,7 @@ export default function DashboardPage() {
       for (const [studentId, rank] of worstByStudent) {
         const target = map.get(studentId)
         if (!target) continue
+        homeworkIssueKeys.add(`${studentId}-${hw.sessionNum}`)
         if (rank === 3) target.homeworkMissingCount += 1
         if (rank === 2) target.homeworkBadCount += 1
       }
@@ -925,7 +927,9 @@ export default function DashboardPage() {
       const student = studentById.get(grade.studentId)
       const cls = student ? classById.get(student.classId) : undefined
       const basisDate = cls ? getClassDate(grade.sessionNum, cls.days, cls.weekdays) : grade.weekStart
-      if (basisDate < monthStart || basisDate > monthEnd) continue
+      if (!isInMonth(basisDate, selectedYM)) continue
+      const issueKey = `${grade.studentId}-${grade.sessionNum - 1}`
+      if (homeworkIssueKeys.has(issueKey)) continue
       const target = map.get(grade.studentId)
       if (!target) continue
       target.homeworkBadCount += 1
@@ -947,7 +951,7 @@ export default function DashboardPage() {
       })
       .filter(student => student.reasons.length > 0)
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
-  }, [state.classes, state.students, state.retests, state.homeworks, state.grades, selectedYM, selectedYear, selectedMonth])
+  }, [state.classes, state.students, state.retests, state.homeworks, state.grades, selectedYM])
 
   const completeTodayRetest = (item: TodayRetestItem, label = '재시험') => {
     if (!confirm(`${item.name} ${label}을 통과 처리하겠습니까?`)) return
