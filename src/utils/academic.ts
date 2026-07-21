@@ -15,7 +15,7 @@ export interface MonthOption {
 
 type MonthSort = 'asc' | 'desc'
 
-const toYM = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}`
+const toYM = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
 const addThursdayMonth = (ymSet: Set<string>, weekStart: string) => {
   const d = new Date(weekStart + 'T00:00:00')

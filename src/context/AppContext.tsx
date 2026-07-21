@@ -872,7 +872,7 @@ export function AppProvider({
 
   const currentYM = useMemo(() => {
     const today = new Date()
-    return `${today.getFullYear()}-${today.getMonth() + 1}`
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
   }, [])
 
   const [selectedYM, setSelectedYM] = useState(currentYM)
@@ -882,7 +882,7 @@ export function AppProvider({
     const cur = getSessionNum(ws) + 1
     const d = new Date(ws + 'T00:00:00')
     d.setDate(d.getDate() + 3)
-    const cym = `${d.getFullYear()}-${d.getMonth() + 1}`
+    const cym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     const [y, m] = cym.split('-').map(Number)
     const sessions = getMonthSessions(y, m, 8)
     return sessions.includes(cur) ? cur : (sessions[0] ?? 1)
