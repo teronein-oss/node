@@ -1,13 +1,10 @@
-import { useEffect, useState, useMemo } from 'react'
-import { getDoc, getDocs } from 'firebase/firestore'
+import { useState, useMemo } from 'react'
 import { AlertTriangle, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Users, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
-import type { Class, HomeworkItem, ScheduleEvent, Student } from '../types'
+import type { Class, HomeworkItem, ScheduleEvent } from '../types'
 import { getWeekStart, formatDateKo, fmtDate, getClassDate, getClassDaysLabel } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM } from '../utils/academic'
-import { normalizeAcademyId } from '../utils/academy'
-import { appDataDoc, registrationsCollection } from '../utils/firestorePaths'
 
 // ─── 달력 헬퍼 ────────────────────────────────────────────────────────────────
 function buildCalDays(year: number, month: number): (Date | null)[] {
@@ -416,11 +413,6 @@ interface ManagementStudent {
   reasons: string[]
 }
 
-interface OperatingDataSource {
-  classes: Class[]
-  students: Student[]
-}
-
 function TodayFocusPanel({
   rows,
   onCompleteRetest,
@@ -529,10 +521,9 @@ function TodayFocusPanel({
 // ─── 메인 대시보드 ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { state, dispatch, getCurrentSession, selectedYM, setSelectedYM, globalScheduleEvents } = useApp()
-  const { user, isAdmin, isAcademyAdmin, viewingUid } = useAuth()
+  const { user, isAdmin, viewingUid } = useAuth()
   const isJogyo = user?.role === '조교'
   const { weekStart } = getCurrentSession()
-  const [academyOperatingData, setAcademyOperatingData] = useState<OperatingDataSource | null>(null)
   const [selectedWeekStart, setSelectedWeekStart] = useState(() => getWeekStart())
   const [weeklyTab, setWeeklyTab] = useState<WeeklyTab>('retest')
 
@@ -544,53 +535,6 @@ export default function DashboardPage() {
 
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
   const currentYM = getCurrentYM(today)
-
-  useEffect(() => {
-    if (!user || viewingUid || !(isAdmin || isAcademyAdmin)) {
-      setAcademyOperatingData(null)
-      return
-    }
-
-    let cancelled = false
-    const academyId = normalizeAcademyId(user.academyId)
-
-    const loadAcademyOperatingData = async () => {
-      const regSnap = await getDocs(registrationsCollection(academyId))
-      const teacherUids: string[] = []
-      regSnap.forEach(docSnap => {
-        const data = docSnap.data()
-        if (data.status !== 'approved') return
-        if (!['선생님', '관리자', '원장'].includes(data.role)) return
-        if (normalizeAcademyId(data.academyId) !== academyId) return
-        teacherUids.push(data.uid ?? docSnap.id)
-      })
-
-      const entries = await Promise.all([...new Set(teacherUids)].map(async uid => {
-        const snap = await getDoc(appDataDoc(uid, academyId))
-        const data = snap.exists() ? snap.data() : {}
-        return {
-          classes: ((data.classes ?? []) as Class[]).map(cls => ({ ...cls, id: `${uid}:${cls.id}` })),
-          students: ((data.students ?? []) as Student[]).map(student => ({ ...student, classId: `${uid}:${student.classId}` })),
-        }
-      }))
-
-      if (cancelled) return
-      setAcademyOperatingData({
-        classes: entries.flatMap(entry => entry.classes),
-        students: entries.flatMap(entry => entry.students),
-      })
-    }
-
-    loadAcademyOperatingData().catch(() => {
-      if (!cancelled) setAcademyOperatingData(null)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [isAcademyAdmin, isAdmin, user, viewingUid])
-
-  const operatingData = academyOperatingData ?? state
 
   const ownEvents = state.scheduleEvents ?? []
   const allEvents = useMemo(
@@ -840,10 +784,10 @@ export default function DashboardPage() {
   const classPopulationRows = useMemo(() => {
     const monthStart = `${selectedYM}-01`
     const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
-    return operatingData.classes
+    return state.classes
       .map(cls => {
-        const activeCount = operatingData.students.filter(s => s.active && s.classId === cls.id).length
-        const withdrawnInMonth = operatingData.students.filter(s => {
+        const activeCount = state.students.filter(s => s.active && s.classId === cls.id).length
+        const withdrawnInMonth = state.students.filter(s => {
           const withdrawnAt = getWithdrawnDate(s, todayStr)
           return s.classId === cls.id && inRange(withdrawnAt, monthStart, monthEnd)
         }).length
@@ -856,19 +800,19 @@ export default function DashboardPage() {
         }
       })
       .sort((a, b) => b.activeCount - a.activeCount || a.className.localeCompare(b.className, 'ko'))
-  }, [operatingData.classes, operatingData.students, selectedMonth, selectedYM, selectedYear, todayStr])
+  }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students, todayStr])
 
   const monthlyFlow = useMemo(() => {
     const monthStart = `${selectedYM}-01`
     const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
     return {
-      registered: operatingData.students.filter(s => inRange(s.registeredAt, monthStart, monthEnd)).length,
-      withdrawn: operatingData.students.filter(s => {
+      registered: state.students.filter(s => inRange(s.registeredAt, monthStart, monthEnd)).length,
+      withdrawn: state.students.filter(s => {
         const withdrawnAt = getWithdrawnDate(s, todayStr)
         return inRange(withdrawnAt, monthStart, monthEnd)
       }).length,
     }
-  }, [operatingData.students, selectedMonth, selectedYM, selectedYear, todayStr])
+  }, [selectedMonth, selectedYM, selectedYear, state.students, todayStr])
 
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
