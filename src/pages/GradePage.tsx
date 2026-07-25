@@ -347,21 +347,6 @@ export default function GradePage() {
     []
   )
 
-  const clinicPendingStudentIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const retest of state.retests) {
-      if (retest.passed === null) ids.add(retest.studentId)
-    }
-    for (const hw of state.homeworks) {
-      for (const item of hw.items ?? []) {
-        for (const status of item.studentStatuses ?? []) {
-          if (status.status === '미흡' || status.status === '미제출') ids.add(status.studentId)
-        }
-      }
-    }
-    return ids
-  }, [state.retests, state.homeworks])
-
   const renderRetestScheduleControls = (
     studentId: string,
     type: string,
@@ -850,8 +835,6 @@ export default function GradePage() {
                 )
                 const hasPendingRetest = !isAbsent && (vocabRetest !== undefined || dailyRetest !== undefined || hasExtraRetest)
                 const allRetestsPassed = !isAbsent && visibleStudentRetests.length > 0 && visibleStudentRetests.every(r => r.passed === true)
-                const hasClinicPending = !isAbsent && clinicPendingStudentIds.has(row.studentId)
-
                 return (
                   <tr key={row.studentId} className={`hover:bg-slate-50 ${isAbsent ? 'bg-slate-100/60' : (isVocabRetest || isDailyRetest) ? 'bg-orange-50/40' : ''}`}>
                     <td className="px-5 py-2.5">
@@ -991,8 +974,6 @@ export default function GradePage() {
                         <span className="text-xs text-slate-400">-</span>
                       ) : hasPendingRetest ? (
                         <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-600 font-medium whitespace-nowrap">재시험 대상자</span>
-                      ) : hasClinicPending ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-600 font-medium whitespace-nowrap">클리닉 미완료</span>
                       ) : allRetestsPassed ? (
                         <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-600 font-medium whitespace-nowrap">재시험 완료</span>
                       ) : (
