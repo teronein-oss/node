@@ -414,10 +414,14 @@ interface ManagementStudent {
 }
 
 function TodayFocusPanel({
+  title = '오늘 확인',
+  emptyText = '오늘 확인할 대상이 없습니다',
   rows,
   onCompleteRetest,
   onCompleteHomework,
 }: {
+  title?: string
+  emptyText?: string
   rows: TodayTaskRow[]
   onCompleteRetest: (item: TodayRetestItem, label?: string) => void
   onCompleteHomework: (item: TodayHomeworkItem) => void
@@ -442,7 +446,7 @@ function TodayFocusPanel({
     for (const item of row.homeworkTargets) getTask(item.studentId, item.name).homework = item
     return [...taskMap.values()]
   })
-  const taskButtonClass = "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors"
+  const taskButtonClass = "rounded-lg border px-2 py-1 text-xs font-semibold transition-colors"
   const renderTaskButton = (
     label: string,
     item: TodayRetestItem | TodayHomeworkItem | undefined,
@@ -463,7 +467,7 @@ function TodayFocusPanel({
   }
 
   const renderTask = (task: TodayStudentTask) => (
-    <div key={task.key} className="grid grid-cols-[72px_90px_max-content] items-center justify-start gap-3 border-b border-slate-50 px-5 py-2.5 last:border-b-0">
+    <div key={task.key} className="grid grid-cols-[64px_74px_max-content] items-center justify-start gap-2 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
       <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
       <span className="truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-semibold text-slate-500">
         {task.className}
@@ -480,17 +484,17 @@ function TodayFocusPanel({
     <div className="flex h-[390px] flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
       <div className="flex shrink-0 items-center gap-2 px-5 py-4 border-b border-slate-100">
         <CheckCircle size={15} className="text-blue-500" />
-        <h2 className="font-semibold text-slate-800 text-sm flex-1">오늘 확인</h2>
+        <h2 className="font-semibold text-slate-800 text-sm flex-1">{title}</h2>
         <span className="hidden text-[11px] font-medium text-slate-400 sm:inline">항목을 누르면 완료됩니다</span>
         <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
           전체 보기
         </button>
       </div>
       {studentTasks.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">{emptyText}</div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="sticky top-0 z-10 grid grid-cols-[72px_90px_max-content] justify-start gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+          <div className="sticky top-0 z-10 grid grid-cols-[64px_74px_max-content] justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400">
             <span>학생</span>
             <span className="text-center">반</span>
             <span>처리 항목</span>
@@ -499,12 +503,12 @@ function TodayFocusPanel({
         </div>
       )}
       {isOpen && (
-        <DashboardModal title="오늘 확인 전체" count={total} onClose={() => setIsOpen(false)}>
+        <DashboardModal title={`${title} 전체`} count={total} onClose={() => setIsOpen(false)}>
           {studentTasks.length === 0 ? (
-            <div className="px-5 py-10 text-center text-xs text-slate-400">오늘 확인할 대상이 없습니다</div>
+            <div className="px-5 py-10 text-center text-xs text-slate-400">{emptyText}</div>
           ) : (
             <div>
-              <div className="grid grid-cols-[72px_90px_max-content] justify-start gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold text-slate-400">
+              <div className="grid grid-cols-[64px_74px_max-content] justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400">
                 <span>학생</span>
                 <span className="text-center">반</span>
                 <span>처리 항목</span>
@@ -683,7 +687,7 @@ export default function DashboardPage() {
   const selectedWeekEnd = weekDates[weekDates.length - 1]?.date ?? selectedWeekStart
   const isCurrentWeek = selectedWeekStart === getWeekStart()
 
-  const todayTaskRows = useMemo<TodayTaskRow[]>(() => {
+  const buildTaskRows = (dateMatches: (date: string) => boolean): TodayTaskRow[] => {
     const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
 
     return state.classes
@@ -693,7 +697,7 @@ export default function DashboardPage() {
           .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
         const studentIds = new Set(activeStudents.map(s => s.id))
         const retests = state.retests.filter(
-          r => r.retestDate === todayStr && r.passed === null && studentIds.has(r.studentId)
+          r => r.retestDate && dateMatches(r.retestDate) && r.passed === null && studentIds.has(r.studentId)
         )
         const vocabRetests = retests
           .filter(r => r.type === 'vocab')
@@ -721,7 +725,7 @@ export default function DashboardPage() {
                 const rank = statusRank[ss.status] ?? 0
                 if (rank < 2) continue
                 const recheckDate = hw.recheckDates?.find(rd => rd.studentId === ss.studentId)?.date ?? defaultRecheckDate
-                if (recheckDate !== todayStr) continue
+                if (!dateMatches(recheckDate)) continue
                 const target = targetsByStudent.get(ss.studentId) ?? { itemIds: [], rank: 0 }
                 target.itemIds.push(item.id)
                 target.rank = Math.max(target.rank, rank)
@@ -750,7 +754,7 @@ export default function DashboardPage() {
               if (g.attendance === '결석') continue
               if (g.homeworkDone !== '미흡') continue
               const recheckDate = hw.recheckDates?.find(rd => rd.studentId === g.studentId)?.date ?? defaultRecheckDate
-              if (recheckDate !== todayStr) continue
+              if (!dateMatches(recheckDate)) continue
               homeworkTargets.push({
                 studentId: g.studentId,
                 name: getStudentName(g.studentId),
@@ -779,7 +783,19 @@ export default function DashboardPage() {
         return hasTargets ? row : null
       })
       .filter((row): row is TodayTaskRow => row !== null)
-  }, [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr])
+  }
+
+  const todayTaskRows = useMemo(
+    () => buildTaskRows(date => date === todayStr),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr]
+  )
+
+  const overdueTaskRows = useMemo(
+    () => buildTaskRows(date => date < todayStr),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr]
+  )
 
   const classPopulationRows = useMemo(() => {
     const monthStart = `${selectedYM}-01`
@@ -1090,7 +1106,22 @@ export default function DashboardPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-bold text-slate-800">오늘 처리</h2>
         <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
-          <TodayFocusPanel rows={todayTaskRows} onCompleteRetest={completeTodayRetest} onCompleteHomework={completeTodayHomework} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <TodayFocusPanel
+              title="오늘 확인"
+              emptyText="오늘 확인할 대상이 없습니다"
+              rows={todayTaskRows}
+              onCompleteRetest={completeTodayRetest}
+              onCompleteHomework={completeTodayHomework}
+            />
+            <TodayFocusPanel
+              title="밀린 확인"
+              emptyText="밀린 확인 대상이 없습니다"
+              rows={overdueTaskRows}
+              onCompleteRetest={completeTodayRetest}
+              onCompleteHomework={completeTodayHomework}
+            />
+          </div>
           <div className="space-y-3">
             <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
             <ScheduleListPanel events={scheduleEvents} todayStr={todayStr} />

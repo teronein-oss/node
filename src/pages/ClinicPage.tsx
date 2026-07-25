@@ -22,6 +22,7 @@ interface DayEntry {
   label: string
   color: string
   scheduledDate?: string
+  scheduledTime?: string
   retestId?: string
   studentId?: string
   assignmentIds?: string[]
@@ -163,6 +164,7 @@ export default function ClinicPage() {
         label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
         color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
         scheduledDate: selectedDate,
+        scheduledTime: r.retestTime,
       })
     }
     for (const e of homeworkRechecksByDate[selectedDate] ?? []) {
@@ -180,7 +182,10 @@ export default function ClinicPage() {
         scheduledDate: selectedDate,
       })
     }
-    return entries.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    return entries.sort((a, b) =>
+      (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99') ||
+      a.name.localeCompare(b.name, 'ko')
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, retestsByDate, homeworkRechecksByDate, state.students, state.classes])
 
@@ -208,6 +213,7 @@ export default function ClinicPage() {
           label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
           color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
           scheduledDate: date,
+          scheduledTime: r.retestTime,
         })
       }
     }
@@ -231,6 +237,7 @@ export default function ClinicPage() {
     }
     return entries.sort((a, b) =>
       (a.scheduledDate ?? '').localeCompare(b.scheduledDate ?? '') ||
+      (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99') ||
       a.name.localeCompare(b.name, 'ko')
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,7 +285,7 @@ export default function ClinicPage() {
               const dayChips = [
                 ...(retestsByDate[dateStr] ?? []).map(r => ({
                   key: r.id,
-                  name: getStudent(r.studentId)?.name ?? '?',
+                  name: `${r.retestTime ? `${r.retestTime} ` : ''}${getStudent(r.studentId)?.name ?? '?'}`,
                   cls: r.type === 'vocab' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
                 })),
                 ...(homeworkRechecksByDate[dateStr] ?? []).map(e => ({
@@ -347,6 +354,7 @@ export default function ClinicPage() {
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-semibold text-slate-800">{entry.name}</span>
                       <span className="text-xs text-slate-400 ml-1.5">{entry.className}</span>
+                      {entry.scheduledTime && <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500">{entry.scheduledTime}</span>}
                     </div>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 ${entry.color}`}>
                       {entry.label}
@@ -367,7 +375,7 @@ export default function ClinicPage() {
                           완료
                         </button>
                         <button
-                          onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId!, retestDate: null } })}
+                          onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId!, retestDate: null, retestTime: null } })}
                           className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
                         >
                           미응시
@@ -441,7 +449,7 @@ export default function ClinicPage() {
                         </span>
                         {entry.scheduledDate && (
                           <span className="text-xs text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
-                            {formatDateKo(entry.scheduledDate)}
+                            {formatDateKo(entry.scheduledDate)}{entry.scheduledTime ? ` ${entry.scheduledTime}` : ''}
                           </span>
                         )}
                       </div>

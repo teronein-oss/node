@@ -66,7 +66,9 @@ export default function GradePage() {
   const [dailyRange, setDailyRange] = useState('')
   const [confirmClear, setConfirmClear] = useState(false)
   const [retestDateSelections, setRetestDateSelections] = useState<Record<string, string>>({})
+  const [retestTimeSelections, setRetestTimeSelections] = useState<Record<string, string>>({})
   const [bulkRetestDate, setBulkRetestDate] = useState('')
+  const [bulkRetestTime, setBulkRetestTime] = useState('')
 
   const sessionConfig = state.sessionTestConfigs.find(
     c => c.sessionNum === selectedSession && c.classId === selectedClass
@@ -117,6 +119,7 @@ export default function GradePage() {
     setColThreshStrs({})
     setColTotalStrs({})
     setBulkRetestDate('')
+    setBulkRetestTime('')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession, selectedClass])
 
@@ -243,11 +246,19 @@ export default function GradePage() {
     dispatch({ type: 'DELETE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id } })
   }
 
-  const handleRetestDateChange = (studentId: string, type: string, date: string, retestId?: string, originalScore?: number | null) => {
+  const handleRetestScheduleChange = (
+    studentId: string,
+    type: string,
+    date: string,
+    time: string,
+    retestId?: string,
+    originalScore?: number | null
+  ) => {
     const key = `${studentId}-${type}`
     setRetestDateSelections(prev => ({ ...prev, [key]: date }))
+    setRetestTimeSelections(prev => ({ ...prev, [key]: time }))
     if (retestId) {
-      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: retestId, retestDate: date || null } })
+      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: retestId, retestDate: date || null, retestTime: time || null } })
     } else if (date && originalScore != null) {
       // RetestRecord 없는 구 세션 → 날짜 포함해서 바로 생성
       dispatch({
@@ -261,6 +272,7 @@ export default function GradePage() {
           passed: null,
           scheduledNote: '',
           retestDate: date,
+          retestTime: time,
         },
       })
     } else {
@@ -268,7 +280,7 @@ export default function GradePage() {
         r => r.studentId === studentId && r.sessionNum === selectedSession && r.passed === null && r.type === type
       )
       for (const r of records) {
-        dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date || null } })
+        dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date || null, retestTime: time || null } })
       }
     }
   }
@@ -287,13 +299,17 @@ export default function GradePage() {
 
   const handleBulkRetestDate = () => {
     const date = bulkRetestDate || nextClassDate
+    const time = bulkRetestTime
     if (!date || pendingRetests.length === 0) return
     const updates: Record<string, string> = {}
+    const timeUpdates: Record<string, string> = {}
     for (const r of pendingRetests) {
-      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date } })
+      dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: date, retestTime: time || null } })
       updates[`${r.studentId}-${r.type}`] = date
+      timeUpdates[`${r.studentId}-${r.type}`] = time
     }
     setRetestDateSelections(prev => ({ ...prev, ...updates }))
+    setRetestTimeSelections(prev => ({ ...prev, ...timeUpdates }))
   }
 
   const saveVocabName = (name: string) => {
@@ -325,6 +341,46 @@ export default function GradePage() {
     }
     return opts
   }, [nextClassDate])
+
+  const retestTimeOptions = useMemo(
+    () => ['15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00'],
+    []
+  )
+
+  const renderRetestScheduleControls = (
+    studentId: string,
+    type: string,
+    tone: 'purple' | 'blue',
+    retestId?: string,
+    originalScore?: number | null,
+    retestDate?: string,
+    retestTime?: string
+  ) => {
+    const key = `${studentId}-${type}`
+    const selectedDate = retestDateSelections[key] ?? retestDate ?? nextClassDate
+    const selectedTime = retestTimeSelections[key] ?? retestTime ?? ''
+    const borderClass = tone === 'blue' ? 'border-blue-200 focus:ring-blue-300 text-blue-700' : 'border-purple-200 focus:ring-purple-300 text-purple-700'
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-1">
+        <select
+          value={selectedDate}
+          onChange={e => handleRetestScheduleChange(studentId, type, e.target.value, selectedTime, retestId, originalScore)}
+          className={`border rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 bg-white ${borderClass}`}
+        >
+          <option value="">날짜 선택</option>
+          {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
+        </select>
+        <select
+          value={selectedTime}
+          onChange={e => handleRetestScheduleChange(studentId, type, selectedDate, e.target.value, retestId, originalScore)}
+          className={`border rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 bg-white ${borderClass}`}
+        >
+          <option value="">시간</option>
+          {retestTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+    )
+  }
 
   useEffect(() => {
     if (!nextClassDate || !selectedCls) return
@@ -497,7 +553,7 @@ export default function GradePage() {
           </div>
         </div>
 
-        {/* 재시험 일괄 날짜 설정 */}
+        {/* 재시험 일괄 일정 설정 */}
         {pendingRetests.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 px-5 py-2.5 border-b border-slate-100 bg-orange-50/30">
             <span className="flex items-center gap-1.5 text-xs text-orange-600 font-medium">
@@ -505,7 +561,7 @@ export default function GradePage() {
               재시험 대상자 {pendingRetests.length}명
             </span>
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-slate-500 shrink-0">날짜 일괄 설정</span>
+              <span className="text-xs text-slate-500 shrink-0">일정 일괄 설정</span>
               <select
                 value={bulkRetestDate || nextClassDate}
                 onChange={e => setBulkRetestDate(e.target.value)}
@@ -515,6 +571,14 @@ export default function GradePage() {
                 {retestDateOptions.map(d => (
                   <option key={d} value={d}>{formatDateKo(d)}</option>
                 ))}
+              </select>
+              <select
+                value={bulkRetestTime}
+                onChange={e => setBulkRetestTime(e.target.value)}
+                className="border border-orange-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-300 bg-white text-orange-700"
+              >
+                <option value="">시간 선택</option>
+                {retestTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
               <button
                 onClick={handleBulkRetestDate}
@@ -815,15 +879,14 @@ export default function GradePage() {
                               <AlertCircle size={14} className="text-orange-400 shrink-0" />
                             )}
                           </div>
-                          {(isVocabRetest || vocabRetest) && !vocabRetestPassed && (
-                            <select
-                              value={retestDateSelections[`${row.studentId}-vocab`] ?? vocabRetest?.retestDate ?? nextClassDate}
-                              onChange={e => handleRetestDateChange(row.studentId, 'vocab', e.target.value, vocabRetest?.id, vocabNum)}
-                              className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
-                            >
-                              <option value="">날짜 선택</option>
-                              {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                            </select>
+                          {(isVocabRetest || vocabRetest) && !vocabRetestPassed && renderRetestScheduleControls(
+                            row.studentId,
+                            'vocab',
+                            'purple',
+                            vocabRetest?.id,
+                            vocabNum,
+                            vocabRetest?.retestDate,
+                            vocabRetest?.retestTime
                           )}
                         </div>
                       </td>
@@ -851,15 +914,14 @@ export default function GradePage() {
                             <AlertCircle size={14} className="text-orange-400 shrink-0" />
                           )}
                         </div>
-                        {(isDailyRetest || dailyRetest) && !dailyRetestPassed && (
-                          <select
-                            value={retestDateSelections[`${row.studentId}-daily`] ?? dailyRetest?.retestDate ?? nextClassDate}
-                            onChange={e => handleRetestDateChange(row.studentId, 'daily', e.target.value, dailyRetest?.id, dailyNum)}
-                            className="border border-blue-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-300 bg-white text-blue-700"
-                          >
-                            <option value="">날짜 선택</option>
-                            {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                          </select>
+                        {(isDailyRetest || dailyRetest) && !dailyRetestPassed && renderRetestScheduleControls(
+                          row.studentId,
+                          'daily',
+                          'blue',
+                          dailyRetest?.id,
+                          dailyNum,
+                          dailyRetest?.retestDate,
+                          dailyRetest?.retestTime
                         )}
                       </div>
                     </td>
@@ -893,15 +955,14 @@ export default function GradePage() {
                               <span className="text-slate-300 text-xs shrink-0">/{colTotal}{colMode === '개수' ? '개' : ''}</span>
                               {isExtraRetest && <AlertCircle size={14} className="text-orange-400 shrink-0" />}
                             </div>
-                            {(isExtraRetest || extraRetest) && !extraRetestPassed && (
-                              <select
-                                value={retestDateSelections[`${row.studentId}-${col.id}`] ?? extraRetest?.retestDate ?? nextClassDate}
-                                onChange={e => handleRetestDateChange(row.studentId, col.id, e.target.value, extraRetest?.id, extraNum)}
-                                className="border border-purple-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-300 bg-white text-purple-700"
-                              >
-                                <option value="">날짜 선택</option>
-                                {retestDateOptions.map(d => <option key={d} value={d}>{formatDateKo(d)}</option>)}
-                              </select>
+                            {(isExtraRetest || extraRetest) && !extraRetestPassed && renderRetestScheduleControls(
+                              row.studentId,
+                              col.id,
+                              'purple',
+                              extraRetest?.id,
+                              extraNum,
+                              extraRetest?.retestDate,
+                              extraRetest?.retestTime
                             )}
                           </div>
                         </td>
