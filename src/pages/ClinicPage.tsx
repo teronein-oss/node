@@ -69,11 +69,13 @@ export default function ClinicPage() {
     const map: Record<string, typeof state.retests> = {}
     for (const r of state.retests) {
       if (!r.retestDate || r.passed !== null) continue
+      const student = state.students.find(s => s.id === r.studentId)
+      if (!student?.active) continue
       if (!map[r.retestDate]) map[r.retestDate] = []
       map[r.retestDate].push(r)
     }
     return map
-  }, [state.retests])
+  }, [state.retests, state.students])
 
   // 날짜별 숙제 재확인 예정 (미흡/미제출 학생, recheckDate ?? 다음 수업일)
   const homeworkRechecksByDate = useMemo(() => {
@@ -146,6 +148,12 @@ export default function ClinicPage() {
     overdueEntries.forEach(completeEntryWithoutConfirm)
   }
 
+  const completeAllSelectedDay = () => {
+    if (selectedDayEntries.length === 0) return
+    if (!confirm(`${formatDateKo(selectedDate)} 항목 ${selectedDayEntries.length}건을 모두 완료 처리하겠습니까?`)) return
+    selectedDayEntries.forEach(completeEntryWithoutConfirm)
+  }
+
   const calDays = useMemo(() => buildCalDays(calYM.year, calYM.month), [calYM])
 
   // 선택 날짜 방문 예정 목록 (재시험)
@@ -154,7 +162,7 @@ export default function ClinicPage() {
     const dayRetests = retestsByDate[selectedDate] ?? []
     for (const r of dayRetests) {
       const s = getStudent(r.studentId)
-      if (!s) continue
+      if (!s?.active) continue
       entries.push({
         kind: 'retest',
         key: r.id,
@@ -169,7 +177,7 @@ export default function ClinicPage() {
     }
     for (const e of homeworkRechecksByDate[selectedDate] ?? []) {
       const s = getStudent(e.studentId)
-      if (!s) continue
+      if (!s?.active) continue
       entries.push({
         kind: 'homework',
         key: `hw-${e.studentId}`,
@@ -336,11 +344,20 @@ export default function ClinicPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <h2 className="text-sm font-semibold text-slate-800">{formatDateKo(selectedDate)} 방문 예정</h2>
-              {selectedDayEntries.length > 0 && (
-                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
-                  {selectedDayEntries.length}명
-                </span>
-              )}
+              <div className="flex items-center gap-1.5">
+                {selectedDayEntries.length > 0 && (
+                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                    {selectedDayEntries.length}명
+                  </span>
+                )}
+                <button
+                  onClick={completeAllSelectedDay}
+                  disabled={selectedDayEntries.length === 0}
+                  className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium disabled:opacity-40 disabled:hover:bg-blue-50 transition-colors"
+                >
+                  전체 완료
+                </button>
+              </div>
             </div>
             <div className="divide-y divide-slate-50 max-h-80 overflow-y-auto">
               {selectedDayEntries.length === 0 ? (

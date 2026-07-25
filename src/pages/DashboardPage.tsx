@@ -382,6 +382,7 @@ interface TodayRetestItem {
   studentId: string
   name: string
   passed: boolean | null
+  scheduledDate?: string
 }
 
 interface TodayHomeworkItem {
@@ -391,6 +392,7 @@ interface TodayHomeworkItem {
   itemIds: string[]
   sessionNum: number
   completed: boolean
+  scheduledDate?: string
 }
 
 interface TodayStudentTask {
@@ -416,12 +418,14 @@ interface ManagementStudent {
 function TodayFocusPanel({
   title = '오늘 확인',
   emptyText = '오늘 확인할 대상이 없습니다',
+  showDates = false,
   rows,
   onCompleteRetest,
   onCompleteHomework,
 }: {
   title?: string
   emptyText?: string
+  showDates?: boolean
   rows: TodayTaskRow[]
   onCompleteRetest: (item: TodayRetestItem, label?: string) => void
   onCompleteHomework: (item: TodayHomeworkItem) => void
@@ -466,19 +470,36 @@ function TodayFocusPanel({
     )
   }
 
-  const renderTask = (task: TodayStudentTask) => (
-    <div key={task.key} className="grid grid-cols-[64px_74px_max-content] items-center justify-start gap-2 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
-      <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
-      <span className="truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-semibold text-slate-500">
-        {task.className}
+  const renderDateCell = (task: TodayStudentTask) => {
+    const dates = [task.vocab?.scheduledDate, task.daily?.scheduledDate, task.homework?.scheduledDate]
+      .filter((date): date is string => Boolean(date))
+      .filter((date, index, arr) => arr.indexOf(date) === index)
+      .sort()
+    if (!showDates) return null
+    return (
+      <span className="whitespace-nowrap rounded-md bg-rose-50 px-1.5 py-0.5 text-center text-[11px] font-semibold text-rose-500">
+        {dates[0]?.slice(5).replace('-', '.') ?? '-'}{dates.length > 1 ? ` +${dates.length - 1}` : ''}
       </span>
-      <div className="flex gap-1.5">
-        {renderTaskButton('단어', task.vocab, 'purple', () => task.vocab && onCompleteRetest(task.vocab, '단어 재시험'))}
-        {renderTaskButton('Daily', task.daily, 'blue', () => task.daily && onCompleteRetest(task.daily, 'Daily 재시험'))}
-        {renderTaskButton('숙제', task.homework, 'orange', () => task.homework && onCompleteHomework(task.homework))}
+    )
+  }
+
+  const renderTask = (task: TodayStudentTask) => {
+    const gridCols = showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'
+    return (
+      <div key={task.key} className={`grid ${gridCols} items-center justify-start gap-2 border-b border-slate-50 px-4 py-2.5 last:border-b-0`}>
+        <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
+        <span className="truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-semibold text-slate-500">
+          {task.className}
+        </span>
+        {renderDateCell(task)}
+        <div className="flex gap-1.5">
+          {renderTaskButton('단어', task.vocab, 'purple', () => task.vocab && onCompleteRetest(task.vocab, '단어 재시험'))}
+          {renderTaskButton('Daily', task.daily, 'blue', () => task.daily && onCompleteRetest(task.daily, 'Daily 재시험'))}
+          {renderTaskButton('숙제', task.homework, 'orange', () => task.homework && onCompleteHomework(task.homework))}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="flex h-[390px] flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
@@ -494,9 +515,10 @@ function TodayFocusPanel({
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">{emptyText}</div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="sticky top-0 z-10 grid grid-cols-[64px_74px_max-content] justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400">
+          <div className={`sticky top-0 z-10 grid ${showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'} justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400`}>
             <span>학생</span>
             <span className="text-center">반</span>
+            {showDates && <span className="text-center">날짜</span>}
             <span>처리 항목</span>
           </div>
           {studentTasks.map(renderTask)}
@@ -508,9 +530,10 @@ function TodayFocusPanel({
             <div className="px-5 py-10 text-center text-xs text-slate-400">{emptyText}</div>
           ) : (
             <div>
-              <div className="grid grid-cols-[64px_74px_max-content] justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400">
+              <div className={`grid ${showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'} justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400`}>
                 <span>학생</span>
                 <span className="text-center">반</span>
+                {showDates && <span className="text-center">날짜</span>}
                 <span>처리 항목</span>
               </div>
               {studentTasks.map(renderTask)}
@@ -701,10 +724,10 @@ export default function DashboardPage() {
         )
         const vocabRetests = retests
           .filter(r => r.type === 'vocab')
-          .map(r => ({ id: r.id, studentId: r.studentId, name: getStudentName(r.studentId), passed: r.passed }))
+          .map(r => ({ id: r.id, studentId: r.studentId, name: getStudentName(r.studentId), passed: r.passed, scheduledDate: r.retestDate }))
         const dailyRetests = retests
           .filter(r => r.type === 'daily')
-          .map(r => ({ id: r.id, studentId: r.studentId, name: getStudentName(r.studentId), passed: r.passed }))
+          .map(r => ({ id: r.id, studentId: r.studentId, name: getStudentName(r.studentId), passed: r.passed, scheduledDate: r.retestDate }))
         const dueHomeworks = state.homeworks.filter(
           h => h.classId === cls.id || h.classId === ''
         )
@@ -718,7 +741,7 @@ export default function DashboardPage() {
           const description = hw.description || (hw.items ?? []).map(item => item.text).join(', ')
 
           if (hw.items?.length) {
-            const targetsByStudent = new Map<string, { itemIds: string[]; rank: number }>()
+            const targetsByStudent = new Map<string, { itemIds: string[]; rank: number; recheckDate: string }>()
             for (const item of hw.items) {
               for (const ss of (item.studentStatuses ?? [])) {
                 if (!studentIds.has(ss.studentId)) continue
@@ -726,9 +749,10 @@ export default function DashboardPage() {
                 if (rank < 2) continue
                 const recheckDate = hw.recheckDates?.find(rd => rd.studentId === ss.studentId)?.date ?? defaultRecheckDate
                 if (!dateMatches(recheckDate)) continue
-                const target = targetsByStudent.get(ss.studentId) ?? { itemIds: [], rank: 0 }
+                const target = targetsByStudent.get(ss.studentId) ?? { itemIds: [], rank: 0, recheckDate }
                 target.itemIds.push(item.id)
                 target.rank = Math.max(target.rank, rank)
+                target.recheckDate = recheckDate
                 targetsByStudent.set(ss.studentId, target)
               }
             }
@@ -742,6 +766,7 @@ export default function DashboardPage() {
                 itemIds: target.itemIds,
                 sessionNum: hw.sessionNum + 1,
                 completed: false,
+                scheduledDate: target.recheckDate,
               })
               if (description) homeworkDescriptionSet.add(description)
               const name = getStudentName(studentId)
@@ -762,6 +787,7 @@ export default function DashboardPage() {
                 itemIds: [],
                 sessionNum: checkSessionNum,
                 completed: false,
+                scheduledDate: recheckDate,
               })
               if (description) homeworkDescriptionSet.add(description)
               homeworkBadSet.add(getStudentName(g.studentId))
@@ -1108,16 +1134,17 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <TodayFocusPanel
-              title="오늘 확인"
-              emptyText="오늘 확인할 대상이 없습니다"
-              rows={todayTaskRows}
+              title="밀린 확인"
+              emptyText="밀린 확인 대상이 없습니다"
+              showDates
+              rows={overdueTaskRows}
               onCompleteRetest={completeTodayRetest}
               onCompleteHomework={completeTodayHomework}
             />
             <TodayFocusPanel
-              title="밀린 확인"
-              emptyText="밀린 확인 대상이 없습니다"
-              rows={overdueTaskRows}
+              title="오늘 확인"
+              emptyText="오늘 확인할 대상이 없습니다"
+              rows={todayTaskRows}
               onCompleteRetest={completeTodayRetest}
               onCompleteHomework={completeTodayHomework}
             />
