@@ -24,6 +24,7 @@ interface DayEntry {
   scheduledDate?: string
   scheduledTime?: string
   retestId?: string
+  retestIds?: string[]
   studentId?: string
   assignmentIds?: string[]
 }
@@ -127,8 +128,11 @@ export default function ClinicPage() {
   }
 
   const completeEntryWithoutConfirm = (entry: DayEntry) => {
-    if (entry.kind === 'retest' && entry.retestId) {
-      dispatch({ type: 'SAVE_RETEST', payload: { id: entry.retestId, retestScore: null, passed: true } })
+    if (entry.kind === 'retest') {
+      const ids = entry.retestIds?.length ? entry.retestIds : entry.retestId ? [entry.retestId] : []
+      for (const id of ids) {
+        dispatch({ type: 'SAVE_RETEST', payload: { id, retestScore: null, passed: true } })
+      }
       setConfirmingRetestId(null)
       return
     }
@@ -159,22 +163,35 @@ export default function ClinicPage() {
   // 선택 날짜 방문 예정 목록 (재시험)
   const selectedDayEntries = useMemo((): DayEntry[] => {
     const entries: DayEntry[] = []
+    const retestGroups = new Map<string, DayEntry>()
     const dayRetests = retestsByDate[selectedDate] ?? []
     for (const r of dayRetests) {
       const s = getStudent(r.studentId)
       if (!s?.active) continue
-      entries.push({
+      const label = r.type === 'vocab' ? '단어재시험' : 'Daily재시험'
+      const groupKey = `retest-${selectedDate}-${r.studentId}-${r.type}`
+      const existing = retestGroups.get(groupKey)
+      if (existing) {
+        existing.retestIds = [...(existing.retestIds ?? []), r.id]
+        if (!existing.scheduledTime || (r.retestTime && r.retestTime < existing.scheduledTime)) {
+          existing.scheduledTime = r.retestTime
+        }
+        continue
+      }
+      retestGroups.set(groupKey, {
         kind: 'retest',
-        key: r.id,
+        key: groupKey,
         retestId: r.id,
+        retestIds: [r.id],
         name: s.name,
         className: getClassName(r.studentId),
-        label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
+        label,
         color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
         scheduledDate: selectedDate,
         scheduledTime: r.retestTime,
       })
     }
+    entries.push(...retestGroups.values())
     for (const e of homeworkRechecksByDate[selectedDate] ?? []) {
       const s = getStudent(e.studentId)
       if (!s?.active) continue
@@ -207,24 +224,37 @@ export default function ClinicPage() {
   // 날짜가 지난 미완료 목록
   const overdueEntries = useMemo((): DayEntry[] => {
     const entries: DayEntry[] = []
+    const retestGroups = new Map<string, DayEntry>()
     for (const [date, retests] of Object.entries(retestsByDate)) {
       if (date >= todayStr) continue
       for (const r of retests) {
         const s = getStudent(r.studentId)
         if (!s?.active) continue
-        entries.push({
+        const label = r.type === 'vocab' ? '단어재시험' : 'Daily재시험'
+        const groupKey = `overdue-retest-${date}-${r.studentId}-${r.type}`
+        const existing = retestGroups.get(groupKey)
+        if (existing) {
+          existing.retestIds = [...(existing.retestIds ?? []), r.id]
+          if (!existing.scheduledTime || (r.retestTime && r.retestTime < existing.scheduledTime)) {
+            existing.scheduledTime = r.retestTime
+          }
+          continue
+        }
+        retestGroups.set(groupKey, {
           kind: 'retest',
-          key: `overdue-${r.id}`,
+          key: groupKey,
           retestId: r.id,
+          retestIds: [r.id],
           name: s.name,
           className: getClassName(r.studentId),
-          label: r.type === 'vocab' ? '단어재시험' : 'Daily재시험',
+          label,
           color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
           scheduledDate: date,
           scheduledTime: r.retestTime,
         })
       }
     }
+    entries.push(...retestGroups.values())
     for (const [date, entriesForDate] of Object.entries(homeworkRechecksByDate)) {
       if (date >= todayStr) continue
       for (const e of entriesForDate) {
@@ -392,7 +422,12 @@ export default function ClinicPage() {
                           완료
                         </button>
                         <button
-                          onClick={() => dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: entry.retestId!, retestDate: null, retestTime: null } })}
+                          onClick={() => {
+                            const ids = entry.retestIds?.length ? entry.retestIds : entry.retestId ? [entry.retestId] : []
+                            for (const id of ids) {
+                              dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id, retestDate: null, retestTime: null } })
+                            }
+                          }}
                           className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
                         >
                           미응시
