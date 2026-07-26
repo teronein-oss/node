@@ -38,10 +38,15 @@ interface DayEntry {
   assignmentIds?: string[]
 }
 
-function groupRetestsByStudentDateType(retests: RetestLike[], date: string, prefix: string) {
+function groupRetestsByStudentDateType(
+  retests: RetestLike[],
+  date: string,
+  prefix: string,
+  getPresentation: (retest: RetestLike) => { label: string; color: string }
+) {
   const groups = new Map<string, DayEntry>()
   for (const r of retests) {
-    const label = r.type === 'vocab' ? '단어재시험' : 'Daily재시험'
+    const { label, color } = getPresentation(r)
     const groupKey = `${prefix}-${date}-${r.studentId}-${r.type}`
     const existing = groups.get(groupKey)
     if (existing) {
@@ -60,7 +65,7 @@ function groupRetestsByStudentDateType(retests: RetestLike[], date: string, pref
       name: '',
       className: '',
       label,
-      color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
+      color,
       scheduledDate: date,
       scheduledTime: r.retestTime,
     })
@@ -77,6 +82,18 @@ export default function ClinicPage() {
   const getClassName = (studentId: string) => {
     const classId = state.students.find(s => s.id === studentId)?.classId
     return state.classes.find(c => c.id === classId)?.name ?? ''
+  }
+  const getRetestPresentation = (retest: RetestLike) => {
+    if (retest.type === 'vocab') return { label: '단어재시험', color: 'bg-purple-50 text-purple-700' }
+    if (retest.type === 'daily') return { label: 'Daily재시험', color: 'bg-blue-50 text-blue-700' }
+
+    const student = getStudent(retest.studentId)
+    const sessionCfg = state.sessionTestConfigs.find(
+      c => c.sessionNum === retest.sessionNum && c.classId === student?.classId
+    ) ?? state.sessionTestConfigs.find(c => c.sessionNum === retest.sessionNum)
+    const col = (sessionCfg?.scoreColumns ?? []).find(c => c.id === retest.type)
+      ?? state.scoreColumns.find(c => c.id === retest.type)
+    return { label: `${col?.name ?? '추가항목'}재시험`, color: 'bg-amber-50 text-amber-700' }
   }
 
   const retestStillNeedsClinic = (retest: RetestLike) => {
@@ -230,7 +247,7 @@ export default function ClinicPage() {
   const selectedDayEntries = useMemo((): DayEntry[] => {
     const entries: DayEntry[] = []
     const dayRetests = retestsByDate[selectedDate] ?? []
-    for (const entry of groupRetestsByStudentDateType(dayRetests, selectedDate, 'retest')) {
+    for (const entry of groupRetestsByStudentDateType(dayRetests, selectedDate, 'retest', getRetestPresentation)) {
       const s = entry.studentId ? getStudent(entry.studentId) : undefined
       if (!s?.active) continue
       entries.push({
@@ -259,7 +276,7 @@ export default function ClinicPage() {
       a.name.localeCompare(b.name, 'ko')
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, retestsByDate, homeworkRechecksByDate, state.students, state.classes])
+  }, [selectedDate, retestsByDate, homeworkRechecksByDate, state.students, state.classes, state.sessionTestConfigs, state.scoreColumns])
 
   const prevMonth = () => setCalYM(({ year, month }) =>
     month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
@@ -273,7 +290,7 @@ export default function ClinicPage() {
     const entries: DayEntry[] = []
     for (const [date, retests] of Object.entries(retestsByDate)) {
       if (date >= todayStr) continue
-      for (const entry of groupRetestsByStudentDateType(retests, date, 'overdue-retest')) {
+      for (const entry of groupRetestsByStudentDateType(retests, date, 'overdue-retest', getRetestPresentation)) {
         const s = entry.studentId ? getStudent(entry.studentId) : undefined
         if (!s?.active) continue
         entries.push({
@@ -307,7 +324,7 @@ export default function ClinicPage() {
       a.name.localeCompare(b.name, 'ko')
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retestsByDate, homeworkRechecksByDate, state.students, state.classes, todayStr])
+  }, [retestsByDate, homeworkRechecksByDate, state.students, state.classes, state.sessionTestConfigs, state.scoreColumns, todayStr])
 
   return (
     <div className="max-w-7xl mx-auto space-y-4">
@@ -348,11 +365,11 @@ export default function ClinicPage() {
               const dateStr = fmtDate(date)
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
-              const dayRetestChips = groupRetestsByStudentDateType(retestsByDate[dateStr] ?? [], dateStr, 'cal-retest')
+              const dayRetestChips = groupRetestsByStudentDateType(retestsByDate[dateStr] ?? [], dateStr, 'cal-retest', getRetestPresentation)
                 .map(entry => ({
                   key: entry.key,
                   name: `${entry.scheduledTime ? `${entry.scheduledTime} ` : ''}${entry.studentId ? getStudent(entry.studentId)?.name ?? '?' : '?'}`,
-                  cls: entry.label === '단어재시험' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+                  cls: entry.color,
                 }))
               const dayChips = [
                 ...dayRetestChips,
