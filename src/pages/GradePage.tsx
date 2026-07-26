@@ -22,6 +22,7 @@ export default function GradePage() {
   const showVocabTest = isDefaultAcademy(viewingAcademyId ?? user?.academyId)
 
   const today = new Date()
+  const todayStr = fmtDate(today)
   const currentYM = getCurrentYM(today)
 
   const availableMonths = useMemo(() => {
@@ -396,7 +397,8 @@ export default function GradePage() {
       const key = `${r.studentId}-${r.type}`
       const retestDow = r.retestDate ? new Date(r.retestDate + 'T00:00:00').getDay() : null
       const hasInvalidDay = retestDow !== null && !validDows.includes(retestDow)
-      if (!r.retestDate || hasInvalidDay) {
+      const isPastRetestDate = r.retestDate ? r.retestDate < todayStr : false
+      if (!r.retestDate || (hasInvalidDay && !isPastRetestDate)) {
         const dateToSet = retestDateSelections[key] ?? nextClassDate
         if (dateToSet) dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: dateToSet } })
       }

@@ -120,7 +120,8 @@ export default function ClinicPage() {
       const correctDate = getClassDate(r.sessionNum + 1, cls.days, cls.weekdays)
       const retestDow = r.retestDate ? new Date(r.retestDate + 'T00:00:00').getDay() : null
       const hasInvalidDay = retestDow !== null && !validDows.includes(retestDow)
-      if (!r.retestDate || hasInvalidDay) {
+      const isPastRetestDate = r.retestDate ? r.retestDate < todayStr : false
+      if (!r.retestDate || (hasInvalidDay && !isPastRetestDate)) {
         dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id: r.id, retestDate: correctDate } })
       }
     }
@@ -454,7 +455,7 @@ export default function ClinicPage() {
                           onClick={() => {
                             const ids = entry.retestIds?.length ? entry.retestIds : entry.retestId ? [entry.retestId] : []
                             for (const id of ids) {
-                              dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id, retestDate: null, retestTime: null } })
+                              dispatch({ type: 'UPDATE_RETEST_DATE', payload: { id, retestDate: entry.scheduledDate ?? null, retestTime: null } })
                             }
                           }}
                           className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-medium shrink-0 transition-colors"
