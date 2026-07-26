@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Stethoscope } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { fmtDate, formatDateKo, getClassDate, normalizeClassWeekdays } from '../utils/helpers'
+import { fmtDate, formatDateKo, getClassDate, needsRetest, normalizeClassWeekdays } from '../utils/helpers'
 
 function buildCalDays(year: number, month: number): (Date | null)[] {
   const first = new Date(year, month - 1, 1)
@@ -13,6 +13,15 @@ function buildCalDays(year: number, month: number): (Date | null)[] {
 }
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
+
+type RetestLike = {
+  id: string
+  studentId: string
+  sessionNum: number
+  type: string
+  retestDate?: string
+  retestTime?: string
+}
 
 interface DayEntry {
   kind: 'retest' | 'homework'
@@ -29,17 +38,79 @@ interface DayEntry {
   assignmentIds?: string[]
 }
 
+function groupRetestsByStudentDateType(retests: RetestLike[], date: string, prefix: string) {
+  const groups = new Map<string, DayEntry>()
+  for (const r of retests) {
+    const label = r.type === 'vocab' ? '단어재시험' : 'Daily재시험'
+    const groupKey = `${prefix}-${date}-${r.studentId}-${r.type}`
+    const existing = groups.get(groupKey)
+    if (existing) {
+      existing.retestIds = [...(existing.retestIds ?? []), r.id]
+      if (!existing.scheduledTime || (r.retestTime && r.retestTime < existing.scheduledTime)) {
+        existing.scheduledTime = r.retestTime
+      }
+      continue
+    }
+    groups.set(groupKey, {
+      kind: 'retest',
+      key: groupKey,
+      retestId: r.id,
+      retestIds: [r.id],
+      studentId: r.studentId,
+      name: '',
+      className: '',
+      label,
+      color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
+      scheduledDate: date,
+      scheduledTime: r.retestTime,
+    })
+  }
+  return [...groups.values()]
+}
+
 export default function ClinicPage() {
   const { state, dispatch, loading } = useApp()
   const fixApplied = useRef(false)
   const today = new Date()
   const todayStr = fmtDate(today)
+  const getStudent = (id: string) => state.students.find(s => s.id === id)
+  const getClassName = (studentId: string) => {
+    const classId = state.students.find(s => s.id === studentId)?.classId
+    return state.classes.find(c => c.id === classId)?.name ?? ''
+  }
+
+  const retestStillNeedsClinic = (retest: RetestLike) => {
+    const student = getStudent(retest.studentId)
+    if (!student?.active) return false
+    const grade = state.grades.find(g => g.studentId === retest.studentId && g.sessionNum === retest.sessionNum)
+    if (!grade) return true
+    const sessionCfg = state.sessionTestConfigs.find(
+      c => c.sessionNum === retest.sessionNum && c.classId === student.classId
+    ) ?? state.sessionTestConfigs.find(c => c.sessionNum === retest.sessionNum)
+
+    if (retest.type === 'vocab') {
+      return needsRetest(grade.vocabScore, sessionCfg?.vocabThreshold ?? state.vocabThreshold)
+    }
+    if (retest.type === 'daily') {
+      return needsRetest(grade.dailyTestScore, sessionCfg?.dailyThreshold ?? state.dailyThreshold)
+    }
+
+    const score = grade.extras?.[retest.type] ?? null
+    const sessionCols = sessionCfg?.scoreColumns ?? []
+    const col = sessionCols.find(c => c.id === retest.type) ?? state.scoreColumns.find(c => c.id === retest.type)
+    if (!col?.threshold || col.threshold <= 0) return true
+    return needsRetest(score, col.threshold)
+  }
 
   useEffect(() => {
     if (loading || fixApplied.current) return
     fixApplied.current = true
     for (const r of state.retests) {
       if (r.passed !== null) continue
+      if (!retestStillNeedsClinic(r)) {
+        dispatch({ type: 'SAVE_RETEST', payload: { id: r.id, retestScore: r.retestScore ?? null, passed: true } })
+        continue
+      }
       const student = state.students.find(s => s.id === r.studentId)
       if (!student?.active) continue
       const cls = state.classes.find(c => c.id === student.classId)
@@ -59,24 +130,18 @@ export default function ClinicPage() {
   const [calYM, setCalYM] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 })
   const [selectedDate, setSelectedDate] = useState<string>(todayStr)
   const [confirmingRetestId, setConfirmingRetestId] = useState<string | null>(null)
-
-  const getStudent = (id: string) => state.students.find(s => s.id === id)
-  const getClassName = (studentId: string) => {
-    const classId = state.students.find(s => s.id === studentId)?.classId
-    return state.classes.find(c => c.id === classId)?.name ?? ''
-  }
   // 날짜별 방문 예정 (재시험 날짜 기준)
   const retestsByDate = useMemo(() => {
     const map: Record<string, typeof state.retests> = {}
     for (const r of state.retests) {
       if (!r.retestDate || r.passed !== null) continue
-      const student = state.students.find(s => s.id === r.studentId)
-      if (!student?.active) continue
+      if (!retestStillNeedsClinic(r)) continue
       if (!map[r.retestDate]) map[r.retestDate] = []
       map[r.retestDate].push(r)
     }
     return map
-  }, [state.retests, state.students])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.retests, state.students, state.grades, state.sessionTestConfigs, state.scoreColumns])
 
   // 날짜별 숙제 재확인 예정 (미흡/미제출 학생, recheckDate ?? 다음 수업일)
   const homeworkRechecksByDate = useMemo(() => {
@@ -163,35 +228,16 @@ export default function ClinicPage() {
   // 선택 날짜 방문 예정 목록 (재시험)
   const selectedDayEntries = useMemo((): DayEntry[] => {
     const entries: DayEntry[] = []
-    const retestGroups = new Map<string, DayEntry>()
     const dayRetests = retestsByDate[selectedDate] ?? []
-    for (const r of dayRetests) {
-      const s = getStudent(r.studentId)
+    for (const entry of groupRetestsByStudentDateType(dayRetests, selectedDate, 'retest')) {
+      const s = entry.studentId ? getStudent(entry.studentId) : undefined
       if (!s?.active) continue
-      const label = r.type === 'vocab' ? '단어재시험' : 'Daily재시험'
-      const groupKey = `retest-${selectedDate}-${r.studentId}-${r.type}`
-      const existing = retestGroups.get(groupKey)
-      if (existing) {
-        existing.retestIds = [...(existing.retestIds ?? []), r.id]
-        if (!existing.scheduledTime || (r.retestTime && r.retestTime < existing.scheduledTime)) {
-          existing.scheduledTime = r.retestTime
-        }
-        continue
-      }
-      retestGroups.set(groupKey, {
-        kind: 'retest',
-        key: groupKey,
-        retestId: r.id,
-        retestIds: [r.id],
+      entries.push({
+        ...entry,
         name: s.name,
-        className: getClassName(r.studentId),
-        label,
-        color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
-        scheduledDate: selectedDate,
-        scheduledTime: r.retestTime,
+        className: getClassName(s.id),
       })
     }
-    entries.push(...retestGroups.values())
     for (const e of homeworkRechecksByDate[selectedDate] ?? []) {
       const s = getStudent(e.studentId)
       if (!s?.active) continue
@@ -224,37 +270,18 @@ export default function ClinicPage() {
   // 날짜가 지난 미완료 목록
   const overdueEntries = useMemo((): DayEntry[] => {
     const entries: DayEntry[] = []
-    const retestGroups = new Map<string, DayEntry>()
     for (const [date, retests] of Object.entries(retestsByDate)) {
       if (date >= todayStr) continue
-      for (const r of retests) {
-        const s = getStudent(r.studentId)
+      for (const entry of groupRetestsByStudentDateType(retests, date, 'overdue-retest')) {
+        const s = entry.studentId ? getStudent(entry.studentId) : undefined
         if (!s?.active) continue
-        const label = r.type === 'vocab' ? '단어재시험' : 'Daily재시험'
-        const groupKey = `overdue-retest-${date}-${r.studentId}-${r.type}`
-        const existing = retestGroups.get(groupKey)
-        if (existing) {
-          existing.retestIds = [...(existing.retestIds ?? []), r.id]
-          if (!existing.scheduledTime || (r.retestTime && r.retestTime < existing.scheduledTime)) {
-            existing.scheduledTime = r.retestTime
-          }
-          continue
-        }
-        retestGroups.set(groupKey, {
-          kind: 'retest',
-          key: groupKey,
-          retestId: r.id,
-          retestIds: [r.id],
+        entries.push({
+          ...entry,
           name: s.name,
-          className: getClassName(r.studentId),
-          label,
-          color: r.type === 'vocab' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700',
-          scheduledDate: date,
-          scheduledTime: r.retestTime,
+          className: getClassName(s.id),
         })
       }
     }
-    entries.push(...retestGroups.values())
     for (const [date, entriesForDate] of Object.entries(homeworkRechecksByDate)) {
       if (date >= todayStr) continue
       for (const e of entriesForDate) {
@@ -320,12 +347,14 @@ export default function ClinicPage() {
               const dateStr = fmtDate(date)
               const isToday = dateStr === todayStr
               const isSelected = dateStr === selectedDate
+              const dayRetestChips = groupRetestsByStudentDateType(retestsByDate[dateStr] ?? [], dateStr, 'cal-retest')
+                .map(entry => ({
+                  key: entry.key,
+                  name: `${entry.scheduledTime ? `${entry.scheduledTime} ` : ''}${entry.studentId ? getStudent(entry.studentId)?.name ?? '?' : '?'}`,
+                  cls: entry.label === '단어재시험' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+                }))
               const dayChips = [
-                ...(retestsByDate[dateStr] ?? []).map(r => ({
-                  key: r.id,
-                  name: `${r.retestTime ? `${r.retestTime} ` : ''}${getStudent(r.studentId)?.name ?? '?'}`,
-                  cls: r.type === 'vocab' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
-                })),
+                ...dayRetestChips,
                 ...(homeworkRechecksByDate[dateStr] ?? []).map(e => ({
                   key: `hw-${e.studentId}`,
                   name: getStudent(e.studentId)?.name ?? '?',

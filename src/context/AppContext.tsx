@@ -174,10 +174,10 @@ function reducer(state: AppState, action: Action): AppState {
             }
           } else {
             // 점수가 기준 이상으로 수정됐으면 미처리 재시험 레코드 제거
-            const pending = state.retests.find(
+            const pendingRecords = state.retests.filter(
               r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === type && r.passed === null
             )
-            if (pending) retestIdsToRemove.add(pending.id)
+            for (const pending of pendingRecords) retestIdsToRemove.add(pending.id)
           }
         }
 
@@ -205,10 +205,10 @@ function reducer(state: AppState, action: Action): AppState {
               })
             }
           } else {
-            const pending = state.retests.find(
+            const pendingRecords = state.retests.filter(
               r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === colId && r.passed === null
             )
-            if (pending) retestIdsToRemove.add(pending.id)
+            for (const pending of pendingRecords) retestIdsToRemove.add(pending.id)
           }
         }
       }

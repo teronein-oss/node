@@ -41,6 +41,7 @@ const ClassManagePage = lazy(() => import('../pages/ClassManagePage'))
 const AdminPage = lazy(() => import('../pages/AdminPage'))
 const AdminManagePage = lazy(() => import('../pages/AdminManagePage'))
 const PrincipalDashboardPage = lazy(() => import('../pages/PrincipalDashboardPage'))
+const RetestDiagnosticsPage = lazy(() => import('../pages/RetestDiagnosticsPage'))
 
 function PageLoader() {
   return (
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
       { path: 'principal', element: <PrincipalGuard><Lazy><PrincipalDashboardPage /></Lazy></PrincipalGuard> },
       { path: 'admin', element: <AdminGuard><Lazy><AdminPage /></Lazy></AdminGuard> },
       { path: 'admin/manage', element: <AdminGuard><Lazy><AdminManagePage /></Lazy></AdminGuard> },
+      { path: 'admin/retest-diagnostics', element: <AdminGuard><Lazy><RetestDiagnosticsPage /></Lazy></AdminGuard> },
     ],
   },
 ])
