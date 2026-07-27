@@ -219,10 +219,8 @@ export default function HomeworkPage() {
         const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSession)
         const isAbsent = checkGrade?.attendance === '결석'
         const itemStatus = (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status ?? null
-        // 아이템 상태 없이 grade.homeworkDone만 '미흡'인 기존 데이터
-        const gradeHwMissed = itemStatus === null && checkGrade?.homeworkDone === '미흡'
-        const displayStatus = itemStatus ?? (gradeHwMissed ? '미흡' : '제출')
-        const showRecheck = itemStatus === '미흡' || itemStatus === '미제출' || itemStatus === '재확인완료' || gradeHwMissed
+        const displayStatus = itemStatus ?? '제출'
+        const showRecheck = itemStatus === '미흡' || itemStatus === '미제출' || itemStatus === '재확인완료'
         const setStatus = (status: '제출' | '미흡' | '미제출' | '재확인완료' | null) =>
           dispatch({ type: 'SET_ITEM_STUDENT_STATUS', payload: { assignmentId: checkHw.id, itemId: item.id, studentId: student.id, status } })
         return (
