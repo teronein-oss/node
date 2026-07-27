@@ -41,6 +41,44 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
   const classWeekdays = normalizeClassWeekdays(classDays, studentCls?.weekdays)
   const currentSessionNum = getCurrentClassSessionNum(classDays, classWeekdays)
   const todayStr = fmtDate(new Date())
+  const getSessionConfig = (sessionNum: number) =>
+    state.sessionTestConfigs.find(c => c.sessionNum === sessionNum && c.classId === student.classId)
+    ?? state.sessionTestConfigs.find(c => c.sessionNum === sessionNum && !c.classId)
+    ?? state.sessionTestConfigs.find(c => c.sessionNum === sessionNum)
+
+  const getExtraColumnForSession = (sessionNum: number, colId: string) => {
+    const sessionCfg = getSessionConfig(sessionNum)
+    return (sessionCfg?.scoreColumns ?? []).find(c => c.id === colId)
+      ?? state.scoreColumns.find(c => c.id === colId)
+  }
+
+  const getRetestMeta = (type: string, sessionNum: number) => {
+    if (type === 'vocab') {
+      const cfg = getSessionConfig(sessionNum)
+      return {
+        label: '단어',
+        total: cfg?.vocabTotal ?? state.vocabTotal,
+        mode: cfg?.vocabMode ?? state.vocabMode,
+        color: 'bg-purple-50 text-purple-600',
+      }
+    }
+    if (type === 'daily') {
+      const cfg = getSessionConfig(sessionNum)
+      return {
+        label: 'Daily',
+        total: cfg?.dailyTotal ?? state.dailyTotal,
+        mode: cfg?.dailyMode ?? state.dailyMode,
+        color: 'bg-blue-50 text-blue-600',
+      }
+    }
+    const col = getExtraColumnForSession(sessionNum, type)
+    return {
+      label: col?.name ?? '추가항목',
+      total: col?.total ?? 100,
+      mode: col?.mode ?? '점수',
+      color: 'bg-amber-50 text-amber-600',
+    }
+  }
 
   const grades = state.grades
     .filter(g => g.studentId === student.id)
@@ -379,11 +417,7 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
                   <tbody className="divide-y divide-slate-50">
                     {grades.map(g => {
                       const hasRetest = retests.some(r => r.sessionNum === g.sessionNum)
-                      const sCfg = state.sessionTestConfigs.find(
-                        c => c.sessionNum === g.sessionNum && c.classId === student.classId
-                      ) ?? state.sessionTestConfigs.find(
-                        c => c.sessionNum === g.sessionNum && !c.classId
-                      )
+                      const sCfg = getSessionConfig(g.sessionNum)
                       const vThresh = sCfg?.vocabThreshold ?? state.vocabThreshold
                       const vTotal = sCfg?.vocabTotal ?? state.vocabTotal
                       const vMode = sCfg?.vocabMode ?? state.vocabMode
@@ -413,9 +447,10 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
                           </td>
                           {allSessionCols.map(col => {
                             const eScore = g.extras?.[col.id]
-                            const eTotal = col.total ?? 100
-                            const eThresh = col.threshold ?? 0
-                            const eMode = col.mode ?? '점수'
+                            const sessionCol = getExtraColumnForSession(g.sessionNum, col.id)
+                            const eTotal = sessionCol?.total ?? col.total ?? 100
+                            const eThresh = sessionCol?.threshold ?? col.threshold ?? 0
+                            const eMode = sessionCol?.mode ?? col.mode ?? '점수'
                             const eFail = eThresh > 0 && eScore != null && eScore < eThresh
                             return (
                               <td key={col.id} className="text-center px-4 py-2.5 whitespace-nowrap">
@@ -538,37 +573,42 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
               <p className="text-sm text-slate-400">재시험 이력이 없습니다</p>
             ) : (
               <div className="space-y-2">
-                {retests.map(r => (
-                  <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="text-xs text-slate-500 whitespace-nowrap">{formatDateKo(getClassDate(r.sessionNum, classDays, classWeekdays))}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-                      ${r.type === 'vocab' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                      {r.type === 'vocab' ? '단어' : 'Daily'}
-                    </span>
-                    <span className="text-sm text-slate-600">
-                      {r.originalScore}점
-                      {r.retestScore !== null && (
-                        <>
-                          {' → '}
-                          <span className={`font-medium ${r.passed ? 'text-green-600' : 'text-red-500'}`}>
-                            {r.retestScore}점
-                          </span>
-                        </>
-                      )}
-                    </span>
-                    <div className="ml-auto">
-                      {r.passed === null && (
-                        <span className="text-xs text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">미처리</span>
-                      )}
-                      {r.passed === true && (
-                        <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">통과</span>
-                      )}
-                      {r.passed === false && (
-                        <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">불통과</span>
-                      )}
+                {retests.map(r => {
+                  const meta = getRetestMeta(r.type, r.sessionNum)
+                  const unit = meta.mode === '개수' ? '개' : '점'
+                  return (
+                    <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                      <span className="text-xs text-slate-500 whitespace-nowrap">{formatDateKo(getClassDate(r.sessionNum, classDays, classWeekdays))}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${meta.color}`}>
+                        {meta.label}
+                      </span>
+                      <span className="text-sm text-slate-600">
+                        {r.originalScore}
+                        <span className="text-xs font-normal text-slate-400">/{meta.total}{unit}</span>
+                        {r.retestScore !== null && (
+                          <>
+                            {' → '}
+                            <span className={`font-medium ${r.passed ? 'text-green-600' : 'text-red-500'}`}>
+                              {r.retestScore}
+                              <span className="text-xs font-normal text-slate-400">/{meta.total}{unit}</span>
+                            </span>
+                          </>
+                        )}
+                      </span>
+                      <div className="ml-auto">
+                        {r.passed === null && (
+                          <span className="text-xs text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">미처리</span>
+                        )}
+                        {r.passed === true && (
+                          <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">통과</span>
+                        )}
+                        {r.passed === false && (
+                          <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-full">불통과</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>
