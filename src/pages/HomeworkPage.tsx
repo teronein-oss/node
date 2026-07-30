@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { ChevronDown, ChevronUp, Calendar, Trash2, RotateCcw, Plus, Pencil, Check, X, AlertTriangle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { genId, getWeekStart, getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
+import { getWeekStart, getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import type { HomeworkAssignment, HomeworkItem } from '../types'
 
@@ -121,17 +121,14 @@ export default function HomeworkPage() {
   const handleAddItem = (sessionNum: number) => {
     const text = (newItemTexts[sessionNum] ?? '').trim()
     if (!text) return
-    const hw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)
     const weekStart = getWeekStart(new Date(getClassDate(sessionNum, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays) + 'T00:00:00'))
-    const newItem: HomeworkItem = { id: genId(), text, done: false }
     dispatch({
-      type: 'SAVE_HOMEWORK',
+      type: 'ADD_HOMEWORK_ITEM',
       payload: {
         classId: selectedClass,
         sessionNum,
         weekStart,
-        description: hw?.description ?? '',
-        items: [...(hw?.items ?? []), newItem],
+        text,
       },
     })
     setNewItemTexts(prev => ({ ...prev, [sessionNum]: '' }))

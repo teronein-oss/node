@@ -44,6 +44,7 @@ export type Action =
   | { type: 'SAVE_RETEST'; payload: { id: string; retestScore: number | null; passed: boolean } }
   | { type: 'ADD_RETEST'; payload: Omit<RetestRecord, 'id' | 'createdAt'> }
   | { type: 'SAVE_HOMEWORK'; payload: Omit<HomeworkAssignment, 'id' | 'createdAt'> }
+  | { type: 'ADD_HOMEWORK_ITEM'; payload: { classId: string; sessionNum: number; weekStart: string; text: string } }
   | { type: 'DELETE_HOMEWORK'; payload: string }
   | { type: 'TOGGLE_HOMEWORK_ITEM'; payload: { assignmentId: string; itemId: string } }
   | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | '재확인완료' | null } }
@@ -267,6 +268,29 @@ function reducer(state: AppState, action: Action): AppState {
           {
             ...action.payload,
             recheckDates: action.payload.recheckDates ?? prev?.recheckDates,
+            id: prev?.id ?? genId(),
+            createdAt: prev?.createdAt ?? new Date().toISOString(),
+          },
+        ],
+      }
+    }
+
+    case 'ADD_HOMEWORK_ITEM': {
+      const { classId, sessionNum, weekStart, text } = action.payload
+      const prev = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === classId)
+      const others = state.homeworks.filter(h => !(h.sessionNum === sessionNum && h.classId === classId))
+      const newItem: HomeworkItem = { id: genId(), text, done: false }
+      return {
+        ...state,
+        homeworks: [
+          ...others,
+          {
+            classId,
+            sessionNum,
+            weekStart,
+            description: prev?.description ?? '',
+            items: [...(prev?.items ?? []), newItem],
+            recheckDates: prev?.recheckDates,
             id: prev?.id ?? genId(),
             createdAt: prev?.createdAt ?? new Date().toISOString(),
           },
