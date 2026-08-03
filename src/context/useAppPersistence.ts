@@ -42,7 +42,8 @@ export function useAppPersistence({
   const loadingRef = useRef(true)
   loadingRef.current = loading
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingWriteCount = useRef(0)
+  const localChangeVersion = useRef(0)
+  const hasPendingLocalChanges = useRef(false)
 
   // 비관리자: config/sharedData 구독해서 전체 공지 일정 수신
   useEffect(() => {
@@ -83,12 +84,18 @@ export function useAppPersistence({
   const dispatch = useCallback((action: Action) => {
     baseDispatch(action)
     if (action.type === 'LOAD' || loadingRef.current) return
+    localChangeVersion.current++
+    hasPendingLocalChanges.current = true
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null
-      pendingWriteCount.current++
-      setDoc(firestoreDoc, toFirestoreData(stateRef.current))
+      const writeVersion = localChangeVersion.current
+      const stateToSave = toFirestoreData(stateRef.current)
+      setDoc(firestoreDoc, stateToSave)
         .then(() => {
+          if (writeVersion === localChangeVersion.current) {
+            hasPendingLocalChanges.current = false
+          }
           console.log('✅ Firestore 저장:', firestoreDoc.path)
           // 관리자가 일정을 변경한 경우 전체 공지 일정을 config/sharedData에 동기화
           if (isAdmin && scheduleActionTypes.has(action.type)) {
@@ -102,7 +109,6 @@ export function useAppPersistence({
           }
         })
         .catch((err) => {
-          pendingWriteCount.current--
           console.error('❌ Firestore 저장 실패:', err?.code, err?.message)
         })
     }, 300)
@@ -112,9 +118,8 @@ export function useAppPersistence({
   useEffect(() => {
     const unsubscribe = onSnapshot(firestoreDoc, (snap) => {
       if (snap.exists()) {
-        if (pendingWriteCount.current > 0) {
-          // 우리가 직접 저장한 onSnapshot 반응 — in-memory 상태를 덮어쓰지 않음
-          pendingWriteCount.current--
+        if (hasPendingLocalChanges.current || saveTimer.current !== null) {
+          // 로컬 변경이 저장되기 전에는 이전 서버 상태로 화면을 되돌리지 않는다.
         } else {
           const rawState = snap.data() as AppState
           const normalized = normalizeState(rawState)
