@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, RotateCcw, Users } from 'lucide-react'
+import { Search, UserPlus, CheckCircle, AlertCircle, BookX, ChevronRight, Calendar, Plus, Trash2, RotateCcw, Users, ArrowRightLeft } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Student, FilterType, WithdrawalReason } from '../types'
@@ -28,6 +28,7 @@ export default function StudentPage() {
   const [selected, setSelected] = useState<Student | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [showBulkAdd, setShowBulkAdd] = useState(false)
+  const [showBulkMove, setShowBulkMove] = useState(false)
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [showWithdrawn, setShowWithdrawn] = useState(false)
   const [returningStudentId, setReturningStudentId] = useState<string | null>(null)
@@ -38,6 +39,8 @@ export default function StudentPage() {
   const [newClass, setNewClass] = useState(state.classes[0]?.id ?? '')
   const [bulkNames, setBulkNames] = useState('')
   const [bulkClass, setBulkClass] = useState(state.classes[0]?.id ?? '')
+  const [bulkMoveNames, setBulkMoveNames] = useState('')
+  const [bulkMoveClass, setBulkMoveClass] = useState(state.classes[0]?.id ?? '')
   const [bulkDeleteNames, setBulkDeleteNames] = useState('')
   const [bulkDeleteClass, setBulkDeleteClass] = useState(state.classes[0]?.id ?? '')
 
@@ -192,6 +195,64 @@ export default function StudentPage() {
     setShowBulkAdd(false)
   }
 
+  const bulkMoveNameList = [...new Set(
+    bulkMoveNames
+      .split(/[\n,;]+/)
+      .map(name => name.trim())
+      .filter(Boolean)
+  )]
+
+  const activeStudentsByName = new Map<string, Student[]>()
+  for (const student of state.students.filter(student => student.active)) {
+    const matches = activeStudentsByName.get(student.name) ?? []
+    matches.push(student)
+    activeStudentsByName.set(student.name, matches)
+  }
+
+  const bulkMoveUniqueMatches = bulkMoveNameList.flatMap(name => {
+    const matches = activeStudentsByName.get(name) ?? []
+    return matches.length === 1 ? matches : []
+  })
+  const bulkMoveChanges = bulkMoveUniqueMatches.filter(student => student.classId !== bulkMoveClass)
+  const bulkMoveAlreadyAssigned = bulkMoveUniqueMatches.filter(student => student.classId === bulkMoveClass)
+  const bulkMoveMissingNames = bulkMoveNameList.filter(name => !activeStudentsByName.has(name))
+  const bulkMoveAmbiguousNames = bulkMoveNameList.filter(name => (activeStudentsByName.get(name)?.length ?? 0) > 1)
+
+  const bulkMoveAffectedClassIds = new Set([
+    bulkMoveClass,
+    ...bulkMoveChanges.map(student => student.classId),
+  ].filter(Boolean))
+  const bulkMoveHomeworkIds = state.homeworks
+    .filter(homework => {
+      if (!bulkMoveAffectedClassIds.has(homework.classId)) return false
+      const cls = state.classes.find(candidate => candidate.id === homework.classId)
+      if (!cls || !selectedMonthStartDate) return false
+      const checkDate = getClassDate(homework.sessionNum + 1, cls.days, cls.weekdays)
+      return checkDate >= selectedMonthStartDate
+    })
+    .map(homework => homework.id)
+
+  const handleBulkMoveStudents = () => {
+    if (!bulkMoveClass || bulkMoveChanges.length === 0) return
+    const targetClassName = getClassName(bulkMoveClass)
+    const monthLabel = selectedMonthInfo?.label ?? selectedYM
+    if (!confirm(
+      `${bulkMoveChanges.length}명을 ${targetClassName} 반으로 이동하고, ${monthLabel} 이후 숙제 명단 ${bulkMoveHomeworkIds.length}건을 현재 반 기준으로 갱신하시겠습니까?`
+    )) return
+
+    dispatch({
+      type: 'BULK_REASSIGN_STUDENTS',
+      payload: {
+        studentIds: bulkMoveChanges.map(student => student.id),
+        targetClassId: bulkMoveClass,
+        homeworkIds: bulkMoveHomeworkIds,
+      },
+    })
+    setBulkMoveNames('')
+    setClassFilter(bulkMoveClass)
+    setShowBulkMove(false)
+  }
+
   const bulkDeleteNameList = bulkDeleteNames
     .split(/[\n,;]+/)
     .map(name => name.trim())
@@ -311,6 +372,7 @@ export default function StudentPage() {
             onClick={() => {
               setShowBulkAdd(v => !v)
               setShowAdd(false)
+              setShowBulkMove(false)
               setShowBulkDelete(false)
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border
@@ -324,9 +386,26 @@ export default function StudentPage() {
           </button>
           <button
             onClick={() => {
+              setShowBulkMove(v => !v)
+              setShowAdd(false)
+              setShowBulkAdd(false)
+              setShowBulkDelete(false)
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border
+              ${showBulkMove
+                ? 'bg-emerald-600 text-white border-emerald-600'
+                : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+              }`}
+          >
+            <ArrowRightLeft size={16} />
+            일괄 반 배정
+          </button>
+          <button
+            onClick={() => {
               setShowBulkDelete(v => !v)
               setShowAdd(false)
               setShowBulkAdd(false)
+              setShowBulkMove(false)
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border
               ${showBulkDelete
@@ -341,6 +420,7 @@ export default function StudentPage() {
             onClick={() => {
               setShowAdd(v => !v)
               setShowBulkAdd(false)
+              setShowBulkMove(false)
               setShowBulkDelete(false)
             }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -481,6 +561,98 @@ export default function StudentPage() {
                 취소
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 반 배정 폼 */}
+      {showBulkMove && (
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-900">학생 일괄 반 배정</h3>
+              <p className="text-xs text-emerald-700/70 mt-1">
+                학생 소속을 한 번에 변경하고 {selectedMonthInfo?.label ?? selectedYM} 이후 숙제 명단도 함께 갱신합니다
+              </p>
+            </div>
+            <span className="text-xs text-emerald-700 bg-white border border-emerald-100 px-2.5 py-1 rounded-full">
+              이동 {bulkMoveChanges.length}명
+            </span>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(260px,0.8fr)]">
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">이동할 반</label>
+                <select
+                  value={bulkMoveClass}
+                  onChange={e => setBulkMoveClass(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200 bg-white"
+                >
+                  {state.classes.map(cls => (
+                    <option key={cls.id} value={cls.id}>{cls.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">학생 이름</label>
+                <textarea
+                  value={bulkMoveNames}
+                  onChange={e => setBulkMoveNames(e.target.value)}
+                  placeholder={'김민재\n이서윤\n박준후'}
+                  className="w-full min-h-40 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200 resize-y bg-white"
+                />
+                <p className="text-xs text-slate-400 mt-1">한 줄에 한 명씩 입력하거나 쉼표로 구분할 수 있습니다</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-emerald-100 rounded-lg overflow-hidden">
+              <div className="px-3 py-2 border-b border-emerald-50 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600">이동 미리보기</span>
+                <span className="text-xs text-slate-400">숙제 {bulkMoveHomeworkIds.length}건 동기화</span>
+              </div>
+              <div className="max-h-52 overflow-y-auto divide-y divide-slate-50">
+                {bulkMoveChanges.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-8">이동할 학생 이름을 입력하세요</p>
+                ) : bulkMoveChanges.map(student => (
+                  <div key={student.id} className="px-3 py-2.5 flex items-center gap-2 text-xs">
+                    <span className="font-semibold text-slate-700 min-w-16">{student.name}</span>
+                    <span className="text-slate-400 truncate">{getClassName(student.classId) || '반 없음'}</span>
+                    <ArrowRightLeft size={12} className="text-emerald-500 shrink-0" />
+                    <span className="text-emerald-700 font-medium truncate">{getClassName(bulkMoveClass)}</span>
+                  </div>
+                ))}
+              </div>
+              {(bulkMoveAlreadyAssigned.length > 0 || bulkMoveMissingNames.length > 0 || bulkMoveAmbiguousNames.length > 0) && (
+                <div className="border-t border-slate-100 px-3 py-2.5 space-y-1 text-xs">
+                  {bulkMoveAlreadyAssigned.length > 0 && (
+                    <p className="text-slate-500">이미 배정됨: {bulkMoveAlreadyAssigned.map(student => student.name).join(', ')}</p>
+                  )}
+                  {bulkMoveMissingNames.length > 0 && (
+                    <p className="text-red-500">찾을 수 없음: {bulkMoveMissingNames.join(', ')}</p>
+                  )}
+                  {bulkMoveAmbiguousNames.length > 0 && (
+                    <p className="text-orange-600">동명이인 제외: {bulkMoveAmbiguousNames.join(', ')}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-4">
+            <button
+              onClick={handleBulkMoveStudents}
+              disabled={!bulkMoveClass || bulkMoveChanges.length === 0}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-40"
+            >
+              {bulkMoveChanges.length}명 일괄 배정
+            </button>
+            <button
+              onClick={() => setShowBulkMove(false)}
+              className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
+            >
+              취소
+            </button>
           </div>
         </div>
       )}

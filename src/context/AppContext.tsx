@@ -39,6 +39,7 @@ export type Action =
   | { type: 'DELETE_CLASS'; payload: string }
   | { type: 'ADD_STUDENT'; payload: Omit<Student, 'id'> }
   | { type: 'UPDATE_STUDENT'; payload: Student }
+  | { type: 'BULK_REASSIGN_STUDENTS'; payload: { studentIds: string[]; targetClassId: string; homeworkIds: string[] } }
   | { type: 'DEACTIVATE_STUDENT'; payload: string }
   | { type: 'SAVE_GRADES'; payload: Omit<GradeRecord, 'id' | 'createdAt'>[] }
   | { type: 'SAVE_RETEST'; payload: { id: string; retestScore: number | null; passed: boolean } }
@@ -125,6 +126,40 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         students: state.students.map(s => s.id === action.payload.id ? action.payload : s),
       }
+
+    case 'BULK_REASSIGN_STUDENTS': {
+      const { studentIds, targetClassId, homeworkIds } = action.payload
+      const movedIds = new Set(studentIds)
+      const homeworkIdSet = new Set(homeworkIds)
+      const students = state.students.map(student =>
+        movedIds.has(student.id) ? { ...student, classId: targetClassId } : student
+      )
+
+      const rosterByClass = new Map<string, string[]>()
+      for (const student of students) {
+        if (!student.active) continue
+        const roster = rosterByClass.get(student.classId) ?? []
+        roster.push(student.id)
+        rosterByClass.set(student.classId, roster)
+      }
+
+      const homeworks = state.homeworks.map(homework => {
+        if (!homeworkIdSet.has(homework.id)) return homework
+        const studentIdsForClass = rosterByClass.get(homework.classId) ?? []
+        const rosterIds = new Set(studentIdsForClass)
+        return {
+          ...homework,
+          studentIds: studentIdsForClass,
+          items: (homework.items ?? []).map(item => ({
+            ...item,
+            studentStatuses: (item.studentStatuses ?? []).filter(status => rosterIds.has(status.studentId)),
+          })),
+          recheckDates: (homework.recheckDates ?? []).filter(recheck => rosterIds.has(recheck.studentId)),
+        }
+      })
+
+      return { ...state, students, homeworks }
+    }
 
     case 'DEACTIVATE_STUDENT':
       return {
