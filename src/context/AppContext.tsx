@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, type ReactNode } from 'react'
 import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, TodoItem, TodoPriority, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
-import { CLASS_NAME_MIGRATION } from '../data/initialData'
+import { CLASS_NAME_MIGRATION, LEGACY_CLASS_ID_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions, getClassDate } from '../utils/helpers'
 import { useAppPersistence } from './useAppPersistence'
 
@@ -771,6 +771,11 @@ export function normalizeState(parsed: AppState): AppState {
   for (const [legacyName, migratedName] of Object.entries(CLASS_NAME_MIGRATION)) {
     const classId = classAliasToId.get(normalizeClassName(migratedName))
     if (classId) classAliasToId.set(legacyName, classId)
+  }
+  for (const [legacyId, migratedName] of Object.entries(LEGACY_CLASS_ID_MIGRATION)) {
+    if (classes.some(cls => cls.id === legacyId)) continue
+    const classId = classAliasToId.get(normalizeClassName(migratedName))
+    if (classId) classAliasToId.set(legacyId, classId)
   }
   const normalizeClassId = (classId?: string) => {
     if (!classId) return ''

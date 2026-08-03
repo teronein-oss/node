@@ -18,6 +18,13 @@ export const CLASS_NAME_MIGRATION: Record<string, string> = {
   '백현2 A1': '백현2_A1',
 }
 
+export const LEGACY_CLASS_ID_MIGRATION: Record<string, string> = {
+  'mon-fri-a': '청덕2_S2',
+  'mon-fri-b': '백현2_A2',
+  'tue-thu-a': '청덕2_S1',
+  'tue-thu-b': '백현2_A1',
+}
+
 export const INITIAL_STUDENTS: Student[] = [
   // 청덕2 S2
   { id: 's01', name: '권태현', classId: 'mon-fri-a', active: true },
