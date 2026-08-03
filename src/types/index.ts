@@ -100,6 +100,7 @@ export interface HomeworkAssignment {
   sessionNum: number
   weekStart: string
   description: string
+  studentIds?: string[]     // 숙제 출제 당시 검사 대상 학생 스냅샷
   items?: HomeworkItem[]
   recheckDates?: { studentId: string; date: string }[]   // 미흡/미제출 학생별 재확인 날짜 YYYY-MM-DD
   createdAt: string

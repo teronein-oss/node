@@ -119,9 +119,10 @@ export function useAppPersistence({
           const rawState = snap.data() as AppState
           const normalized = normalizeState(rawState)
           baseDispatch({ type: 'LOAD', payload: normalized })
-          if ((rawState.students ?? []).some(student => student.active === false && !student.withdrawnAt)) {
+          const normalizedChanged = JSON.stringify(toFirestoreData(rawState)) !== JSON.stringify(toFirestoreData(normalized))
+          if (normalizedChanged) {
             setDoc(firestoreDoc, toFirestoreData(normalized), { merge: true })
-              .catch(err => console.error('❌ 퇴원일 마이그레이션 실패:', err?.code))
+              .catch(err => console.error('❌ 데이터 정규화 저장 실패:', err?.code))
           }
           // 관리자 계정 로드 시 기존 전체 공지 일정도 즉시 동기화
           if (isAdmin) {

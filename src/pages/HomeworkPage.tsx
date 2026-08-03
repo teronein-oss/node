@@ -49,6 +49,17 @@ export default function HomeworkPage() {
     [state.students, selectedClass]
   )
 
+  const studentsForHomework = (hw?: HomeworkAssignment) => {
+    if (!hw?.studentIds?.length) return classStudents
+    const order = new Map(hw.studentIds.map((id, idx) => [id, idx]))
+    return state.students
+      .filter(s => order.has(s.id))
+      .sort((a, b) =>
+        (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0) ||
+        a.name.localeCompare(b.name, 'ko')
+      )
+  }
+
   const prevDate = (sessionNum: number) =>
     getClassDate(sessionNum - 1, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays)
 
@@ -76,21 +87,24 @@ export default function HomeworkPage() {
         if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
       }
     }
-    return classStudents
+    const rosterStudents = studentsForHomework(checkHw)
+    return rosterStudents
       .filter(s => (worstMap.get(s.id) ?? 0) >= 2)
       .map(s => ({ student: s, status: (worstMap.get(s.id) === 3 ? '미제출' : '미흡') as '미흡' | '미제출' }))
   }
 
   // 검사일별 미제출/미흡 현황 (재확인완료 제외)
   const summary = useMemo(() => {
-    const studentName = (id: string) => classStudents.find(s => s.id === id)?.name ?? '?'
     return classDates.map(({ date, sessionNum }) => {
       const checkHw = state.homeworks.find(h => h.sessionNum === sessionNum - 1 && h.classId === selectedClass)
+      const rosterStudents = studentsForHomework(checkHw)
+      const rosterIds = new Set(rosterStudents.map(s => s.id))
+      const studentName = (id: string) => rosterStudents.find(s => s.id === id)?.name ?? '?'
       const entries: { studentId: string; studentName: string; itemId: string; itemText: string; status: '미흡' | '미제출'; assignmentId: string }[] = []
       let resolvedCount = 0
       for (const item of checkHw?.items ?? []) {
         for (const ss of item.studentStatuses ?? []) {
-          if (!classStudents.some(s => s.id === ss.studentId)) continue
+          if (!rosterIds.has(ss.studentId)) continue
           if (ss.status === '재확인완료') resolvedCount++
           else if (ss.status === '미흡' || ss.status === '미제출') {
             entries.push({ studentId: ss.studentId, studentName: studentName(ss.studentId), itemId: item.id, itemText: item.text, status: ss.status, assignmentId: checkHw!.id })
@@ -99,7 +113,7 @@ export default function HomeworkPage() {
       }
       return { date, sessionNum, assignDate: prevDate(sessionNum), entries, resolvedCount }
     }).filter(g => g.entries.length > 0)
-  }, [classDates, state.homeworks, selectedClass, classStudents])
+  }, [classDates, state.homeworks, state.students, selectedClass, classStudents])
 
   const outstandingTotal = summary.reduce((n, g) => n + g.entries.length, 0)
 
@@ -135,6 +149,7 @@ export default function HomeworkPage() {
         sessionNum,
         weekStart,
         text,
+        studentIds: classStudents.map(s => s.id),
       },
     })
     setNewItemTexts(prev => ({ ...prev, [sessionNum]: '' }))
@@ -152,6 +167,7 @@ export default function HomeworkPage() {
           sessionNum: hw.sessionNum,
           weekStart: hw.weekStart,
           description: hw.description,
+          studentIds: hw.studentIds ?? classStudents.map(s => s.id),
           items: updatedItems,
         },
       })
@@ -168,6 +184,7 @@ export default function HomeworkPage() {
           sessionNum: hw.sessionNum,
           weekStart: hw.weekStart,
           description: hw.description,
+          studentIds: hw.studentIds ?? classStudents.map(s => s.id),
           items: (hw.items ?? []).map(item =>
             item.id === itemId ? { ...item, text: trimmed } : item
           ),
@@ -191,12 +208,14 @@ export default function HomeworkPage() {
   const selectedSummary = summary.find(group => group.sessionNum === selectedSessionNum)
   const selectedIssueEntries = selectedSummary?.entries ?? []
   const selectedFlaggedStudents = selectedCheckHw ? flaggedStudents(selectedCheckHw) : []
+  const selectedCheckStudents = selectedCheckHw ? studentsForHomework(selectedCheckHw) : classStudents
   const selectedIsToday = selectedDate === todayStr
 
   const markSelectedAllSubmitted = () => {
     if (!selectedCheckHw) return
+    const checkStudents = studentsForHomework(selectedCheckHw)
     for (const item of selectedCheckItems) {
-      for (const student of classStudents) {
+      for (const student of checkStudents) {
         dispatch({
           type: 'SET_ITEM_STUDENT_STATUS',
           payload: { assignmentId: selectedCheckHw.id, itemId: item.id, studentId: student.id, status: null },
@@ -216,9 +235,11 @@ export default function HomeworkPage() {
   }
 
   // 지난 숙제 검사 — 학생별 제출 상태 그리드
-  const renderCheckGrid = (checkHw: HomeworkAssignment, item: HomeworkItem, checkSession: number) => (
+  const renderCheckGrid = (checkHw: HomeworkAssignment, item: HomeworkItem, checkSession: number) => {
+    const checkStudents = studentsForHomework(checkHw)
+    return (
     <div className="ml-7 grid grid-cols-1 sm:grid-cols-[repeat(2,max-content)] xl:grid-cols-[repeat(3,max-content)] gap-x-6 gap-y-2">
-      {classStudents.map(student => {
+      {checkStudents.map(student => {
         const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSession)
         const isAbsent = checkGrade?.attendance === '결석'
         const itemStatus = (item.studentStatuses ?? []).find(ss => ss.studentId === student.id)?.status ?? null
@@ -280,7 +301,8 @@ export default function HomeworkPage() {
         )
       })}
     </div>
-  )
+    )
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
@@ -405,7 +427,7 @@ export default function HomeworkPage() {
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-400">{idx + 1}</span>
                           <span className="min-w-0 flex-1 text-sm font-semibold text-slate-800">{item.text}</span>
                         </div>
-                        {classStudents.length > 0 ? renderCheckGrid(selectedCheckHw, item, selectedSessionNum) : (
+                        {selectedCheckStudents.length > 0 ? renderCheckGrid(selectedCheckHw, item, selectedSessionNum) : (
                           <p className="text-xs text-slate-400">등록된 학생이 없습니다</p>
                         )}
                       </div>

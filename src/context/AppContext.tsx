@@ -44,7 +44,7 @@ export type Action =
   | { type: 'SAVE_RETEST'; payload: { id: string; retestScore: number | null; passed: boolean } }
   | { type: 'ADD_RETEST'; payload: Omit<RetestRecord, 'id' | 'createdAt'> }
   | { type: 'SAVE_HOMEWORK'; payload: Omit<HomeworkAssignment, 'id' | 'createdAt'> }
-  | { type: 'ADD_HOMEWORK_ITEM'; payload: { classId: string; sessionNum: number; weekStart: string; text: string } }
+  | { type: 'ADD_HOMEWORK_ITEM'; payload: { classId: string; sessionNum: number; weekStart: string; text: string; studentIds?: string[] } }
   | { type: 'DELETE_HOMEWORK'; payload: string }
   | { type: 'TOGGLE_HOMEWORK_ITEM'; payload: { assignmentId: string; itemId: string } }
   | { type: 'SET_ITEM_STUDENT_STATUS'; payload: { assignmentId: string; itemId: string; studentId: string; status: '제출' | '미흡' | '미제출' | '재확인완료' | null } }
@@ -267,6 +267,7 @@ function reducer(state: AppState, action: Action): AppState {
           ...others,
           {
             ...action.payload,
+            studentIds: action.payload.studentIds ?? prev?.studentIds,
             recheckDates: action.payload.recheckDates ?? prev?.recheckDates,
             id: prev?.id ?? genId(),
             createdAt: prev?.createdAt ?? new Date().toISOString(),
@@ -276,7 +277,7 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'ADD_HOMEWORK_ITEM': {
-      const { classId, sessionNum, weekStart, text } = action.payload
+      const { classId, sessionNum, weekStart, text, studentIds } = action.payload
       const prev = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === classId)
       const others = state.homeworks.filter(h => !(h.sessionNum === sessionNum && h.classId === classId))
       const newItem: HomeworkItem = { id: genId(), text, done: false }
@@ -289,6 +290,7 @@ function reducer(state: AppState, action: Action): AppState {
             sessionNum,
             weekStart,
             description: prev?.description ?? '',
+            studentIds: prev?.studentIds ?? studentIds,
             items: [...(prev?.items ?? []), newItem],
             recheckDates: prev?.recheckDates,
             id: prev?.id ?? genId(),
@@ -755,10 +757,31 @@ const normalizeClassName = (name: string) =>
 
 export function normalizeState(parsed: AppState): AppState {
   const normalizedAt = new Date().toISOString()
+  const classes = (parsed.classes ?? []).map(c => ({
+    ...c,
+    name: normalizeClassName(c.name),
+    days: c.days ?? 'mon-fri',
+  }))
+  const classAliasToId = new Map<string, string>()
+  for (const cls of classes) {
+    classAliasToId.set(cls.id, cls.id)
+    classAliasToId.set(cls.name, cls.id)
+    classAliasToId.set(normalizeClassName(cls.name), cls.id)
+  }
+  for (const [legacyName, migratedName] of Object.entries(CLASS_NAME_MIGRATION)) {
+    const classId = classAliasToId.get(normalizeClassName(migratedName))
+    if (classId) classAliasToId.set(legacyName, classId)
+  }
+  const normalizeClassId = (classId?: string) => {
+    if (!classId) return ''
+    return classAliasToId.get(classId) ?? classAliasToId.get(normalizeClassName(classId)) ?? classId
+  }
+
   return {
     ...parsed,
     students: (parsed.students ?? []).map(s => ({
       ...s,
+      classId: normalizeClassId(s.classId),
       active: s.active ?? true,
       registeredAt: s.registeredAt,
       withdrawnAt: s.active === false ? (s.withdrawnAt ?? normalizedAt) : s.withdrawnAt,
@@ -773,9 +796,13 @@ export function normalizeState(parsed: AppState): AppState {
         items = [{ id: h.id + '_desc', text: description, done: false }]
         description = ''
       }
+      const statusStudentIds = Array.from(new Set(
+        items.flatMap(item => (item.studentStatuses ?? []).map(ss => ss.studentId))
+      ))
       return {
         ...h,
-        classId: h.classId ?? '',
+        classId: normalizeClassId(h.classId),
+        studentIds: h.studentIds?.length ? h.studentIds : (statusStudentIds.length > 0 ? statusStudentIds : undefined),
         items,
         description,
       }
@@ -783,7 +810,7 @@ export function normalizeState(parsed: AppState): AppState {
     scoreColumns: parsed.scoreColumns ?? [],
     scopes: (parsed.scopes ?? []).map((s: SessionScope & { classId?: string }) => ({
       ...s,
-      classId: s.classId ?? '',
+      classId: normalizeClassId(s.classId),
     })),
     vocabThreshold: parsed.vocabThreshold ?? 80,
     dailyThreshold: parsed.dailyThreshold ?? 80,
@@ -804,6 +831,7 @@ export function normalizeState(parsed: AppState): AppState {
     })),
     examInfo: (parsed.examInfo ?? []).map((e: ExamInfo & { semester?: string }) => ({
       ...e,
+      classId: normalizeClassId(e.classId),
       semester: e.semester ?? '1학기 중간',
     })),
     scheduleEvents: (parsed.scheduleEvents ?? []).map((e) => {
@@ -820,16 +848,15 @@ export function normalizeState(parsed: AppState): AppState {
       }
     }),
     clinicSchedules: parsed.clinicSchedules ?? [],
-    sessionTestConfigs: parsed.sessionTestConfigs ?? [],
+    sessionTestConfigs: (parsed.sessionTestConfigs ?? []).map(config => ({
+      ...config,
+      classId: config.classId ? normalizeClassId(config.classId) : config.classId,
+    })),
     weeklyProgress: (parsed.weeklyProgress ?? []).map((p: WeeklyProgress & { schoolId?: string }) => ({
       ...p,
-      classId: p.classId ?? p.schoolId ?? '',
+      classId: normalizeClassId(p.classId ?? p.schoolId),
     })),
-    classes: (parsed.classes ?? []).map(c => ({
-      ...c,
-      name: normalizeClassName(c.name),
-      days: c.days ?? 'mon-fri',
-    })),
+    classes,
     grades: (parsed.grades ?? []).map((g: GradeRecord & { homeworkDone: unknown }) => {
       const hd: unknown = g.homeworkDone
       return {
