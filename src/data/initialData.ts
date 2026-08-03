@@ -1,17 +1,21 @@
 import type { Class, Student } from '../types'
 
 export const INITIAL_CLASSES: Class[] = [
-  { id: 'mon-fri-a', name: '청덕2 S2', days: 'mon-fri' },
-  { id: 'mon-fri-b', name: '백현2 A2', days: 'mon-fri' },
-  { id: 'tue-thu-a', name: '청덕2 S1', days: 'tue-thu' },
-  { id: 'tue-thu-b', name: '백현2 A1', days: 'tue-thu' },
+  { id: 'mon-fri-a', name: '청덕2_S2', days: 'mon-fri' },
+  { id: 'mon-fri-b', name: '백현2_A2', days: 'mon-fri' },
+  { id: 'tue-thu-a', name: '청덕2_S1', days: 'tue-thu' },
+  { id: 'tue-thu-b', name: '백현2_A1', days: 'tue-thu' },
 ]
 
 export const CLASS_NAME_MIGRATION: Record<string, string> = {
-  '월금A반': '청덕2 S2',
-  '월금B반': '백현2 A2',
-  '화목A반': '청덕2 S1',
-  '화목B반': '백현2 A1',
+  '월금A반': '청덕2_S2',
+  '월금B반': '백현2_A2',
+  '화목A반': '청덕2_S1',
+  '화목B반': '백현2_A1',
+  '청덕2 S2': '청덕2_S2',
+  '백현2 A2': '백현2_A2',
+  '청덕2 S1': '청덕2_S1',
+  '백현2 A1': '백현2_A1',
 }
 
 export const INITIAL_STUDENTS: Student[] = [

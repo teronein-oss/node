@@ -750,6 +750,9 @@ const DEFAULT_STATE: AppState = {
   sessionTestConfigs: [],
 }
 
+const normalizeClassName = (name: string) =>
+  (CLASS_NAME_MIGRATION[name] ?? name).replace(/^(.+?\d)\s+([A-Z]\d+)$/, '$1_$2')
+
 export function normalizeState(parsed: AppState): AppState {
   const normalizedAt = new Date().toISOString()
   return {
@@ -824,7 +827,7 @@ export function normalizeState(parsed: AppState): AppState {
     })),
     classes: (parsed.classes ?? []).map(c => ({
       ...c,
-      name: CLASS_NAME_MIGRATION[c.name] ?? c.name,
+      name: normalizeClassName(c.name),
       days: c.days ?? 'mon-fri',
     })),
     grades: (parsed.grades ?? []).map((g: GradeRecord & { homeworkDone: unknown }) => {

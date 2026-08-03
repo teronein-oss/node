@@ -24,6 +24,12 @@ export default function HomeworkPage() {
 
   const selectedCls = state.classes.find(c => c.id === selectedClass)
 
+  useEffect(() => {
+    if (state.classes.length === 0) return
+    if (state.classes.some(c => c.id === selectedClass)) return
+    setSelectedClass(getDefaultClassIdForToday(state.classes, state.classes[0]?.id ?? ''))
+  }, [state.classes, selectedClass])
+
   // 검사일(수업일) 목록 — 각 수업일에서 지난 회차 숙제를 검사한다
   const classDates = useMemo(() => {
     if (!selectedMonthInfo) return []
