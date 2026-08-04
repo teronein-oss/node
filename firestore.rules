@@ -79,6 +79,13 @@ service cloud.firestore {
           || (isAcademyMember(academyId) && isAssignedJogyo(userId));
       }
 
+      match /homeworkData/{userId} {
+        allow read, write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
+          || isAcademyAdmin(academyId)
+          || (isAcademyMember(academyId) && isAssignedJogyo(userId));
+      }
+
       match /users/{userId} {
         allow read, write: if isSuperAdmin()
           || (isAcademyMember(academyId) && request.auth.uid == userId)
@@ -119,6 +126,15 @@ service cloud.firestore {
     }
 
     match /appData/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
+      allow read, write: if isDefaultMember() && isAssignedJogyo(userId);
+      allow read: if isDefaultMember()
+        && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
+    }
+
+    match /homeworkData/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
       allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');

@@ -35,6 +35,11 @@ export const appDataDoc = (uid: string, academyId?: string | null) =>
     ? doc(db, 'appData', uid)
     : doc(db, 'academies', normalizeAcademyId(academyId), 'appData', uid)
 
+export const homeworkDataDoc = (uid: string, academyId?: string | null) =>
+  isDefaultAcademy(academyId)
+    ? doc(db, 'homeworkData', uid)
+    : doc(db, 'academies', normalizeAcademyId(academyId), 'homeworkData', uid)
+
 export const sharedStudentRostersCollection = (academyId?: string | null) =>
   isDefaultAcademy(academyId)
     ? collection(db, 'sharedStudentRosters')

@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Calendar, Trash2, RotateCcw, Plus, Pencil, Check, X, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronUp, Calendar, Trash2, RotateCcw, Plus, Pencil, Check, X, AlertTriangle, Cloud, CloudOff, LoaderCircle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { getWeekStart, getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import type { HomeworkAssignment, HomeworkItem } from '../types'
 
 export default function HomeworkPage() {
-  const { state, dispatch, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
+  const { state, dispatch, saveStatus, saveError, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
 
   const today = new Date()
   const todayStr = fmtDate(today)
@@ -306,10 +306,38 @@ export default function HomeworkPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">숙제관리</h1>
-        <p className="text-sm text-slate-500 mt-1">오늘 검사할 숙제와 새로 출제할 숙제를 한 화면에서 관리합니다</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">숙제관리</h1>
+          <p className="text-sm text-slate-500 mt-1">오늘 검사할 숙제와 새로 출제할 숙제를 한 화면에서 관리합니다</p>
+        </div>
+        <div aria-live="polite" className="flex min-h-8 items-center">
+          {saveStatus === 'saving' && (
+            <span className="flex items-center gap-1.5 text-xs font-medium text-blue-600">
+              <LoaderCircle size={14} className="animate-spin" />
+              저장 중
+            </span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+              <Cloud size={14} />
+              저장 완료
+            </span>
+          )}
+          {saveStatus === 'error' && (
+            <span title={saveError ?? undefined} className="flex items-center gap-1.5 text-xs font-semibold text-red-600">
+              <CloudOff size={14} />
+              저장 실패
+            </span>
+          )}
+        </div>
       </div>
+
+      {saveStatus === 'error' && saveError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-xs font-medium text-red-700">
+          {saveError} 변경 내용은 이 기기에 보관되며 다음 접속 때 다시 저장합니다.
+        </div>
+      )}
 
       {/* 필터 바 */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 px-5 py-3.5 flex flex-wrap items-center gap-3">

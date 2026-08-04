@@ -79,7 +79,7 @@ export type Action =
   | { type: 'SET_SESSION_TEST_CONFIG'; payload: { sessionNum: number; classId?: string } & Partial<Omit<SessionTestConfig, 'sessionNum' | 'classId'>> }
   | { type: 'UPDATE_RETEST_DATE'; payload: { id: string; retestDate: string | null; retestTime?: string | null } }
 
-function reducer(state: AppState, action: Action): AppState {
+export function appReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'LOAD':
       return action.payload
@@ -922,6 +922,8 @@ interface AppContextValue {
   state: AppState
   dispatch: React.Dispatch<Action>
   loading: boolean
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error'
+  saveError: string | null
   globalScheduleEvents: ScheduleEvent[]
   visibleCount: number
   setVisibleCount: React.Dispatch<React.SetStateAction<number>>
@@ -950,11 +952,11 @@ export function AppProvider({
   academyId?: string
   isAdmin?: boolean
 }) {
-  const [state, baseDispatch] = useReducer(reducer, DEFAULT_STATE)
+  const [state, baseDispatch] = useReducer(appReducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
   const [globalScheduleEvents, setGlobalScheduleEvents] = useState<ScheduleEvent[]>([])
   const [visibleCount, setVisibleCount] = useState(8)
-  const dispatch = useAppPersistence({
+  const { dispatch, saveStatus, saveError } = useAppPersistence({
     uid,
     academyId,
     isAdmin,
@@ -966,6 +968,7 @@ export function AppProvider({
     normalizeState,
     legacyStorageKey: LEGACY_STORAGE_KEY,
     scheduleActionTypes: SCHEDULE_ACTION_TYPES,
+    reduceState: appReducer,
   })
 
   const currentYM = useMemo(() => {
@@ -1029,7 +1032,7 @@ export function AppProvider({
 
   return (
     <AppContext.Provider
-      value={{ state, dispatch, loading, globalScheduleEvents, visibleCount, setVisibleCount, selectedYM, setSelectedYM, selectedSession, setSelectedSession, getStudentsByClass, getGrade, getRetests, getPendingRetests, getCurrentSession, getScope }}
+      value={{ state, dispatch, loading, saveStatus, saveError, globalScheduleEvents, visibleCount, setVisibleCount, selectedYM, setSelectedYM, selectedSession, setSelectedSession, getStudentsByClass, getGrade, getRetests, getPendingRetests, getCurrentSession, getScope }}
     >
       {children}
     </AppContext.Provider>
