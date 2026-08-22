@@ -103,6 +103,45 @@ service cloud.firestore {
       match /studentDashboardRows/{rowId} {
         allow read, write: if isAcademyMember(academyId);
       }
+
+      match /messageLogs/{logId} {
+        allow read: if isAcademyAdmin(academyId);
+        allow write: if false;
+      }
+
+      match /studentReports/{reportId} {
+        allow read, write: if false;
+      }
+
+      match /actualExamScores/{scoreId} {
+        allow read, write: if false;
+      }
+    }
+
+    // 발송결과 동기화 작업은 Admin SDK를 사용하는 Cloud Functions 전용입니다.
+    match /messageSyncJobs/{jobId} {
+      allow read, write: if false;
+    }
+
+    // 성적 리포트와 식별 코드는 Cloud Functions에서만 접근합니다.
+    match /studentReportAccess/{accessHash} {
+      allow read, write: if false;
+    }
+
+    match /studentReportRateLimits/{viewerHash} {
+      allow read, write: if false;
+    }
+
+    match /studentReportViewLogs/{logId} {
+      allow read, write: if false;
+    }
+
+    match /teacherReportRateLimits/{viewerHash} {
+      allow read, write: if false;
+    }
+
+    match /teacherReportViewLogs/{logId} {
+      allow read, write: if false;
     }
 
     match /registrations/{userId} {

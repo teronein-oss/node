@@ -4,7 +4,8 @@ import type { Student, HomeworkStatus, ScoreColumn, WithdrawalReason, WeekdayKey
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { getClassDate, formatDateKo, fmtDate, normalizeClassWeekdays, getCurrentClassSessionNum } from '../utils/helpers'
-import { toPng } from 'html-to-image'
+import { createMmsJpeg } from '../utils/mmsImage'
+import { toCanvas } from 'html-to-image'
 
 interface Props {
   student: Student
@@ -212,7 +213,7 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
     setTransferClassId('')
   }
 
-  const handleDownloadPng = async () => {
+  const handleDownloadJpg = async () => {
     if (!cardRef.current || downloading) return
     setDownloading(true)
     const card = cardRef.current
@@ -229,17 +230,20 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
     wideTables.forEach(el => { el.style.overflow = 'visible' })
     card.style.width = `${Math.max(card.scrollWidth, card.getBoundingClientRect().width)}px`
     try {
-      const dataUrl = await toPng(card, {
+      const canvas = await toCanvas(card, {
         backgroundColor: '#ffffff',
         pixelRatio: 2,
         filter: (n) => !(n instanceof Element && n.getAttribute('data-no-capture') === 'true'),
       })
+      const { blob: jpeg } = await createMmsJpeg(canvas)
+      const downloadUrl = URL.createObjectURL(jpeg)
       const a = document.createElement('a')
-      a.href = dataUrl
-      a.download = `${student.name}_현황_${fmtDate(new Date())}.png`
+      a.href = downloadUrl
+      a.download = `${student.name}_현황_${fmtDate(new Date())}.jpg`
       a.click()
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 0)
     } catch (e) {
-      console.error('PNG 다운로드 실패:', e)
+      console.error('JPG 다운로드 실패:', e)
     } finally {
       card.style.width = prevCardWidth
       card.style.maxHeight = ''
@@ -331,12 +335,12 @@ export default function StudentDetail({ student, onClose, initialFromDate = '' }
             </div>
             <div className="flex items-center gap-2" data-no-capture="true">
               <button
-                onClick={handleDownloadPng}
+                onClick={handleDownloadJpg}
                 disabled={downloading}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
               >
                 <Download size={14} />
-                {downloading ? '저장 중...' : 'PNG'}
+                {downloading ? '저장 중...' : 'JPG'}
               </button>
               <button
                 onClick={onClose}

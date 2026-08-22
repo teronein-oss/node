@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, GraduationCap, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, CheckSquare } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, CheckSquare, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2, Clock3 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
@@ -32,9 +32,9 @@ type SidebarItem = {
 
 function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-b border-white/10 px-3 py-4">
-      <p className="mb-2 px-3 text-xs font-semibold text-slate-400">{title}</p>
-      <div className="space-y-1">{children}</div>
+    <section className="px-2 pb-3 pt-2">
+      <p className="mb-1 px-2 text-[11px] font-semibold text-[#8b8b8b]">{title}</p>
+      <div className="space-y-0.5">{children}</div>
     </section>
   )
 }
@@ -48,20 +48,20 @@ function SidebarLink({ item, onClose }: { item: SidebarItem; onClose: () => void
       onClick={onClose}
       className={({ isActive }) => {
         const inactive = item.tone === 'amber'
-          ? 'text-amber-300 hover:bg-white/10 hover:text-amber-200'
+          ? 'text-[#d4a95f] hover:bg-[#2a2a2a] hover:text-[#e4b969]'
           : item.tone === 'emerald'
-            ? 'text-emerald-300 hover:bg-white/10 hover:text-emerald-200'
-            : 'text-slate-200 hover:bg-white/10 hover:text-white'
+            ? 'text-[#6ebc8b] hover:bg-[#2a2a2a] hover:text-[#81c99b]'
+            : 'text-[#b8b8b8] hover:bg-[#2a2a2a] hover:text-[#eeeeee]'
         const active = item.tone === 'amber'
-          ? 'bg-amber-400/15 text-amber-300 border-r-4 border-amber-300'
+          ? 'bg-[#34302a] text-[#edbd6c]'
           : item.tone === 'emerald'
-            ? 'bg-emerald-400/15 text-emerald-300 border-r-4 border-emerald-300'
-            : 'bg-blue-500/20 text-white border-r-4 border-blue-400'
-        return `flex items-center gap-3 rounded-l-lg px-4 py-3 text-sm font-semibold transition-colors ${isActive ? active : inactive}`
+            ? 'bg-[#29342d] text-[#80c79a]'
+            : 'bg-[#333333] text-[#f2f2f2]'
+        return `group flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${isActive ? active : inactive}`
       }}
     >
-      <Icon size={19} className={item.tone === 'amber' ? 'text-yellow-300' : item.tone === 'emerald' ? 'text-emerald-300' : undefined} />
-      {item.label}
+      <Icon size={16} strokeWidth={1.9} className="shrink-0 opacity-90" />
+      <span className="truncate">{item.label}</span>
     </NavLink>
   )
 }
@@ -104,7 +104,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       {/* 사이드바 */}
       <aside
         className={`
-          fixed top-0 left-0 h-full w-60 bg-[#10243d] text-white z-30
+          notion-sidebar fixed left-0 top-0 z-30 h-full w-64 text-white
           flex flex-col
           transform transition-transform duration-200
           ${open ? 'translate-x-0' : '-translate-x-full'}
@@ -112,21 +112,30 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         `}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 py-6 border-b border-white/10 bg-[#112844]">
-          <div className="flex items-center gap-2">
-            <GraduationCap size={25} className="text-white" />
-            <span className="font-bold text-xl leading-tight tracking-wide">NODE</span>
+        <div className="flex h-12 items-center gap-2 px-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-[#2a2a2a]">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[#373737] text-xs font-semibold text-[#e9e9e9]">S</div>
+            <span className="truncate text-[13px] font-semibold text-[#eeeeee]">{viewingAcademyName ?? user?.academyName ?? 'SEUM Academy'}</span>
+            <ChevronsUpDown size={13} className="ml-auto shrink-0 text-[#808080]" />
           </div>
           <button
             onClick={onClose}
-            className="lg:hidden text-slate-400 hover:text-white"
+            aria-label="메뉴 닫기"
+            className="rounded-md p-1.5 text-[#8b8b8b] hover:bg-[#303030] hover:text-white lg:hidden"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
+        <div className="grid grid-cols-4 gap-1 px-3 pb-3">
+          <NavLink to="/" onClick={onClose} aria-label="홈" className="flex h-8 items-center justify-center rounded-md text-[#a4a4a4] hover:bg-[#2a2a2a] hover:text-white"><LayoutDashboard size={17} /></NavLink>
+          <NavLink to="/students" onClick={onClose} aria-label="학생 검색" className="flex h-8 items-center justify-center rounded-md text-[#a4a4a4] hover:bg-[#2a2a2a] hover:text-white"><Search size={17} /></NavLink>
+          <NavLink to="/todo" onClick={onClose} aria-label="할 일" className="flex h-8 items-center justify-center rounded-md text-[#a4a4a4] hover:bg-[#2a2a2a] hover:text-white"><Clock3 size={17} /></NavLink>
+          <NavLink to="/classes" onClick={onClose} aria-label="반 설정" className="flex h-8 items-center justify-center rounded-md text-[#a4a4a4] hover:bg-[#2a2a2a] hover:text-white"><Settings2 size={17} /></NavLink>
+        </div>
+
         {/* 메뉴 */}
-        <nav className="flex-1 overflow-y-auto">
+        <nav className="notion-sidebar-scroll flex-1 overflow-y-auto px-1">
           <SidebarSection title="학습 관리">
             {visibleLearningItems.map(item => <SidebarLink key={item.to} item={item} onClose={onClose} />)}
           </SidebarSection>
@@ -141,24 +150,26 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           {(isAdmin || isAcademyAdmin) && (
             <SidebarSection title="관리자">
               <SidebarLink item={{ to: '/admin', icon: Shield, label: '관리자 모드', tone: 'amber' }} onClose={onClose} />
+              <SidebarLink item={{ to: '/admin/messages', icon: MessageSquareText, label: '문자 발송', tone: 'amber' }} onClose={onClose} />
+              <SidebarLink item={{ to: '/admin/reports', icon: FileKey2, label: '성적표 게시', tone: 'amber' }} onClose={onClose} />
             </SidebarSection>
           )}
         </nav>
 
-        <div className="border-t border-white/10 px-3 py-4">
+        <div className="border-t border-[#303030] px-2 py-2">
           <SidebarLink item={{ to: '/classes', icon: BookOpenCheck, label: '반관리' }} onClose={onClose} />
         </div>
 
         {/* 사용자 정보 + 로그아웃 */}
-        <div className="px-4 py-4 border-t border-white/10 space-y-3 bg-[#0f2239]">
+        <div className="space-y-2 border-t border-[#303030] px-3 py-3">
           {user && (
-            <div className="flex items-center gap-2.5 px-1">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+            <div className="flex items-center gap-2.5 rounded-md px-1 py-1">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#3b3b3b] text-xs font-semibold text-[#ededed]">
                 {user.displayName[0]}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium text-white truncate">{user.displayName}</p>
-                <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                <p className="truncate text-[13px] font-medium text-[#e5e5e5]">{user.displayName}</p>
+                <p className="truncate text-[11px] text-[#808080]">{user.role}</p>
               </div>
             </div>
           )}
@@ -166,7 +177,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           {/* 조교 담당 선생님 전환 드롭다운 */}
           {showTeacherSwitcher && (
             <div>
-              <p className="text-[11px] text-slate-500 mb-1 px-1">담당 선생님</p>
+              <p className="mb-1 px-1 text-[11px] text-[#808080]">담당 선생님</p>
               <select
                 value={switcherCurrentUid ?? ''}
                 onChange={(e) => {
@@ -178,7 +189,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                   navigate('/')
                   onClose()
                 }}
-                className="w-full bg-white/10 text-white text-xs rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 border border-white/10 cursor-pointer"
+                className="w-full cursor-pointer rounded-md border border-[#3a3a3a] bg-[#282828] px-2.5 py-2 text-xs text-[#d8d8d8] outline-none focus:border-[#5a5a5a]"
               >
                 {switcherTeachers.map(t => (
                   <option key={t.uid} value={t.uid}>{t.displayName}</option>
@@ -189,7 +200,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
           <button
             onClick={signOut}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors text-sm"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-[#9b9b9b] transition-colors hover:bg-[#2a2a2a] hover:text-[#eeeeee]"
           >
             <LogOut size={15} />
             로그아웃

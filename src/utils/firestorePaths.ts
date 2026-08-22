@@ -59,3 +59,8 @@ export const studentDashboardRowDoc = (rowId: string, academyId?: string | null)
   isDefaultAcademy(academyId)
     ? doc(db, 'studentDashboardRows', rowId)
     : doc(db, 'academies', normalizeAcademyId(academyId), 'studentDashboardRows', rowId)
+
+// 문자 발송 기록은 Cloud Functions에서만 쓰고, 관리자 화면에서는 읽기만 합니다.
+// 기본 학원을 포함해 항상 academy 하위에 저장해 테넌트 경계를 명확히 유지합니다.
+export const messageLogsCollection = (academyId: string) =>
+  collection(db, 'academies', normalizeAcademyId(academyId), 'messageLogs')

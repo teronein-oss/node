@@ -6,6 +6,16 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
+.firebase/
+functions/lib/
+functions/node_modules/
+functions/.secret.local
+output/
+private/
+functions/src/generatedExamPortalSeed.ts
+functions/src/reportSeedData.ts
+scripts/__pycache__/
+*.py[cod]
 
 # Environment variables
 .env

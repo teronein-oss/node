@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:functions": "npm --prefix functions run build",
+    "test:functions": "npm --prefix functions test"
   },
   "dependencies": {
     "firebase": "^12.13.0",

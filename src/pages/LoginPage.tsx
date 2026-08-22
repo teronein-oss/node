@@ -69,22 +69,22 @@ export default function LoginPage() {
 
   if (registrationStatus === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+      <div className="notion-login min-h-screen flex items-center justify-center bg-[#191919]">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8">
+    <div className="notion-login min-h-screen bg-[#191919] flex items-center justify-center p-4">
+      <div className="notion-login-card bg-[#202020] rounded-lg border border-[#303030] w-full max-w-sm p-8">
         {/* 로고 */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mb-4">
-            <GraduationCap size={30} className="text-white" />
+          <div className="w-14 h-14 bg-[#2f6f9f]/25 rounded-lg flex items-center justify-center mb-4">
+            <GraduationCap size={30} className="text-[#6fa9dd]" />
           </div>
-          <h1 className="text-xl font-bold text-slate-800">NODE</h1>
-          <p className="text-sm text-slate-400 mt-1">학원 관리 시스템</p>
+          <h1 className="text-xl font-bold text-[#ededed]">SEUM</h1>
+          <p className="text-sm text-[#858585] mt-1">학원 관리 워크스페이스</p>
         </div>
 
         {!firebaseUser ? (

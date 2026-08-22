@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
-import { Menu, ArrowLeft } from 'lucide-react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Menu, ArrowLeft, MoreHorizontal, Star } from 'lucide-react'
 import Sidebar from './Sidebar'
 import { useAuth } from '../context/AuthContext'
 
@@ -8,6 +8,23 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { viewingUid, viewingUserName, setViewingUid } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const pageTitle = ({
+    '/': '대시보드',
+    '/grades': '성적관리',
+    '/homework': '숙제관리',
+    '/students': '학생관리',
+    '/clinic': '보충/클리닉',
+    '/todo': 'ToDo',
+    '/schedule': '업무 일정표',
+    '/student-dashboard': '학생 대시보드',
+    '/classes': '반관리',
+    '/principal': '원장 대시보드',
+    '/admin': '관리자 모드',
+    '/admin/manage': '사용자 관리',
+    '/admin/messages': '문자 발송',
+    '/admin/reports': '성적표 게시',
+  } as Record<string, string>)[pathname] ?? 'SEUM'
 
   const exitViewingMode = () => {
     setViewingUid(null)
@@ -15,21 +32,21 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
+    <div className="notion-dashboard flex h-screen overflow-hidden bg-[#191919] text-[#d4d4d4]">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 관리자 뷰잉 배너 */}
         {viewingUid && (
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between shrink-0">
-            <p className="text-xs text-amber-700 font-medium">
+          <div className="flex shrink-0 items-center justify-between border-b border-[#3d3528] bg-[#2b271f] px-4 py-2">
+            <p className="text-xs font-medium text-[#d7b875]">
               {viewingUserName
                 ? `${viewingUserName}님의 대시보드를 보고 있습니다`
                 : '다른 사용자의 대시보드를 보고 있습니다'}
             </p>
             <button
               onClick={exitViewingMode}
-              className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium transition-colors"
+              className="flex items-center gap-1 text-xs font-medium text-[#d7b875] transition-colors hover:text-[#f0d18d]"
             >
               <ArrowLeft size={12} />
               관리자 패널로 돌아가기
@@ -37,19 +54,30 @@ export default function AppLayout() {
           </div>
         )}
 
+        {/* 데스크톱 노션형 페이지 상단 바 */}
+        <header className="notion-page-topbar hidden h-12 shrink-0 items-center border-b border-[#2c2c2c] bg-[#191919] px-4 lg:flex">
+          <span className="truncate text-[13px] font-semibold text-[#d8d8d8]">{pageTitle}</span>
+          <div className="ml-auto flex items-center gap-1 text-[#8b8b8b]">
+            <span className="mr-2 text-[11px]">SEUM workspace</span>
+            <button type="button" aria-label="즐겨찾기" className="rounded-md p-1.5 hover:bg-[#2a2a2a] hover:text-[#ededed]"><Star size={16} /></button>
+            <button type="button" aria-label="더 보기" className="rounded-md p-1.5 hover:bg-[#2a2a2a] hover:text-[#ededed]"><MoreHorizontal size={17} /></button>
+          </div>
+        </header>
+
         {/* 모바일 상단 바 */}
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
+        <header className="flex shrink-0 items-center gap-3 border-b border-[#2d2d2d] bg-[#202020] px-4 py-3 lg:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-slate-600 hover:text-slate-900"
+            aria-label="사이드 메뉴 열기"
+            className="rounded-md p-1 text-[#a4a4a4] hover:bg-[#303030] hover:text-white"
           >
             <Menu size={22} />
           </button>
-          <span className="font-bold text-slate-800">NODE</span>
+          <span className="text-sm font-semibold text-[#eeeeee]">SEUM</span>
         </header>
 
         {/* 메인 콘텐츠 */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="notion-main flex-1 overflow-y-auto p-4 lg:p-7">
           <Outlet />
         </main>
       </div>

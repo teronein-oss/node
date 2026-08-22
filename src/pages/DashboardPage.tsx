@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { AlertTriangle, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Users, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, LayoutDashboard, Megaphone, Users, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
@@ -1172,12 +1172,15 @@ export default function DashboardPage() {
   return (
     <div className="max-w-[1600px] mx-auto space-y-5 pb-16">
       {/* 헤더 */}
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
+      <div className="notion-page-heading flex items-start justify-between gap-4 border-b border-slate-200 pb-5 pt-2">
+        <div className="flex items-center gap-3">
+          <div className="notion-page-icon flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/15 text-blue-400"><LayoutDashboard size={22} /></div>
+          <div>
           <h1 className="text-2xl font-bold text-slate-800">대시보드</h1>
           <p className="mt-1 text-sm font-medium text-slate-500">
             {todayYear}년 {todayMonth}월 {todayDate}일
           </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1">
           <Calendar size={15} className="text-slate-400" />
