@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 const ACCESS_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export const ACCESS_CODE_LENGTH = 8
+export const MASTER_ACCESS_CODE_LENGTH = 12
 
 export function normalizeAccessCode(value: unknown): string {
   if (typeof value !== 'string') return ''
@@ -10,6 +11,11 @@ export function normalizeAccessCode(value: unknown): string {
 
 export function isValidAccessCode(value: string): boolean {
   return value.length === ACCESS_CODE_LENGTH
+    && [...value].every(character => ACCESS_CODE_ALPHABET.includes(character))
+}
+
+export function isValidMasterAccessCode(value: string): boolean {
+  return value.length === MASTER_ACCESS_CODE_LENGTH
     && [...value].every(character => ACCESS_CODE_ALPHABET.includes(character))
 }
 

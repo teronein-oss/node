@@ -2,10 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ACCESS_CODE_LENGTH,
+  MASTER_ACCESS_CODE_LENGTH,
   createAccessCode,
   hashAccessCode,
   hashTeacherAccessCode,
   isValidAccessCode,
+  isValidMasterAccessCode,
   normalizeAccessCode,
   rankToTopPercent,
 } from './reportAccessDomain'
@@ -20,6 +22,13 @@ test('generated access codes use the supported alphabet', () => {
     assert.equal(code.length, ACCESS_CODE_LENGTH)
     assert.equal(isValidAccessCode(code), true)
   }
+})
+
+test('master access codes use a separate longer format', () => {
+  assert.equal(MASTER_ACCESS_CODE_LENGTH, 12)
+  assert.equal(isValidMasterAccessCode('ABCDEFGHJKLM'), true)
+  assert.equal(isValidMasterAccessCode('ABCD2345'), false)
+  assert.equal(isValidAccessCode('ABCDEFGHJKLM'), false)
 })
 
 test('access code hashes are stable and do not expose the original code', () => {

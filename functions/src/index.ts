@@ -27,6 +27,7 @@ import {
   hashTeacherAccessCode,
   hashViewerAddress,
   isValidAccessCode,
+  isValidMasterAccessCode,
   normalizeAccessCode,
   rankToTopPercent,
 } from './reportAccessDomain'
@@ -48,6 +49,8 @@ const REPORT_RETENTION_MS = REPORT_ACCESS_DAYS * 24 * 60 * 60 * 1000
 const REPORT_RATE_WINDOW_MS = 10 * 60 * 1000
 const REPORT_LOCK_MS = 15 * 60 * 1000
 const REPORT_MAX_FAILURES = 5
+// 원문은 저장하지 않습니다. 12자리 마스터 코드를 teacher-report 네임스페이스로 해시한 값입니다.
+const MASTER_TEACHER_ACCESS_HASH = '3d7f53d9252b4ad4216d34db72e97b7f05d8a146a387c710f936c5f3a4586fbb'
 
 interface SendMessageInput {
   academyId?: unknown
@@ -431,9 +434,14 @@ function viewerAddress(request: { rawRequest: { ip?: string; socket?: { remoteAd
 }
 
 function teacherCohortsForHash(accessHash: string) {
+  if (accessHash === MASTER_TEACHER_ACCESS_HASH) return examPortalSeed.cohorts
   return Date.now() < examPortalSeed.expiresAt
     ? examPortalSeed.cohorts.filter(item => item.teacherAccessHash === accessHash)
     : []
+}
+
+function isMasterTeacherCode(code: string, accessHash: string): boolean {
+  return isValidMasterAccessCode(code) && accessHash === MASTER_TEACHER_ACCESS_HASH
 }
 
 export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
@@ -470,7 +478,7 @@ export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
       && typeof accessData?.academyId === 'string'
       && typeof accessData?.reportId === 'string'
     const embeddedStudentValid = isValidAccessCode(code) && embeddedStudent !== null
-    const teacherValid = isValidAccessCode(code) && teacherCohorts.length > 0
+    const teacherValid = (isValidAccessCode(code) || isMasterTeacherCode(code, teacherHash)) && teacherCohorts.length > 0
     const resolvedRole = teacherValid ? 'teacher' as const : firestoreStudentValid || embeddedStudentValid ? 'student' as const : null
 
     if (!resolvedRole) {
@@ -563,8 +571,8 @@ function embeddedStudentAccess(accessHash: string): { cohort: ExamPortalCohort; 
   return null
 }
 
-function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
-  if (Date.now() >= examPortalSeed.expiresAt) return null
+function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string, allowExpired = false) {
+  if (!allowExpired && Date.now() >= examPortalSeed.expiresAt) return null
   const access = cohort.studentAccess.find(item => item.studentId === studentId)
   if (!access) return null
 
@@ -876,6 +884,7 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
 }, async request => {
   const code = normalizeAccessCode(request.data?.code)
   const accessHash = hashTeacherAccessCode(code || 'invalid')
+  const masterAccess = isMasterTeacherCode(code, accessHash)
   const cohorts = teacherCohortsForHash(accessHash)
   const ipHash = hashViewerAddress(`teacher:${viewerAddress(request)}`)
   const rateRef = db.doc(`teacherReportRateLimits/${ipHash}`)
@@ -887,7 +896,7 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
     const lockedUntil = rateData?.lockedUntil instanceof Timestamp ? rateData.lockedUntil : null
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
-    if (!isValidAccessCode(code) || cohorts.length === 0) {
+    if ((!isValidAccessCode(code) && !masterAccess) || cohorts.length === 0) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp
         ? rateData.windowStartedAt
         : now
@@ -960,6 +969,7 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
   const code = normalizeAccessCode(request.data?.code)
   const studentId = typeof request.data?.studentId === 'string' ? request.data.studentId.slice(0, 80) : ''
   const accessHash = hashTeacherAccessCode(code || 'invalid')
+  const masterAccess = isMasterTeacherCode(code, accessHash)
   const authorizedCohorts = teacherCohortsForHash(accessHash)
   const cohort = authorizedCohorts.find(item => item.studentAccess.some(student => student.studentId === studentId))
   const ipHash = hashViewerAddress(`teacher:${viewerAddress(request)}`)
@@ -973,7 +983,7 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
     const studentAllowed = cohort?.studentAccess.some(student => student.studentId === studentId) === true
-    if (!isValidAccessCode(code) || !cohort || !studentAllowed) {
+    if ((!isValidAccessCode(code) && !masterAccess) || !cohort || !studentAllowed) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp ? rateData.windowStartedAt : now
       const withinWindow = now.toMillis() - windowStartedAt.toMillis() <= REPORT_RATE_WINDOW_MS
       const failedAttempts = withinWindow && typeof rateData?.failedAttempts === 'number'
@@ -1008,7 +1018,7 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     throw new HttpsError('permission-denied', '학생 성적표 열람 권한을 확인해 주세요.')
   }
 
-  const cumulativeBase = buildStudentCumulative(cohort, studentId)
+  const cumulativeBase = buildStudentCumulative(cohort, studentId, masterAccess)
   if (!cumulativeBase) throw new HttpsError('not-found', '학생 성적표를 찾을 수 없습니다.')
   const cumulative = await attachActualExamScores(cumulativeBase, 'node-default')
 

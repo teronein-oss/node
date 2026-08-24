@@ -27,11 +27,15 @@ const fetchTeacherStudentReport = httpsCallable<{ code: string; studentId: strin
 const resolveReportPortalAccess = httpsCallable<{ code: string }, { role: 'student' | 'teacher' }>(functions, 'resolveReportPortalAccess')
 
 function normalizeCode(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)
 }
 
 function displayCode(value: string) {
-  return value.length > 4 ? `${value.slice(0, 4)}-${value.slice(4)}` : value
+  return value.match(/.{1,4}/g)?.join('-') ?? value
+}
+
+function isSubmittableCode(value: string) {
+  return value.length === 8 || value.length === 12
 }
 
 function getErrorMessage(error: unknown) {
@@ -237,7 +241,7 @@ export default function StudentReportPage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (code.length !== 8 || loading) return
+    if (!isSubmittableCode(code) || loading) return
     setLoading(true)
     setError('')
     try {
@@ -304,13 +308,13 @@ export default function StudentReportPage() {
             <section className="m3-login-panel min-w-0 rounded-[1.5rem] border border-white/70 bg-white p-5 shadow-2xl shadow-slate-950/20 sm:rounded-[2rem] sm:p-9">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700"><KeyRound size={23} /></div>
               <h2 className="mt-5 text-2xl font-black tracking-tight">성적 결과 열람</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">발급받은 학생 또는 교사용 8자리 코드를 입력해 주세요. 코드에 맞는 화면으로 자동 연결됩니다.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">발급받은 식별 코드를 입력해 주세요. 코드에 맞는 화면으로 자동 연결됩니다.</p>
 
               <form onSubmit={submit} className="mt-8">
-                <label htmlFor="report-code" className="text-xs font-bold text-slate-600">8자리 식별 코드</label>
+                <label htmlFor="report-code" className="text-xs font-bold text-slate-600">식별 코드</label>
                 <div className={`m3-text-field mt-2 flex items-center rounded-2xl border bg-slate-50 px-4 transition ${error ? 'border-rose-300 ring-4 ring-rose-50' : 'border-slate-200 focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-50'}`}>
                   <KeyRound size={19} className="shrink-0 text-slate-400" />
-                  <input id="report-code" autoFocus autoComplete="one-time-code" inputMode="text" value={displayCode(code)} onChange={event => { setCode(normalizeCode(event.target.value)); setError('') }} placeholder="ABCD-2345" className="min-w-0 flex-1 bg-transparent px-3 py-4 text-center text-xl font-black tracking-[0.22em] text-slate-800 outline-none placeholder:text-slate-300" aria-describedby={error ? 'report-code-error' : 'report-code-help'} />
+                  <input id="report-code" autoFocus autoComplete="one-time-code" inputMode="text" value={displayCode(code)} onChange={event => { setCode(normalizeCode(event.target.value)); setError('') }} placeholder="ABCD-2345" className="min-w-0 flex-1 bg-transparent px-3 py-4 text-center text-xl font-black tracking-[0.16em] text-slate-800 outline-none placeholder:text-slate-300" aria-describedby={error ? 'report-code-error' : 'report-code-help'} />
                 </div>
                 {error ? (
                   <p id="report-code-error" role="alert" className="mt-3 flex items-start gap-2 text-xs leading-5 text-rose-600"><AlertTriangle className="mt-0.5 shrink-0" size={14} />{error}</p>
@@ -318,14 +322,20 @@ export default function StudentReportPage() {
                   <p id="report-code-help" className="mt-3 flex items-center gap-2 text-xs font-semibold text-amber-600">
                     <AlertTriangle size={14} />현재 {code.length}/8자리 · {8 - code.length}자리 더 입력해 주세요.
                   </p>
+                ) : code.length > 8 && code.length < 12 ? (
+                  <p id="report-code-help" className="mt-3 flex items-center gap-2 text-xs font-semibold text-amber-600">
+                    <AlertTriangle size={14} />현재 {code.length}/12자리 · {12 - code.length}자리 더 입력해 주세요.
+                  </p>
                 ) : (
                   <p id="report-code-help" className="mt-3 text-xs text-slate-400">영문 대소문자와 하이픈은 구분하지 않습니다.</p>
                 )}
-                <button type="submit" disabled={code.length !== 8 || loading} className="m3-primary-button mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10243d] px-5 py-4 text-sm font-bold text-white shadow-lg shadow-slate-300 transition hover:bg-[#173a61] disabled:cursor-not-allowed disabled:opacity-40">
+                <button type="submit" disabled={!isSubmittableCode(code) || loading} className="m3-primary-button mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10243d] px-5 py-4 text-sm font-bold text-white shadow-lg shadow-slate-300 transition hover:bg-[#173a61] disabled:cursor-not-allowed disabled:opacity-40">
                   {loading ? (
                     <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />확인 중...</>
                   ) : code.length > 0 && code.length < 8 ? (
                     <>코드 {8 - code.length}자리 더 입력</>
+                  ) : code.length > 8 && code.length < 12 ? (
+                    <>코드 {12 - code.length}자리 더 입력</>
                   ) : (
                     <>성적 결과 확인하기 <ChevronRight size={17} /></>
                   )}
