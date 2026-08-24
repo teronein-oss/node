@@ -410,7 +410,6 @@ interface ManagementStudent {
   className: string
   retestCount: number
   homeworkMissingCount: number
-  homeworkBadCount: number
   total: number
   reasons: string[]
 }
@@ -486,7 +485,7 @@ function TodayFocusPanel({
   const renderTask = (task: TodayStudentTask) => {
     const gridCols = showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'
     return (
-      <div key={task.key} className={`grid ${gridCols} items-center justify-start gap-2 border-b border-slate-50 px-4 py-2.5 last:border-b-0`}>
+      <div key={task.key} data-show-dates={showDates} className={`today-focus-grid grid ${gridCols} items-center justify-start gap-2 border-b border-slate-50 px-4 py-2.5 last:border-b-0`}>
         <span className="truncate text-sm font-semibold text-slate-800">{task.name}</span>
         <span className="truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-semibold text-slate-500">
           {task.className}
@@ -515,7 +514,7 @@ function TodayFocusPanel({
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">{emptyText}</div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className={`sticky top-0 z-10 grid ${showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'} justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400`}>
+          <div data-show-dates={showDates} className={`today-focus-grid sticky top-0 z-10 grid ${showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'} justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400`}>
             <span>학생</span>
             <span className="text-center">반</span>
             {showDates && <span className="text-center">날짜</span>}
@@ -530,7 +529,7 @@ function TodayFocusPanel({
             <div className="px-5 py-10 text-center text-xs text-slate-400">{emptyText}</div>
           ) : (
             <div>
-              <div className={`grid ${showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'} justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400`}>
+              <div data-show-dates={showDates} className={`today-focus-grid grid ${showDates ? 'grid-cols-[60px_68px_54px_max-content]' : 'grid-cols-[64px_74px_max-content]'} justify-start gap-2 border-b border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-semibold text-slate-400`}>
                 <span>학생</span>
                 <span className="text-center">반</span>
                 {showDates && <span className="text-center">날짜</span>}
@@ -558,7 +557,7 @@ function TodaySummaryPanel({
 }) {
   const cards = [
     {
-      label: '밀린 확인',
+      label: '미완료 현황',
       value: overdueCount,
       unit: '건',
       accent: 'text-rose-600',
@@ -600,11 +599,11 @@ function TodaySummaryPanel({
       <div className="border-b border-slate-200 px-5 py-3">
         <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Today</h2>
       </div>
-      <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mobile-summary-grid grid grid-cols-2 gap-2 p-3 sm:gap-3 sm:p-4 xl:grid-cols-4">
         {cards.map(card => {
           const Icon = card.icon
           return (
-            <div key={card.label} className={`flex min-h-28 items-center justify-between rounded-md border ${card.ring} bg-white px-5 py-4`}>
+            <div key={card.label} className={`mobile-summary-card flex min-h-28 items-center justify-between rounded-md border ${card.ring} bg-white px-5 py-4`}>
               <div>
                 <p className="text-sm font-semibold text-slate-600">{card.label}</p>
                 <p className={`mt-4 text-2xl font-bold ${card.accent}`}>
@@ -712,7 +711,6 @@ export default function DashboardPage() {
   }, [state.classes, state.students, state.retests, weekDates])
 
   const weeklyHomeworkRows = useMemo(() => {
-    const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
     return state.classes.map(cls => {
       const studentIds = new Set(state.students.filter(s => s.active && s.classId === cls.id).map(s => s.id))
       const dateMap = getClassDateMapForWeek(cls, weekDates.map(d => d.date))
@@ -733,31 +731,14 @@ export default function DashboardPage() {
         const hw = state.homeworks.find(
           h => h.sessionNum === sessionNum - 1 && (h.classId === cls.id || h.classId === '')
         )
-        const gradeRecords = state.grades.filter(
-          g => g.sessionNum === sessionNum && studentIds.has(g.studentId)
-        )
         const hwMissSet = new Set<string>()
-        const hwBadSet = new Set<string>()
         const items = hw?.items ?? []
 
-        if (items.length > 0) {
-          const worstMap = new Map<string, number>()
-          for (const item of items) {
-            for (const ss of (item.studentStatuses ?? [])) {
-              if (!studentIds.has(ss.studentId)) continue
-              const rank = statusRank[ss.status] ?? 0
-              if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
+        for (const item of items) {
+          for (const ss of (item.studentStatuses ?? [])) {
+            if (studentIds.has(ss.studentId) && ss.status === '미제출') {
+              hwMissSet.add(getStudentName(ss.studentId))
             }
-          }
-          for (const [studentId, rank] of worstMap) {
-            const name = getStudentName(studentId)
-            if (rank === 3) hwMissSet.add(name)
-            else if (rank === 2) hwBadSet.add(name)
-          }
-        } else {
-          for (const g of gradeRecords) {
-            if (g.attendance === '결석') continue
-            if (g.homeworkDone === '미흡') hwBadSet.add(getStudentName(g.studentId))
           }
         }
 
@@ -767,7 +748,6 @@ export default function DashboardPage() {
           sessionNum,
           items,
           description: hw?.description ?? '',
-          notGoodNames: [...hwBadSet].filter(name => !hwMissSet.has(name)),
           missingNames,
           isClassDay: true,
         }
@@ -777,10 +757,10 @@ export default function DashboardPage() {
         className: cls.name,
         classDays: cls.days,
         days,
-        total: days.reduce((sum, day) => sum + day.notGoodNames.length + day.missingNames.length, 0),
+        total: days.reduce((sum, day) => sum + day.missingNames.length, 0),
       }
     })
-  }, [state.classes, state.students, state.homeworks, state.grades, weekDates])
+  }, [state.classes, state.students, state.homeworks, weekDates])
 
   const weekTotal = weeklyRetestRows.reduce((sum, row) => sum + row.total, 0)
   const homeworkWeekTotal = weeklyHomeworkRows.reduce((sum, row) => sum + row.total, 0)
@@ -788,8 +768,6 @@ export default function DashboardPage() {
   const isCurrentWeek = selectedWeekStart === getWeekStart()
 
   const buildTaskRows = (dateMatches: (date: string) => boolean): TodayTaskRow[] => {
-    const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
-
     return state.classes
       .map(cls => {
         const activeStudents = state.students
@@ -809,7 +787,6 @@ export default function DashboardPage() {
           h => h.classId === cls.id || h.classId === ''
         )
         const homeworkTargets: TodayHomeworkItem[] = []
-        const homeworkBadSet = new Set<string>()
         const homeworkMissingSet = new Set<string>()
         const homeworkDescriptionSet = new Set<string>()
 
@@ -818,17 +795,14 @@ export default function DashboardPage() {
           const description = hw.description || (hw.items ?? []).map(item => item.text).join(', ')
 
           if (hw.items?.length) {
-            const targetsByStudent = new Map<string, { itemIds: string[]; rank: number; recheckDate: string }>()
+            const targetsByStudent = new Map<string, { itemIds: string[]; recheckDate: string }>()
             for (const item of hw.items) {
               for (const ss of (item.studentStatuses ?? [])) {
-                if (!studentIds.has(ss.studentId)) continue
-                const rank = statusRank[ss.status] ?? 0
-                if (rank < 2) continue
+                if (!studentIds.has(ss.studentId) || ss.status !== '미제출') continue
                 const recheckDate = hw.recheckDates?.find(rd => rd.studentId === ss.studentId)?.date ?? defaultRecheckDate
                 if (!dateMatches(recheckDate)) continue
-                const target = targetsByStudent.get(ss.studentId) ?? { itemIds: [], rank: 0, recheckDate }
+                const target = targetsByStudent.get(ss.studentId) ?? { itemIds: [], recheckDate }
                 target.itemIds.push(item.id)
-                target.rank = Math.max(target.rank, rank)
                 target.recheckDate = recheckDate
                 targetsByStudent.set(ss.studentId, target)
               }
@@ -846,28 +820,7 @@ export default function DashboardPage() {
                 scheduledDate: target.recheckDate,
               })
               if (description) homeworkDescriptionSet.add(description)
-              const name = getStudentName(studentId)
-              if (target.rank === 3) homeworkMissingSet.add(name)
-              else if (target.rank === 2) homeworkBadSet.add(name)
-            }
-          } else {
-            const checkSessionNum = hw.sessionNum + 1
-            for (const g of state.grades.filter(g => g.sessionNum === checkSessionNum && studentIds.has(g.studentId))) {
-              if (g.attendance === '결석') continue
-              if (g.homeworkDone !== '미흡') continue
-              const recheckDate = hw.recheckDates?.find(rd => rd.studentId === g.studentId)?.date ?? defaultRecheckDate
-              if (!dateMatches(recheckDate)) continue
-              homeworkTargets.push({
-                studentId: g.studentId,
-                name: getStudentName(g.studentId),
-                assignmentId: hw.id,
-                itemIds: [],
-                sessionNum: checkSessionNum,
-                completed: false,
-                scheduledDate: recheckDate,
-              })
-              if (description) homeworkDescriptionSet.add(description)
-              homeworkBadSet.add(getStudentName(g.studentId))
+              homeworkMissingSet.add(getStudentName(studentId))
             }
           }
         }
@@ -878,7 +831,7 @@ export default function DashboardPage() {
           vocabRetests,
           dailyRetests,
           homeworkTargets,
-          homeworkBadNames: [...homeworkBadSet].filter(name => !homeworkMissingSet.has(name)),
+          homeworkBadNames: [],
           homeworkMissingNames: [...homeworkMissingSet],
           homeworkDescription: [...homeworkDescriptionSet].join(' / '),
         }
@@ -891,13 +844,13 @@ export default function DashboardPage() {
   const todayTaskRows = useMemo(
     () => buildTaskRows(date => date === todayStr),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr]
+    [state.classes, state.students, state.retests, state.homeworks, todayStr]
   )
 
   const overdueTaskRows = useMemo(
     () => buildTaskRows(date => date < todayStr),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.classes, state.students, state.retests, state.homeworks, state.grades, todayStr]
+    [state.classes, state.students, state.retests, state.homeworks, todayStr]
   )
 
   const countTaskRows = (rows: TodayTaskRow[]) =>
@@ -940,8 +893,6 @@ export default function DashboardPage() {
     const activeStudents = state.students.filter(s => s.active)
     const map = new Map<string, ManagementStudent>()
     const classById = new Map(state.classes.map(cls => [cls.id, cls]))
-    const studentById = new Map(state.students.map(student => [student.id, student]))
-    const homeworkIssueKeys = new Set<string>()
 
     for (const student of activeStudents) {
       const cls = state.classes.find(c => c.id === student.classId)
@@ -951,7 +902,6 @@ export default function DashboardPage() {
         className: cls?.name ?? '',
         retestCount: 0,
         homeworkMissingCount: 0,
-        homeworkBadCount: 0,
         total: 0,
         reasons: [],
       })
@@ -966,58 +916,37 @@ export default function DashboardPage() {
       target.retestCount += 1
     }
 
-    const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1, '제출': 0 }
     for (const hw of state.homeworks) {
       const cls = classById.get(hw.classId)
       const checkDate = cls ? getClassDate(hw.sessionNum + 1, cls.days, cls.weekdays) : hw.weekStart
       if (!isInMonth(checkDate, selectedYM)) continue
-      const worstByStudent = new Map<string, number>()
+      const missingStudents = new Set<string>()
       for (const item of hw.items ?? []) {
         for (const ss of item.studentStatuses ?? []) {
-          if (!map.has(ss.studentId)) continue
-          const rank = statusRank[ss.status] ?? 0
-          if (rank > (worstByStudent.get(ss.studentId) ?? 0)) worstByStudent.set(ss.studentId, rank)
+          if (map.has(ss.studentId) && ss.status === '미제출') missingStudents.add(ss.studentId)
         }
       }
-      for (const [studentId, rank] of worstByStudent) {
+      for (const studentId of missingStudents) {
         const target = map.get(studentId)
         if (!target) continue
-        homeworkIssueKeys.add(`${studentId}-${hw.sessionNum}`)
-        if (rank === 3) target.homeworkMissingCount += 1
-        if (rank === 2) target.homeworkBadCount += 1
+        target.homeworkMissingCount += 1
       }
-    }
-
-    for (const grade of state.grades) {
-      if (grade.homeworkDone !== '미흡') continue
-      const student = studentById.get(grade.studentId)
-      const cls = student ? classById.get(student.classId) : undefined
-      const basisDate = cls ? getClassDate(grade.sessionNum, cls.days, cls.weekdays) : grade.weekStart
-      if (!isInMonth(basisDate, selectedYM)) continue
-      const issueKey = `${grade.studentId}-${grade.sessionNum - 1}`
-      if (homeworkIssueKeys.has(issueKey)) continue
-      const target = map.get(grade.studentId)
-      if (!target) continue
-      target.homeworkBadCount += 1
     }
 
     return [...map.values()]
       .map(student => {
-        const homeworkIssueCount = student.homeworkMissingCount + student.homeworkBadCount
         const reasons: string[] = []
         if (student.retestCount >= 3) reasons.push(`재시험 ${student.retestCount}회`)
         if (student.homeworkMissingCount >= 3) reasons.push(`숙제 미제출 ${student.homeworkMissingCount}회`)
-        if (student.homeworkBadCount >= 3) reasons.push(`숙제 미흡 ${student.homeworkBadCount}회`)
-        if (homeworkIssueCount >= 3 && student.homeworkMissingCount < 3 && student.homeworkBadCount < 3) reasons.push(`숙제 문제 ${homeworkIssueCount}회`)
         return {
           ...student,
-          total: student.retestCount + homeworkIssueCount,
+          total: student.retestCount + student.homeworkMissingCount,
           reasons,
         }
       })
       .filter(student => student.reasons.length > 0)
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
-  }, [state.classes, state.students, state.retests, state.homeworks, state.grades, selectedYM])
+  }, [state.classes, state.students, state.retests, state.homeworks, selectedYM])
 
   const todayTaskTotal = countTaskRows(todayTaskRows)
   const overdueTaskTotal = countTaskRows(overdueTaskRows)
@@ -1085,37 +1014,17 @@ export default function DashboardPage() {
           const hwItems = hw?.items ?? []
 
           const hwMissSet = new Set<string>()
-          const hwBadSet = new Set<string>()
 
-          // 미제출(3) > 미흡(2) > 재확인완료(1) > 제출/없음(0)
-          // 결석 학생은 결석생 현황에 별도 표시되므로 숙제 현황에서는 아이템/grade 상태만 사용
-          const statusRank: Record<string, number> = { '미제출': 3, '미흡': 2, '재확인완료': 1 }
-          if (hwItems.length > 0) {
-            // 아이템이 있으면 아이템 상태만 사용 (숙제관리와 동일 기준)
-            const worstMap = new Map<string, number>()
-            for (const item of hwItems) {
-              for (const ss of (item.studentStatuses ?? [])) {
-                if (!studentIds.has(ss.studentId)) continue
-                const rank = statusRank[ss.status] ?? 0
-                if (rank > (worstMap.get(ss.studentId) ?? 0)) worstMap.set(ss.studentId, rank)
+          // 대시보드 숙제 현황은 미제출만 표시한다.
+          for (const item of hwItems) {
+            for (const ss of (item.studentStatuses ?? [])) {
+              if (studentIds.has(ss.studentId) && ss.status === '미제출') {
+                hwMissSet.add(getStudentName(ss.studentId))
               }
-            }
-            for (const [studentId, rank] of worstMap) {
-              const name = getStudentName(studentId)
-              if (rank === 3) hwMissSet.add(name)
-              else if (rank === 2) hwBadSet.add(name)
-              // rank === 1 (재확인완료) → 표시 안 함
-            }
-          } else {
-            // 아이템 없는 경우(기존 데이터)만 grade.homeworkDone fallback
-            for (const g of gradeRecords) {
-              if (g.attendance === '결석') continue
-              const name = getStudentName(g.studentId)
-              if (g.homeworkDone === '미흡') hwBadSet.add(name)
             }
           }
           const hwMissNames = [...hwMissSet]
-          const hwNotGoodNames = [...hwBadSet].filter(n => !hwMissSet.has(n))
+          const hwNotGoodNames: string[] = []
 
           const absentNames = gradeRecords
             .filter(g => g.attendance === '결석')
@@ -1170,9 +1079,9 @@ export default function DashboardPage() {
   const isAllTab = true
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-5 pb-16">
+    <div className="mobile-dashboard-page max-w-[1600px] mx-auto space-y-5 pb-16">
       {/* 헤더 */}
-      <div className="notion-page-heading flex items-start justify-between gap-4 border-b border-slate-200 pb-5 pt-2">
+      <div className="mobile-dashboard-heading notion-page-heading flex items-start justify-between gap-4 border-b border-slate-200 pb-5 pt-2">
         <div className="flex items-center gap-3">
           <div className="notion-page-icon flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/15 text-blue-400"><LayoutDashboard size={22} /></div>
           <div>
@@ -1182,7 +1091,7 @@ export default function DashboardPage() {
           </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1">
+        <div className="mobile-month-picker flex items-center gap-2 shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1">
           <Calendar size={15} className="text-slate-400" />
           <button
             onClick={() => hasPrev && setSelectedYM(availableMonths[currentIdx - 1].ym)}
@@ -1225,8 +1134,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <TodayFocusPanel
-              title="밀린 확인"
-              emptyText="밀린 확인 대상이 없습니다"
+              title="미완료 현황"
+              emptyText="미완료 대상이 없습니다"
               showDates
               rows={overdueTaskRows}
               onCompleteRetest={completeTodayRetest}
@@ -1496,13 +1405,13 @@ function WeeklyOverviewPanel({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {problemHomeworkRows.length === 0 ? (
-                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-300">이번 주 미흡·미제출 학생이 없습니다</td></tr>
+                <tr><td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-300">이번 주 미제출 학생이 없습니다</td></tr>
               ) : problemHomeworkRows.map(row => (
                 <tr key={`weekly-hw-${row.classId}`} className="hover:bg-slate-50">
                   <td className="px-4 py-3 align-top"><div className="font-semibold text-slate-800">{row.className}</div><div className="text-xs text-slate-400 mt-1">{getClassDaysLabel(row.classDays)}</div></td>
                   {row.days.map((day: any) => (
                     <td key={`${row.classId}-${day.date}-homework`} className={`px-3 py-3 align-top ${day.date === todayStr ? 'bg-yellow-50/40' : ''}`}>
-                      <WeeklyHomeworkCell isClassDay={day.isClassDay} items={day.items} description={day.description} notGoodNames={day.notGoodNames} missingNames={day.missingNames} />
+                      <WeeklyHomeworkCell isClassDay={day.isClassDay} items={day.items} description={day.description} missingNames={day.missingNames} />
                     </td>
                   ))}
                   <td className="px-4 py-3 align-top text-right"><span className="inline-flex min-w-8 justify-center rounded-full bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-700">{row.total}</span></td>
@@ -1672,13 +1581,11 @@ function WeeklyHomeworkCell({
   isClassDay,
   items,
   description,
-  notGoodNames,
   missingNames,
 }: {
   isClassDay: boolean
   items: HomeworkItem[]
   description: string
-  notGoodNames: string[]
   missingNames: string[]
 }) {
   if (!isClassDay) {
@@ -1690,7 +1597,7 @@ function WeeklyHomeworkCell({
   }
 
   const hasHomework = items.length > 0 || description.trim() !== ''
-  const hasIssues = notGoodNames.length > 0 || missingNames.length > 0
+  const hasIssues = missingNames.length > 0
   const visibleItems = items.slice(0, 2)
 
   return (
@@ -1715,7 +1622,6 @@ function WeeklyHomeworkCell({
       </div>
       {hasHomework ? (
         <div className="space-y-2">
-          <HomeworkStatusLine label="미흡" names={notGoodNames} color="orange" />
           <HomeworkStatusLine label="미제출" names={missingNames} color="red" />
         </div>
       ) : (

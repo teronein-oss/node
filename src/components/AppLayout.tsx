@@ -77,7 +77,7 @@ export default function AppLayout() {
         </header>
 
         {/* 메인 콘텐츠 */}
-        <main className="notion-main flex-1 overflow-y-auto p-4 lg:p-7">
+        <main className="notion-main flex-1 overflow-y-auto p-3 sm:p-4 lg:p-7">
           <Outlet />
         </main>
       </div>

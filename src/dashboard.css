@@ -178,6 +178,153 @@ body {
   .notion-sidebar { box-shadow: 18px 0 48px rgba(0, 0, 0, .35); }
 }
 
+/* 핵심 운영 화면 모바일 최적화 */
+@media (max-width: 639px) {
+  .notion-main { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+
+  .mobile-dashboard-page,
+  .mobile-grade-page,
+  .mobile-homework-page {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mobile-dashboard-page h1,
+  .mobile-grade-page h1,
+  .mobile-homework-page h1 { font-size: 1.25rem !important; line-height: 1.75rem; }
+
+  .mobile-dashboard-heading { align-items: stretch !important; flex-direction: column; padding-bottom: 12px !important; }
+  .mobile-month-picker { width: 100%; justify-content: space-between; }
+  .mobile-month-picker > span { flex: 1; width: auto !important; }
+
+  .mobile-summary-card { min-height: 104px !important; padding: 12px !important; }
+  .mobile-summary-card p.mt-4 { margin-top: 10px !important; font-size: 1.25rem !important; }
+  .mobile-summary-card > div:last-child { display: none; }
+
+  .today-focus-grid[data-show-dates='true'] {
+    grid-template-columns: 48px 54px 42px minmax(112px, 1fr) !important;
+    gap: 4px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  .today-focus-grid[data-show-dates='false'] {
+    grid-template-columns: 56px 62px minmax(112px, 1fr) !important;
+    gap: 5px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+  .today-focus-grid button { min-height: 34px; padding: 5px 7px !important; }
+
+  .mobile-dashboard-page table { font-size: 12px; }
+  .mobile-dashboard-page .overflow-x-auto {
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+  }
+  .mobile-dashboard-page table.min-w-\[940px\] :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #202020 !important;
+    box-shadow: 1px 0 0 #353535;
+  }
+  .mobile-dashboard-page table.min-w-\[940px\] thead th:first-child { z-index: 3; background: #242424 !important; }
+
+  .mobile-grade-page > div:first-child,
+  .mobile-homework-page > div:first-child { padding-inline: 2px; }
+
+  .mobile-grade-toolbar,
+  .mobile-grade-ranges,
+  .mobile-retest-bulk,
+  .mobile-homework-toolbar { padding: 12px !important; }
+
+  .mobile-grade-toolbar > .w-px,
+  .mobile-homework-toolbar > .w-px { display: none; }
+
+  .mobile-grade-toolbar > div:first-child,
+  .mobile-homework-toolbar > div:first-child { width: 100%; }
+  .mobile-grade-toolbar > div:first-child select,
+  .mobile-homework-toolbar > div:first-child select { flex: 1; min-height: 42px; }
+
+  .mobile-grade-date-nav {
+    width: 100%;
+    justify-content: space-between;
+    border: 1px solid #343434;
+    border-radius: 7px;
+    padding: 3px 5px;
+  }
+  .mobile-grade-date-nav button { min-width: 40px; min-height: 40px; }
+
+  .mobile-class-strip {
+    width: 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .mobile-class-strip::-webkit-scrollbar { display: none; }
+  .mobile-class-strip > button { flex: 0 0 auto; min-height: 40px; scroll-snap-align: start; }
+
+  .mobile-grade-actions { width: 100%; margin-left: 0 !important; }
+  .mobile-grade-actions > button { min-height: 42px; justify-content: center; }
+  .mobile-grade-actions > button:last-child { flex: 1; }
+
+  .mobile-grade-ranges > span:first-child { width: 100%; font-weight: 700; }
+  .mobile-grade-ranges > div { width: 100%; }
+  .mobile-grade-ranges > div > input { flex: 1; width: auto !important; min-width: 0; min-height: 40px; }
+
+  .mobile-retest-bulk-controls {
+    width: 100%;
+    margin-left: 0 !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+  .mobile-retest-bulk-controls > span { grid-column: 1 / -1; }
+  .mobile-retest-bulk-controls select { min-width: 0; min-height: 40px; }
+  .mobile-retest-bulk-controls button { grid-column: 1 / -1; min-height: 42px; }
+
+  .mobile-grade-table { width: 100%; -webkit-overflow-scrolling: touch; }
+  .mobile-grade-table table { width: max-content !important; min-width: 100%; }
+  .mobile-grade-table :is(th, td):first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    min-width: 140px;
+    padding-left: 10px !important;
+    padding-right: 8px !important;
+    background: #202020 !important;
+    box-shadow: 1px 0 0 #353535;
+  }
+  .mobile-grade-table thead th:first-child { z-index: 4; background: #242424 !important; }
+  .mobile-grade-table tbody tr:nth-child(even) td:first-child { background: #222 !important; }
+  .mobile-grade-table tbody input[type='number'] { min-height: 40px; font-size: 16px !important; }
+  .mobile-grade-table tbody button { min-height: 34px; }
+
+  .mobile-date-strip {
+    padding-bottom: 4px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-date-strip::-webkit-scrollbar { display: none; }
+  .mobile-date-strip > button { min-width: 132px !important; min-height: 66px; scroll-snap-align: start; }
+
+  .mobile-homework-page section > div[class*='px-5'] { padding-left: 12px !important; padding-right: 12px !important; }
+  .mobile-homework-status-grid > div { width: 100%; gap: 8px !important; }
+  .mobile-homework-status-grid > div > div:last-child {
+    min-width: 0;
+    flex: 1;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px !important;
+  }
+  .mobile-homework-status-grid > div > div:last-child:has(button:nth-child(4)) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .mobile-homework-status-grid button { min-height: 38px; padding: 5px 3px !important; }
+  .mobile-homework-page .group button.opacity-0 { opacity: 1 !important; min-width: 36px; min-height: 36px; }
+  .mobile-homework-page input,
+  .mobile-homework-page select { font-size: 16px !important; }
+}
+
 @media print {
   @page { size: A4; margin: 12mm; }
   body { background: white; print-color-adjust: exact; }

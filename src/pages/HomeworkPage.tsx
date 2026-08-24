@@ -238,7 +238,7 @@ export default function HomeworkPage() {
   const renderCheckGrid = (checkHw: HomeworkAssignment, item: HomeworkItem, checkSession: number) => {
     const checkStudents = studentsForHomework(checkHw)
     return (
-    <div className="ml-7 grid grid-cols-1 sm:grid-cols-[repeat(2,max-content)] xl:grid-cols-[repeat(3,max-content)] gap-x-6 gap-y-2">
+    <div className="mobile-homework-status-grid ml-0 grid grid-cols-1 gap-x-6 gap-y-2 sm:ml-7 sm:grid-cols-[repeat(2,max-content)] xl:grid-cols-[repeat(3,max-content)]">
       {checkStudents.map(student => {
         const checkGrade = state.grades.find(g => g.studentId === student.id && g.sessionNum === checkSession)
         const isAbsent = checkGrade?.attendance === '결석'
@@ -305,7 +305,7 @@ export default function HomeworkPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-4">
+    <div className="mobile-homework-page max-w-6xl mx-auto space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">숙제관리</h1>
@@ -340,7 +340,7 @@ export default function HomeworkPage() {
       )}
 
       {/* 필터 바 */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 px-5 py-3.5 flex flex-wrap items-center gap-3">
+      <div className="mobile-homework-toolbar bg-white rounded-xl shadow-sm border border-slate-100 px-5 py-3.5 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Calendar size={15} className="text-slate-400 shrink-0" />
           <select
@@ -358,7 +358,7 @@ export default function HomeworkPage() {
 
         <div className="w-px h-5 bg-slate-200" />
 
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="mobile-class-strip flex gap-1.5">
           {state.classes.map(cls => {
             const hasHw = state.homeworks.some(h => h.classId === cls.id)
             return (
@@ -384,7 +384,7 @@ export default function HomeworkPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 px-4 py-3">
-        <div className="flex items-center gap-2 overflow-x-auto">
+        <div className="mobile-date-strip flex items-center gap-2 overflow-x-auto overscroll-x-contain">
           {classDates.map(({ date, sessionNum }) => {
             const checkHw = state.homeworks.find(h => h.sessionNum === sessionNum - 1 && h.classId === selectedClass)
             const assignHw = state.homeworks.find(h => h.sessionNum === sessionNum && h.classId === selectedClass)

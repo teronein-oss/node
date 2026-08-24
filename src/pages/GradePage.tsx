@@ -414,7 +414,7 @@ export default function GradePage() {
   }, [state.retests, selectedSession, nextClassDate, selectedClass, state.students, selectedCls, showVocabTest])
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="mobile-grade-page max-w-5xl mx-auto space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">성적관리</h1>
         <p className="text-sm text-slate-500 mt-1">성적 입력</p>
@@ -422,7 +422,7 @@ export default function GradePage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100">
         {/* 필터 바 */}
-        <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100">
+        <div className="mobile-grade-toolbar flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100">
           {/* 월 선택 */}
           <div className="flex items-center gap-2">
             <Calendar size={15} className="text-slate-400 shrink-0" />
@@ -446,7 +446,7 @@ export default function GradePage() {
             const dateIdx = classDates.findIndex(d => d.sessionNum === selectedSession)
             const currentEntry = classDates[dateIdx]
             return (
-              <div className="flex items-center gap-2">
+              <div className="mobile-grade-date-nav flex items-center gap-2">
                 <button
                   onClick={() => dateIdx > 0 && setSelectedSession(classDates[dateIdx - 1].sessionNum)}
                   disabled={dateIdx <= 0}
@@ -471,7 +471,7 @@ export default function GradePage() {
           <div className="w-px h-5 bg-slate-200" />
 
           {/* 반 선택 */}
-          <div className="flex gap-1.5">
+          <div className="mobile-class-strip flex gap-1.5">
             {state.classes.map(cls => (
               <button
                 key={cls.id}
@@ -487,7 +487,7 @@ export default function GradePage() {
             ))}
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="mobile-grade-actions ml-auto flex items-center gap-2">
             {confirmClear ? (
               <>
                 <span className="text-xs text-slate-500">이 날짜 성적을 모두 초기화?</span>
@@ -532,7 +532,7 @@ export default function GradePage() {
         </div>
 
         {/* 범위 입력 */}
-        <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+        <div className="mobile-grade-ranges flex flex-wrap items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
           <span className="text-xs text-slate-400 shrink-0">범위</span>
           {showVocabTest && (
             <div className="flex items-center gap-1.5">
@@ -564,12 +564,12 @@ export default function GradePage() {
 
         {/* 재시험 일괄 일정 설정 */}
         {pendingRetests.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3 px-5 py-2.5 border-b border-slate-100 bg-orange-50/30">
+          <div className="mobile-retest-bulk flex flex-wrap items-center gap-3 px-5 py-2.5 border-b border-slate-100 bg-orange-50/30">
             <span className="flex items-center gap-1.5 text-xs text-orange-600 font-medium">
               <AlertCircle size={13} />
               재시험 대상자 {pendingRetests.length}명
             </span>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="mobile-retest-bulk-controls ml-auto flex items-center gap-2">
               <span className="text-xs text-slate-500 shrink-0">일정 일괄 설정</span>
               <select
                 value={bulkRetestDate || nextClassDate}
@@ -600,7 +600,7 @@ export default function GradePage() {
         )}
 
         {/* 성적 테이블 */}
-        <div className="overflow-x-auto">
+        <div className="mobile-grade-table overflow-x-auto overscroll-x-contain">
           <table className="w-full text-sm break-words">
             <thead>
               <tr className="bg-slate-50 text-xs text-slate-500">
@@ -630,11 +630,11 @@ export default function GradePage() {
                       </div>
                     )}
                     <div className="flex items-center justify-center gap-1 mt-1">
-                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '점수' } })}
-                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
-                      <span className="text-slate-300 text-xs">|</span>
                       <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '개수' } })}
                         className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                      <span className="text-slate-300 text-xs">|</span>
+                      <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, vocabMode: '점수' } })}
+                        className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${vocabMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                     </div>
                     <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                       <span>총</span>
@@ -678,11 +678,11 @@ export default function GradePage() {
                     </div>
                   )}
                   <div className="flex items-center justify-center gap-1 mt-1">
-                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyMode: '점수' } })}
-                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
-                    <span className="text-slate-300 text-xs">|</span>
                     <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyMode: '개수' } })}
                       className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <button onClick={() => dispatch({ type: 'SET_SESSION_TEST_CONFIG', payload: { sessionNum: selectedSession, classId: selectedClass, dailyMode: '점수' } })}
+                      className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${dailyMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                   </div>
                   <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                     <span>총</span>
@@ -739,11 +739,11 @@ export default function GradePage() {
                         </div>
                       )}
                       <div className="flex items-center justify-center gap-1 mt-1">
-                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, mode: '점수' } })}
-                          className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
-                        <span className="text-slate-300 text-xs">|</span>
                         <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, mode: '개수' } })}
                           className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '개수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>개수</button>
+                        <span className="text-slate-300 text-xs">|</span>
+                        <button onClick={() => dispatch({ type: 'UPDATE_SCORE_COLUMN', payload: { sessionNum: selectedSession, classId: selectedClass, id: col.id, mode: '점수' } })}
+                          className={`text-xs px-1.5 py-0.5 rounded font-medium transition-colors ${colMode === '점수' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}>점수</button>
                       </div>
                       <div className="flex items-center justify-center gap-0.5 text-slate-400 font-normal mt-0.5 text-xs">
                         <span>총</span>

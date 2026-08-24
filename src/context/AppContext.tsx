@@ -513,7 +513,7 @@ export function appReducer(state: AppState, action: Action): AppState {
 
     case 'ADD_SCORE_COLUMN': {
       const { sessionNum, classId, name } = action.payload
-      const newCol: ScoreColumn = { id: genId(), name, createdAt: new Date().toISOString() }
+      const newCol: ScoreColumn = { id: genId(), name, mode: '개수', createdAt: new Date().toISOString() }
       const matches = (c: SessionTestConfig) => c.sessionNum === sessionNum && c.classId === classId
       const existing = state.sessionTestConfigs.find(matches)
       if (existing) {
@@ -774,8 +774,8 @@ const DEFAULT_STATE: AppState = {
   scopes: [],
   vocabThreshold: 80,
   dailyThreshold: 80,
-  vocabMode: '점수' as const,
-  dailyMode: '점수' as const,
+  vocabMode: '개수' as const,
+  dailyMode: '개수' as const,
   vocabTotal: 100,
   dailyTotal: 100,
   notices: [],
@@ -854,8 +854,9 @@ export function normalizeState(parsed: AppState): AppState {
     })),
     vocabThreshold: parsed.vocabThreshold ?? 80,
     dailyThreshold: parsed.dailyThreshold ?? 80,
-    vocabMode: parsed.vocabMode ?? '점수',
-    dailyMode: parsed.dailyMode ?? '점수',
+    // 전역 모드는 새 회차의 기본값이며, 기존 회차의 저장된 설정은 그대로 유지한다.
+    vocabMode: '개수',
+    dailyMode: '개수',
     vocabTotal: parsed.vocabTotal ?? 100,
     dailyTotal: parsed.dailyTotal ?? 100,
     notices: parsed.notices ?? [{ id: '1', message: 'Test', completed: false }],
