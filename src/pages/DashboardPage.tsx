@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { AlertTriangle, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, LayoutDashboard, Megaphone, Users, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, BookX, Check, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, LayoutDashboard, Megaphone, Plus, StickyNote, Trash2, Users, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
@@ -372,9 +373,6 @@ interface TodayTaskRow {
   vocabRetests: TodayRetestItem[]
   dailyRetests: TodayRetestItem[]
   homeworkTargets: TodayHomeworkItem[]
-  homeworkBadNames: string[]
-  homeworkMissingNames: string[]
-  homeworkDescription: string
 }
 
 interface TodayRetestItem {
@@ -412,6 +410,14 @@ interface ManagementStudent {
   homeworkMissingCount: number
   total: number
   reasons: string[]
+}
+
+interface HomeworkIssueStudent {
+  studentId: string
+  name: string
+  className: string
+  insufficientCount: number
+  missingCount: number
 }
 
 function TodayFocusPanel({
@@ -544,79 +550,106 @@ function TodayFocusPanel({
   )
 }
 
-function TodaySummaryPanel({
-  overdueCount,
-  todayCount,
-  scheduleTodayCount,
-  managementCount,
-}: {
-  overdueCount: number
-  todayCount: number
-  scheduleTodayCount: number
-  managementCount: number
-}) {
-  const cards = [
-    {
-      label: '미완료 현황',
-      value: overdueCount,
-      unit: '건',
-      accent: 'text-rose-600',
-      bg: 'bg-rose-50',
-      ring: 'border-rose-100',
-      icon: AlertTriangle,
-    },
-    {
-      label: '오늘 확인',
-      value: todayCount,
-      unit: '건',
-      accent: 'text-blue-600',
-      bg: 'bg-blue-50',
-      ring: 'border-blue-100',
-      icon: CheckCircle,
-    },
-    {
-      label: '업무 공지',
-      value: scheduleTodayCount,
-      unit: '건',
-      accent: 'text-amber-600',
-      bg: 'bg-amber-50',
-      ring: 'border-amber-100',
-      icon: Megaphone,
-    },
-    {
-      label: '관리 필요',
-      value: managementCount,
-      unit: '명',
-      accent: 'text-slate-700',
-      bg: 'bg-slate-100',
-      ring: 'border-slate-100',
-      icon: Users,
-    },
-  ]
+function DashboardMemoPanel() {
+  const { state, dispatch } = useApp()
+  const [text, setText] = useState('')
+  const memos = [...(state.todos ?? [])]
+    .sort((a, b) => Number(a.completed) - Number(b.completed) || b.createdAt.localeCompare(a.createdAt))
+  const visibleMemos = memos.slice(0, 8)
+  const activeCount = memos.filter(memo => !memo.completed).length
+
+  const addMemo = () => {
+    const title = text.trim()
+    if (!title) return
+    dispatch({ type: 'ADD_TODO', payload: { title, date: fmtDate(new Date()), priority: 'none' } })
+    setText('')
+  }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-5 py-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">Today</h2>
+    <section className="flex h-[390px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-5 py-3.5">
+        <StickyNote size={15} className="text-blue-500" />
+        <h2 className="flex-1 text-sm font-semibold text-slate-800">메모</h2>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">미완료 {activeCount}</span>
+        <Link to="/todo" className="text-xs font-semibold text-blue-600 hover:text-blue-700">전체 보기</Link>
       </div>
-      <div className="mobile-summary-grid grid grid-cols-2 gap-2 p-3 sm:gap-3 sm:p-4 xl:grid-cols-4">
-        {cards.map(card => {
-          const Icon = card.icon
-          return (
-            <div key={card.label} className={`mobile-summary-card flex min-h-28 items-center justify-between rounded-md border ${card.ring} bg-white px-5 py-4`}>
-              <div>
-                <p className="text-sm font-semibold text-slate-600">{card.label}</p>
-                <p className={`mt-4 text-2xl font-bold ${card.accent}`}>
-                  {card.value}<span className="ml-1 text-base font-semibold text-slate-400">{card.unit}</span>
-                </p>
-              </div>
-              <div className={`flex h-14 w-14 items-center justify-center rounded-full ${card.bg}`}>
-                <Icon size={26} className={card.accent} />
-              </div>
-            </div>
-          )
-        })}
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+        <span className="h-4 w-4 shrink-0 rounded border border-slate-300 bg-white" />
+        <input
+          value={text}
+          onChange={event => setText(event.target.value)}
+          onKeyDown={event => event.key === 'Enter' && addMemo()}
+          placeholder="메모를 입력하고 Enter"
+          className="min-w-0 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-slate-400"
+        />
+        <button type="button" onClick={addMemo} disabled={!text.trim()} className="rounded p-1.5 text-blue-600 hover:bg-blue-50 disabled:opacity-30" aria-label="메모 추가">
+          <Plus size={15} />
+        </button>
       </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        {visibleMemos.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-xs text-slate-400">작성된 메모가 없습니다</div>
+        ) : visibleMemos.map(memo => (
+          <div key={memo.id} className="group flex items-start gap-2 rounded-md px-2 py-2 hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'TOGGLE_TODO', payload: memo.id })}
+              className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${memo.completed ? 'border-blue-500 bg-blue-500 text-white' : 'border-slate-300 text-transparent hover:border-blue-400'}`}
+              aria-label={memo.completed ? '메모 미완료로 변경' : '메모 완료'}
+            >
+              <Check size={11} strokeWidth={3} />
+            </button>
+            <span className={`min-w-0 flex-1 text-sm leading-5 ${memo.completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{memo.title}</span>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'REMOVE_TODO', payload: memo.id })}
+              className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100"
+              aria-label="메모 삭제"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function HomeworkIssuePanel({ students }: { students: HomeworkIssueStudent[] }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const renderStudent = (student: HomeworkIssueStudent) => (
+    <div key={student.studentId} className="flex items-center gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-slate-800">{student.name}</span>
+          <span className="truncate text-xs text-slate-400">{student.className}</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 gap-1.5">
+        {student.insufficientCount > 0 && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">미흡 {student.insufficientCount}</span>}
+        {student.missingCount > 0 && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">미제출 {student.missingCount}</span>}
+      </div>
+    </div>
+  )
+
+  return (
+    <section className="flex h-[390px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-5 py-3.5">
+        <BookX size={15} className="text-orange-500" />
+        <h2 className="flex-1 text-sm font-semibold text-slate-800">숙제 미흡·미제출자</h2>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${students.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{students.length}명</span>
+        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">전체 보기</button>
+      </div>
+      {students.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">숙제 미흡·미제출자가 없습니다</div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto">{students.map(renderStudent)}</div>
+      )}
+      {isOpen && (
+        <DashboardModal title="숙제 미흡·미제출자 전체" count={students.length} onClose={() => setIsOpen(false)}>
+          {students.length === 0 ? <div className="px-5 py-10 text-center text-xs text-slate-400">해당 학생이 없습니다</div> : students.map(renderStudent)}
+        </DashboardModal>
+      )}
     </section>
   )
 }
@@ -787,12 +820,9 @@ export default function DashboardPage() {
           h => h.classId === cls.id || h.classId === ''
         )
         const homeworkTargets: TodayHomeworkItem[] = []
-        const homeworkMissingSet = new Set<string>()
-        const homeworkDescriptionSet = new Set<string>()
 
         for (const hw of dueHomeworks) {
           const defaultRecheckDate = getClassDate(hw.sessionNum + 2, cls.days, cls.weekdays)
-          const description = hw.description || (hw.items ?? []).map(item => item.text).join(', ')
 
           if (hw.items?.length) {
             const targetsByStudent = new Map<string, { itemIds: string[]; recheckDate: string }>()
@@ -819,8 +849,6 @@ export default function DashboardPage() {
                 completed: false,
                 scheduledDate: target.recheckDate,
               })
-              if (description) homeworkDescriptionSet.add(description)
-              homeworkMissingSet.add(getStudentName(studentId))
             }
           }
         }
@@ -831,9 +859,6 @@ export default function DashboardPage() {
           vocabRetests,
           dailyRetests,
           homeworkTargets,
-          homeworkBadNames: [],
-          homeworkMissingNames: [...homeworkMissingSet],
-          homeworkDescription: [...homeworkDescriptionSet].join(' / '),
         }
         const hasTargets = row.vocabRetests.length > 0 || row.dailyRetests.length > 0 || row.homeworkTargets.length > 0
         return hasTargets ? row : null
@@ -847,14 +872,42 @@ export default function DashboardPage() {
     [state.classes, state.students, state.retests, state.homeworks, todayStr]
   )
 
-  const overdueTaskRows = useMemo(
-    () => buildTaskRows(date => date < todayStr),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.classes, state.students, state.retests, state.homeworks, todayStr]
-  )
+  const homeworkIssueStudents = useMemo<HomeworkIssueStudent[]>(() => {
+    const activeStudents = new Map(state.students.filter(student => student.active).map(student => [student.id, student]))
+    const classMap = new Map(state.classes.map(cls => [cls.id, cls]))
+    const issues = new Map<string, HomeworkIssueStudent>()
 
-  const countTaskRows = (rows: TodayTaskRow[]) =>
-    rows.reduce((sum, row) => sum + row.vocabRetests.length + row.dailyRetests.length + row.homeworkTargets.length, 0)
+    for (const homework of state.homeworks) {
+      const cls = classMap.get(homework.classId)
+      const checkDate = cls ? getClassDate(homework.sessionNum + 1, cls.days, cls.weekdays) : homework.weekStart
+      if (!isInMonth(checkDate, selectedYM)) continue
+
+      for (const item of homework.items ?? []) {
+        for (const status of item.studentStatuses ?? []) {
+          if (status.status !== '미흡' && status.status !== '미제출') continue
+          const student = activeStudents.get(status.studentId)
+          if (!student) continue
+          const studentClass = classMap.get(student.classId)
+          const issue = issues.get(student.id) ?? {
+            studentId: student.id,
+            name: student.name,
+            className: studentClass?.name ?? '',
+            insufficientCount: 0,
+            missingCount: 0,
+          }
+          if (status.status === '미제출') issue.missingCount += 1
+          if (status.status === '미흡') issue.insufficientCount += 1
+          issues.set(student.id, issue)
+        }
+      }
+    }
+
+    return [...issues.values()].sort((a, b) =>
+      b.missingCount - a.missingCount ||
+      b.insufficientCount - a.insufficientCount ||
+      a.name.localeCompare(b.name, 'ko')
+    )
+  }, [selectedYM, state.classes, state.homeworks, state.students])
 
   const classPopulationRows = useMemo(() => {
     const monthStart = `${selectedYM}-01`
@@ -947,10 +1000,6 @@ export default function DashboardPage() {
       .filter(student => student.reasons.length > 0)
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
   }, [state.classes, state.students, state.retests, state.homeworks, selectedYM])
-
-  const todayTaskTotal = countTaskRows(todayTaskRows)
-  const overdueTaskTotal = countTaskRows(overdueTaskRows)
-  const scheduleTodayCount = scheduleEvents.filter(e => e.startDate <= todayStr && e.endDate >= todayStr).length
 
   const completeTodayRetest = (item: TodayRetestItem, label = '재시험') => {
     if (!confirm(`${item.name} ${label}을 통과 처리하겠습니까?`)) return
@@ -1115,12 +1164,6 @@ export default function DashboardPage() {
       </div>
 
       <section className="space-y-3">
-        <TodaySummaryPanel
-          overdueCount={overdueTaskTotal}
-          todayCount={todayTaskTotal}
-          scheduleTodayCount={scheduleTodayCount}
-          managementCount={managementStudents.length}
-        />
         <SchedulePanel
           title="업무 공지"
           icon={Megaphone}
@@ -1133,21 +1176,17 @@ export default function DashboardPage() {
         />
         <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <TodayFocusPanel
-              title="미완료 현황"
-              emptyText="미완료 대상이 없습니다"
-              showDates
-              rows={overdueTaskRows}
-              onCompleteRetest={completeTodayRetest}
-              onCompleteHomework={completeTodayHomework}
-            />
-            <TodayFocusPanel
-              title="오늘 확인"
-              emptyText="오늘 확인할 대상이 없습니다"
-              rows={todayTaskRows}
-              onCompleteRetest={completeTodayRetest}
-              onCompleteHomework={completeTodayHomework}
-            />
+            <DashboardMemoPanel />
+            <HomeworkIssuePanel students={homeworkIssueStudents} />
+            <div className="lg:col-span-2">
+              <TodayFocusPanel
+                title="오늘 확인"
+                emptyText="오늘 확인할 대상이 없습니다"
+                rows={todayTaskRows}
+                onCompleteRetest={completeTodayRetest}
+                onCompleteHomework={completeTodayHomework}
+              />
+            </div>
           </div>
           <div className="space-y-3">
             <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />

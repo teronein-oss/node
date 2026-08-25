@@ -15,7 +15,7 @@ export default function AppLayout() {
     '/homework': '숙제관리',
     '/students': '학생관리',
     '/clinic': '보충/클리닉',
-    '/todo': 'ToDo',
+    '/todo': '메모',
     '/schedule': '업무 일정표',
     '/student-dashboard': '학생 대시보드',
     '/classes': '반관리',

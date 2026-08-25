@@ -138,10 +138,6 @@ body {
   .mobile-month-picker { width: 100%; justify-content: space-between; }
   .mobile-month-picker > span { flex: 1; width: auto !important; }
 
-  .mobile-summary-card { min-height: 104px !important; padding: 12px !important; }
-  .mobile-summary-card p.mt-4 { margin-top: 10px !important; font-size: 1.25rem !important; }
-  .mobile-summary-card > div:last-child { display: none; }
-
   .today-focus-grid[data-show-dates='true'] {
     grid-template-columns: 48px 54px 42px minmax(112px, 1fr) !important;
     gap: 4px !important;

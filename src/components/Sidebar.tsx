@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, CheckSquare, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2, Clock3 } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
@@ -14,7 +14,7 @@ const LEARNING_ITEMS = [
   { to: '/homework', icon: ClipboardList, label: '숙제관리' },
   { to: '/students', icon: Users, label: '학생관리' },
   { to: '/clinic', icon: Stethoscope, label: '보충/클리닉' },
-  { to: '/todo', icon: CheckSquare, label: 'ToDo' },
+  { to: '/todo', icon: StickyNote, label: '메모' },
 ]
 
 const OPERATION_ITEMS = [
@@ -130,7 +130,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="grid grid-cols-4 gap-1 px-3 pb-3">
           <NavLink to="/" onClick={onClose} aria-label="홈" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><LayoutDashboard size={17} /></NavLink>
           <NavLink to="/students" onClick={onClose} aria-label="학생 검색" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><Search size={17} /></NavLink>
-          <NavLink to="/todo" onClick={onClose} aria-label="할 일" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><Clock3 size={17} /></NavLink>
+          <NavLink to="/todo" onClick={onClose} aria-label="메모" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><StickyNote size={17} /></NavLink>
           <NavLink to="/classes" onClick={onClose} aria-label="반 설정" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><Settings2 size={17} /></NavLink>
         </div>
 
