@@ -69,22 +69,22 @@ export default function LoginPage() {
 
   if (registrationStatus === 'loading') {
     return (
-      <div className="notion-login min-h-screen flex items-center justify-center bg-[#191919]">
+      <div className="notion-login min-h-screen flex items-center justify-center bg-[#f7f7f5]">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="notion-login min-h-screen bg-[#191919] flex items-center justify-center p-4">
-      <div className="notion-login-card bg-[#202020] rounded-lg border border-[#303030] w-full max-w-sm p-8">
+    <div className="notion-login min-h-screen bg-[#f7f7f5] flex items-center justify-center p-4">
+      <div className="notion-login-card w-full max-w-sm rounded-lg border border-[#e3e3e0] bg-white p-8">
         {/* 로고 */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-[#2f6f9f]/25 rounded-lg flex items-center justify-center mb-4">
-            <GraduationCap size={30} className="text-[#6fa9dd]" />
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-[#eef4fb]">
+            <GraduationCap size={30} className="text-[#4f7fa8]" />
           </div>
-          <h1 className="text-xl font-bold text-[#ededed]">SEUM</h1>
-          <p className="text-sm text-[#858585] mt-1">학원 관리 워크스페이스</p>
+          <h1 className="text-xl font-bold text-[#37352f]">SEUM</h1>
+          <p className="mt-1 text-sm text-[#787774]">학원 관리 워크스페이스</p>
         </div>
 
         {!firebaseUser ? (

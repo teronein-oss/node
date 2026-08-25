@@ -32,21 +32,21 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="notion-dashboard flex h-screen overflow-hidden bg-[#191919] text-[#d4d4d4]">
+    <div className="notion-dashboard flex h-screen overflow-hidden bg-white text-[#37352f]">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 관리자 뷰잉 배너 */}
         {viewingUid && (
-          <div className="flex shrink-0 items-center justify-between border-b border-[#3d3528] bg-[#2b271f] px-4 py-2">
-            <p className="text-xs font-medium text-[#d7b875]">
+          <div className="flex shrink-0 items-center justify-between border-b border-[#ead9b0] bg-[#fbf3db] px-4 py-2">
+            <p className="text-xs font-medium text-[#8a6424]">
               {viewingUserName
                 ? `${viewingUserName}님의 대시보드를 보고 있습니다`
                 : '다른 사용자의 대시보드를 보고 있습니다'}
             </p>
             <button
               onClick={exitViewingMode}
-              className="flex items-center gap-1 text-xs font-medium text-[#d7b875] transition-colors hover:text-[#f0d18d]"
+              className="flex items-center gap-1 text-xs font-medium text-[#8a6424] transition-colors hover:text-[#684b19]"
             >
               <ArrowLeft size={12} />
               관리자 패널로 돌아가기
@@ -55,25 +55,25 @@ export default function AppLayout() {
         )}
 
         {/* 데스크톱 노션형 페이지 상단 바 */}
-        <header className="notion-page-topbar hidden h-12 shrink-0 items-center border-b border-[#2c2c2c] bg-[#191919] px-4 lg:flex">
-          <span className="truncate text-[13px] font-semibold text-[#d8d8d8]">{pageTitle}</span>
-          <div className="ml-auto flex items-center gap-1 text-[#8b8b8b]">
+        <header className="notion-page-topbar hidden h-12 shrink-0 items-center border-b border-[#e9e9e7] bg-white px-4 lg:flex">
+          <span className="truncate text-[13px] font-semibold text-[#37352f]">{pageTitle}</span>
+          <div className="ml-auto flex items-center gap-1 text-[#9b9a97]">
             <span className="mr-2 text-[11px]">SEUM workspace</span>
-            <button type="button" aria-label="즐겨찾기" className="rounded-md p-1.5 hover:bg-[#2a2a2a] hover:text-[#ededed]"><Star size={16} /></button>
-            <button type="button" aria-label="더 보기" className="rounded-md p-1.5 hover:bg-[#2a2a2a] hover:text-[#ededed]"><MoreHorizontal size={17} /></button>
+            <button type="button" aria-label="즐겨찾기" className="rounded-md p-1.5 hover:bg-[#f1f1ef] hover:text-[#37352f]"><Star size={16} /></button>
+            <button type="button" aria-label="더 보기" className="rounded-md p-1.5 hover:bg-[#f1f1ef] hover:text-[#37352f]"><MoreHorizontal size={17} /></button>
           </div>
         </header>
 
         {/* 모바일 상단 바 */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-[#2d2d2d] bg-[#202020] px-4 py-3 lg:hidden">
+        <header className="flex shrink-0 items-center gap-3 border-b border-[#e9e9e7] bg-white px-4 py-3 lg:hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="사이드 메뉴 열기"
-            className="rounded-md p-1 text-[#a4a4a4] hover:bg-[#303030] hover:text-white"
+            className="rounded-md p-1 text-[#787774] hover:bg-[#f1f1ef] hover:text-[#37352f]"
           >
             <Menu size={22} />
           </button>
-          <span className="text-sm font-semibold text-[#eeeeee]">SEUM</span>
+          <span className="text-sm font-semibold text-[#37352f]">SEUM</span>
         </header>
 
         {/* 메인 콘텐츠 */}

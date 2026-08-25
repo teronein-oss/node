@@ -9,10 +9,10 @@ function AppInner() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#191919]">
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]">
         <div className="text-center">
           <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-sm text-[#8b8b8b]">데이터 불러오는 중...</p>
+          <p className="text-sm text-[#787774]">데이터 불러오는 중...</p>
         </div>
       </div>
     )
@@ -26,7 +26,7 @@ function AuthGate() {
 
   if (registrationStatus === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#191919]">
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -41,12 +41,12 @@ function AuthGate() {
   // 조교에게 담당 선생님이 배정되지 않은 경우
   if (isJogyo && !adminUid) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#191919]">
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]">
         <div className="text-center space-y-4">
-          <p className="text-sm text-[#a4a4a4]">담당 선생님이 배정되지 않았습니다</p>
+          <p className="text-sm text-[#787774]">담당 선생님이 배정되지 않았습니다</p>
           <button
             onClick={() => signOut()}
-            className="rounded-md bg-[#2b2b2b] px-4 py-2 text-sm text-[#d4d4d4] transition-colors hover:bg-[#333333]"
+            className="rounded-md border border-[#dededb] bg-white px-4 py-2 text-sm text-[#37352f] transition-colors hover:bg-[#efefed]"
           >
             로그아웃
           </button>
