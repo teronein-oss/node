@@ -418,6 +418,11 @@ interface HomeworkIssueStudent {
   className: string
   insufficientCount: number
   missingCount: number
+  issues: {
+    checkDate: string
+    homeworkText: string
+    status: '미흡' | '미제출'
+  }[]
 }
 
 function TodayFocusPanel({
@@ -618,14 +623,27 @@ function DashboardMemoPanel() {
 function HomeworkIssuePanel({ students }: { students: HomeworkIssueStudent[] }) {
   const [isOpen, setIsOpen] = useState(false)
   const renderStudent = (student: HomeworkIssueStudent) => (
-    <div key={student.studentId} className="flex items-center gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+    <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
+      <div className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:w-[130px]">
           <span className="truncate text-sm font-semibold text-slate-800">{student.name}</span>
           <span className="truncate text-xs text-slate-400">{student.className}</span>
         </div>
+        <div className="mt-1 flex min-w-0 flex-1 flex-wrap gap-1.5 sm:mt-0">
+          {student.issues.map((issue, index) => (
+            <span
+              key={`${issue.checkDate}-${issue.homeworkText}-${issue.status}-${index}`}
+              title={`${formatDateKo(issue.checkDate)} · ${issue.homeworkText} · ${issue.status}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-600"
+            >
+              <span className="shrink-0 font-semibold text-slate-400">{issue.checkDate.slice(5).replace('-', '/')}</span>
+              <span className="max-w-[260px] truncate">{issue.homeworkText}</span>
+              <span className={`shrink-0 font-semibold ${issue.status === '미제출' ? 'text-red-500' : 'text-orange-500'}`}>{issue.status}</span>
+            </span>
+          ))}
+        </div>
       </div>
-      <div className="flex shrink-0 gap-1.5">
+      <div className="mt-0.5 flex shrink-0 gap-1.5">
         {student.insufficientCount > 0 && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">미흡 {student.insufficientCount}</span>}
         {student.missingCount > 0 && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">미제출 {student.missingCount}</span>}
       </div>
@@ -894,12 +912,25 @@ export default function DashboardPage() {
             className: studentClass?.name ?? '',
             insufficientCount: 0,
             missingCount: 0,
+            issues: [],
           }
           if (status.status === '미제출') issue.missingCount += 1
           if (status.status === '미흡') issue.insufficientCount += 1
+          issue.issues.push({
+            checkDate,
+            homeworkText: item.text.trim() || homework.description.trim() || '숙제 내용 없음',
+            status: status.status,
+          })
           issues.set(student.id, issue)
         }
       }
+    }
+
+    for (const issue of issues.values()) {
+      issue.issues.sort((a, b) =>
+        b.checkDate.localeCompare(a.checkDate) ||
+        a.homeworkText.localeCompare(b.homeworkText, 'ko')
+      )
     }
 
     return [...issues.values()].sort((a, b) =>
