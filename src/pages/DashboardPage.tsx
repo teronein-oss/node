@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, BookX, Check, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, LayoutDashboard, Megaphone, Plus, StickyNote, Trash2, Users, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -620,8 +620,31 @@ function DashboardMemoPanel() {
   )
 }
 
-function HomeworkIssuePanel({ students }: { students: HomeworkIssueStudent[] }) {
+function HomeworkIssuePanel({ students, selectedYM }: { students: HomeworkIssueStudent[]; selectedYM: string }) {
   const [isOpen, setIsOpen] = useState(false)
+  const monthStart = `${selectedYM}-01`
+  const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
+  const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
+  const [startDate, setStartDate] = useState(monthStart)
+
+  useEffect(() => {
+    setStartDate(monthStart)
+    setIsOpen(false)
+  }, [monthStart])
+
+  const visibleStudents = useMemo(() => students
+    .map(student => {
+      const issues = student.issues.filter(issue => issue.checkDate >= startDate)
+      if (issues.length === 0) return null
+      return {
+        ...student,
+        issues,
+        insufficientCount: issues.filter(issue => issue.status === '미흡').length,
+        missingCount: issues.filter(issue => issue.status === '미제출').length,
+      }
+    })
+    .filter((student): student is HomeworkIssueStudent => student !== null), [startDate, students])
+
   const renderStudent = (student: HomeworkIssueStudent) => (
     <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
       <div className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-3">
@@ -655,17 +678,33 @@ function HomeworkIssuePanel({ students }: { students: HomeworkIssueStudent[] }) 
       <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-5 py-3.5">
         <BookX size={15} className="text-orange-500" />
         <h2 className="flex-1 text-sm font-semibold text-slate-800">숙제 미흡·미제출자</h2>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${students.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{students.length}명</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${visibleStudents.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{visibleStudents.length}명</span>
         <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">전체 보기</button>
       </div>
-      {students.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">숙제 미흡·미제출자가 없습니다</div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2">
+        <label htmlFor="homework-issue-start-date" className="text-xs font-medium text-slate-500">조회 시작일</label>
+        <input
+          id="homework-issue-start-date"
+          type="date"
+          min={monthStart}
+          max={monthEnd}
+          value={startDate}
+          onChange={event => event.target.value && setStartDate(event.target.value)}
+          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        />
+        <span className="text-xs text-slate-400">부터</span>
+        {startDate !== monthStart && (
+          <button type="button" onClick={() => setStartDate(monthStart)} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700">이번 달 전체</button>
+        )}
+      </div>
+      {visibleStudents.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">선택한 날짜 이후 숙제 미흡·미제출자가 없습니다</div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">{students.map(renderStudent)}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{visibleStudents.map(renderStudent)}</div>
       )}
       {isOpen && (
-        <DashboardModal title="숙제 미흡·미제출자 전체" count={students.length} onClose={() => setIsOpen(false)}>
-          {students.length === 0 ? <div className="px-5 py-10 text-center text-xs text-slate-400">해당 학생이 없습니다</div> : students.map(renderStudent)}
+        <DashboardModal title={`${formatDateKo(startDate)}부터 숙제 미흡·미제출자`} count={visibleStudents.length} onClose={() => setIsOpen(false)}>
+          {visibleStudents.length === 0 ? <div className="px-5 py-10 text-center text-xs text-slate-400">해당 학생이 없습니다</div> : visibleStudents.map(renderStudent)}
         </DashboardModal>
       )}
     </section>
@@ -1208,7 +1247,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <DashboardMemoPanel />
-            <HomeworkIssuePanel students={homeworkIssueStudents} />
+            <HomeworkIssuePanel students={homeworkIssueStudents} selectedYM={selectedYM} />
             <div className="lg:col-span-2">
               <TodayFocusPanel
                 title="오늘 확인"
