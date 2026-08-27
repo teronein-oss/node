@@ -973,6 +973,7 @@ export default function DashboardPage() {
     }
 
     return [...issues.values()].sort((a, b) =>
+      (b.issues[0]?.checkDate ?? '').localeCompare(a.issues[0]?.checkDate ?? '') ||
       b.missingCount - a.missingCount ||
       b.insufficientCount - a.insufficientCount ||
       a.name.localeCompare(b.name, 'ko')
