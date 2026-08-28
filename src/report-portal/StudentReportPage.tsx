@@ -300,7 +300,7 @@ export default function StudentReportPage() {
           <div className="grid min-w-0 w-full items-stretch gap-6 lg:grid-cols-[1.05fr_0.95fr]">
             <section className="m3-login-copy min-w-0 flex flex-col justify-center px-2 py-8 text-white sm:px-8 lg:py-14">
               <div className="m3-chip inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-blue-50"><LockKeyhole size={14} />코드 기반 안전 열람</div>
-              <h1 className="mt-6 text-3xl font-black leading-[1.15] tracking-tight sm:text-5xl">필요한 학습 결과를<br /><span className="text-cyan-300">한눈에 확인하세요</span></h1>
+              <h1 className="mt-6 text-3xl font-black leading-[1.15] tracking-tight sm:text-5xl">SEUM 내신모의고사<br /><span className="text-cyan-300">성적확인 시스템</span></h1>
               <p className="mt-5 max-w-lg text-sm leading-7 text-blue-50/70 sm:text-base">학생 코드는 본인의 개별 성적만, 교사 코드는 담당 학교·학년의 회차별 성적과 석차만 열람할 수 있습니다.</p>
               <div className="mt-8 hidden gap-5 text-xs text-blue-100/65 sm:flex"><span className="flex items-center gap-2"><ShieldCheck size={15} />권한별 암호화 코드</span><span className="flex items-center gap-2"><FileText size={15} />회차·누적 성적 분석</span></div>
             </section>
