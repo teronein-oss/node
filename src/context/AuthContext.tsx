@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore'
 import { auth } from '../firebase'
 import { displayName } from '../utils/displayName'
-import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, createInviteCode, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
+import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_INVITE_CODE, DEFAULT_ACADEMY_NAME, createInviteCode, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
 import { academyDoc, configDoc, registrationDoc, registrationsCollection, userDoc } from '../utils/firestorePaths'
 
 export const ADMIN_EMAIL = 'teronein@gmail.com'
@@ -298,11 +298,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       }, { merge: true })
     } else if (academy?.mode === 'join' && academy.inviteCode?.trim()) {
-      academyId = academy.inviteCode.trim().toUpperCase()
-      const academySnap = await getDoc(academyDoc(academyId))
-      if (!academySnap.exists()) throw new Error('academy-not-found')
-      const academyData = academySnap.data() as { name?: string }
-      academyName = academyData.name ?? academyId
+      const inviteCode = academy.inviteCode.trim().toUpperCase()
+      if (inviteCode === DEFAULT_ACADEMY_INVITE_CODE) {
+        academyId = DEFAULT_ACADEMY_ID
+        academyName = DEFAULT_ACADEMY_NAME
+      } else {
+        academyId = inviteCode
+        const academySnap = await getDoc(academyDoc(academyId))
+        if (!academySnap.exists()) throw new Error('academy-not-found')
+        const academyData = academySnap.data() as { name?: string }
+        academyName = academyData.name ?? academyId
+      }
     }
     const regRef = registrationDoc(firebaseUser.uid, DEFAULT_ACADEMY_ID)
     const regData: RegistrationInfo = {

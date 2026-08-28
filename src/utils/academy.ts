@@ -1,5 +1,6 @@
 export const DEFAULT_ACADEMY_ID = 'node-default'
 export const DEFAULT_ACADEMY_NAME = '세움학원'
+export const DEFAULT_ACADEMY_INVITE_CODE = 'SEUM-6898'
 
 export const isDefaultAcademy = (academyId?: string | null) =>
   !academyId || academyId === DEFAULT_ACADEMY_ID
@@ -9,6 +10,9 @@ export const normalizeAcademyId = (academyId?: string | null) =>
 
 export const normalizeAcademyName = (academyName?: string | null) =>
   academyName || DEFAULT_ACADEMY_NAME
+
+export const academyInviteCode = (academyId?: string | null) =>
+  isDefaultAcademy(academyId) ? DEFAULT_ACADEMY_INVITE_CODE : normalizeAcademyId(academyId)
 
 export const createInviteCode = (academyName: string) => {
   const prefix = academyName

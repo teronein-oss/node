@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users, Settings } from 'lucide-react'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
 import { appDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
-import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
+import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, academyInviteCode, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
 
 function AdminTabs() {
   const { pathname } = useLocation()
@@ -150,7 +150,7 @@ export default function AdminPage() {
         {user?.academyId && (
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
             <p className="text-xs font-semibold text-blue-700">학원 초대코드</p>
-            <p className="mt-1 text-sm font-bold text-slate-800">{user.academyId}</p>
+            <p className="mt-1 text-sm font-bold text-slate-800">{academyInviteCode(user.academyId)}</p>
             <p className="mt-0.5 text-xs text-slate-500">{user.academyName} 구성원 가입 시 이 코드를 입력합니다</p>
           </div>
         )}
