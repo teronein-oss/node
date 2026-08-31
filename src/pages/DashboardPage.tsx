@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BookX, Check, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, LayoutDashboard, Megaphone, Plus, StickyNote, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, BookX, Check, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Plus, RotateCcw, StickyNote, Trash2, Users, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
@@ -8,27 +8,6 @@ import { getWeekStart, formatDateKo, fmtDate, getClassDate, getClassDaysLabel } 
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM } from '../utils/academic'
 
 // ─── 달력 헬퍼 ────────────────────────────────────────────────────────────────
-function buildCalDays(year: number, month: number): (Date | null)[] {
-  const first = new Date(year, month - 1, 1)
-  const last = new Date(year, month, 0)
-  const startPad = first.getDay()
-  const days: (Date | null)[] = Array(startPad).fill(null)
-  for (let d = 1; d <= last.getDate(); d++) days.push(new Date(year, month - 1, d))
-  while (days.length % 7 !== 0) days.push(null)
-  return days
-}
-
-function daysBetween(start: string, end: string): string[] {
-  const dates: string[] = []
-  const cur = new Date(start + 'T00:00:00')
-  const endD = new Date(end + 'T00:00:00')
-  while (cur <= endD) {
-    dates.push(fmtDate(cur))
-    cur.setDate(cur.getDate() + 1)
-  }
-  return dates
-}
-
 function diffDays(start: string, end: string): number {
   return Math.round(
     (new Date(end + 'T00:00:00').getTime() - new Date(start + 'T00:00:00').getTime()) / 86400000
@@ -96,11 +75,6 @@ function DashboardModal({
       </div>
     </div>
   )
-}
-
-const ACADEMY_HOLIDAYS: Record<string, string> = {
-  '2025-05-05': '어린이날',
-  '2026-05-05': '어린이날',
 }
 
 const WEEK_DAYS = ['월', '화', '수', '목', '금', '토'] as const
@@ -228,145 +202,6 @@ function SchedulePanel({
   )
 }
 
-function ScheduleListPanel({
-  events,
-  todayStr,
-}: {
-  events: ScheduleEvent[]
-  todayStr: string
-}) {
-  const activeEvents = useMemo(
-    () => events
-      .filter(e => e.endDate >= todayStr)
-      .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title, 'ko')),
-    [events, todayStr]
-  )
-  const previewEvents = activeEvents.slice(0, 3)
-  const [isOpen, setIsOpen] = useState(false)
-
-  const renderEvent = (event: ScheduleEvent) => {
-    const isToday = event.startDate <= todayStr && event.endDate >= todayStr
-    return (
-      <div key={event.id} className="flex items-center gap-3 px-4 py-3">
-        <span className={`h-2.5 w-2.5 rounded-full ${event.type === 'all' ? 'bg-red-400' : 'bg-emerald-400'}`} />
-        <span className={`text-xs font-semibold ${event.type === 'all' ? 'text-red-500' : 'text-emerald-600'}`}>
-          {event.type === 'all' ? '전체' : '개인'}
-        </span>
-        <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${isToday ? 'text-slate-900' : 'text-slate-700'}`}>{event.title}</span>
-        <span className="shrink-0 text-xs text-slate-400">
-          {event.time ? event.time : event.startDate}
-        </span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="divide-y divide-slate-50">
-        {previewEvents.length === 0 ? (
-          <div className="px-4 py-8 text-center text-xs text-slate-400">예정된 일정이 없습니다</div>
-        ) : (
-          previewEvents.map(renderEvent)
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="flex w-full items-center gap-1.5 border-t border-slate-100 px-4 py-2 text-left text-xs font-semibold text-slate-600 hover:bg-slate-50"
-      >
-        전체 일정표 보기 <ChevronRight size={13} />
-      </button>
-      {isOpen && (
-        <DashboardModal title="전체 일정표" count={activeEvents.length} onClose={() => setIsOpen(false)}>
-          <div className="divide-y divide-slate-50">
-            {activeEvents.length === 0
-              ? <div className="px-5 py-10 text-center text-xs text-slate-400">예정된 일정이 없습니다</div>
-              : activeEvents.map(renderEvent)}
-          </div>
-        </DashboardModal>
-      )}
-    </div>
-  )
-}
-
-// ─── 미니 달력 ────────────────────────────────────────────────────────────────
-function MiniCalendar({ year, month, scheduleEvents }: {
-  year: number; month: number; scheduleEvents: ScheduleEvent[]
-}) {
-  const todayStr = fmtDate(new Date())
-  const days = buildCalDays(year, month)
-  const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토']
-
-  const eventsByDate = useMemo(() => {
-    const map: Record<string, ScheduleEvent[]> = {}
-    for (const e of scheduleEvents) {
-      for (const d of daysBetween(e.startDate, e.endDate)) {
-        if (!map[d]) map[d] = []
-        map[d].push(e)
-      }
-    }
-    return map
-  }, [scheduleEvents])
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-        <Calendar size={15} className="text-slate-400" />
-        <span className="text-sm font-semibold text-slate-800">{year}년 {month}월</span>
-      </div>
-      <div className="p-3">
-        <div className="grid grid-cols-7 mb-1">
-          {DOW_LABELS.map((d, i) => (
-            <div key={d} className={`text-center text-xs font-medium py-1
-              ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
-              {d}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-y-0.5">
-          {days.map((date, i) => {
-            if (!date) return <div key={`pad-${i}`} />
-            const dateStr = fmtDate(date)
-            const isToday = dateStr === todayStr
-            const holiday = ACADEMY_HOLIDAYS[dateStr]
-            const evts = eventsByDate[dateStr] ?? []
-            const hasPersonal = evts.some(e => e.type === 'personal')
-            const hasAll = evts.some(e => e.type === 'all')
-            const dow = date.getDay()
-            const eventBorder = hasAll ? 'ring-[3px] ring-red-400'
-              : hasPersonal ? 'ring-[3px] ring-green-500'
-              : ''
-
-            return (
-              <div key={dateStr} className="flex flex-col items-center py-0.5">
-                <div className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium ${eventBorder}
-                  ${isToday ? 'bg-slate-800 text-white'
-                    : holiday ? 'text-red-500 font-semibold'
-                    : dow === 0 ? 'text-red-400'
-                    : dow === 6 ? 'text-blue-400'
-                    : 'text-slate-600'}`}>
-                  {date.getDate()}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-50 pt-2">
-          <div className="flex items-center gap-1 text-xs text-slate-500">
-            <span className="w-4 h-4 rounded-full bg-slate-800 inline-block shrink-0" />오늘
-          </div>
-          <div className="flex items-center gap-1 text-xs text-slate-500">
-            <span className="w-4 h-4 rounded-full border-[3px] border-green-500 inline-block shrink-0" />개인
-          </div>
-          <div className="flex items-center gap-1 text-xs text-slate-500">
-            <span className="w-4 h-4 rounded-full border-[3px] border-red-400 inline-block shrink-0" />전체
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 interface TodayTaskRow {
   classId: string
   className: string
@@ -424,6 +259,21 @@ interface HomeworkIssueStudent {
     checkDate: string
     homeworkText: string
     status: '미흡' | '미제출'
+  }[]
+}
+
+interface RetestIssueStudent {
+  studentId: string
+  name: string
+  className: string
+  issues: {
+    retestId: string
+    date: string
+    type: 'vocab' | 'daily'
+    label: string
+    originalScore: number
+    unit: '점' | '개'
+    retestScore: number | null
   }[]
 }
 
@@ -585,7 +435,11 @@ function DashboardMemoPanel() {
         <input
           value={text}
           onChange={event => setText(event.target.value)}
-          onKeyDown={event => event.key === 'Enter' && addMemo()}
+          onKeyDown={event => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return
+            event.preventDefault()
+            addMemo()
+          }}
           placeholder="메모를 입력하고 Enter"
           className="min-w-0 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-slate-400"
         />
@@ -724,6 +578,103 @@ function HomeworkIssuePanel({
   )
 }
 
+function RetestIssuePanel({
+  students,
+  selectedYM,
+  onCompleteIssue,
+}: {
+  students: RetestIssueStudent[]
+  selectedYM: string
+  onCompleteIssue: (student: RetestIssueStudent, issue: RetestIssueStudent['issues'][number]) => void
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const monthStart = `${selectedYM}-01`
+  const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
+  const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
+  const [startDate, setStartDate] = useState(monthStart)
+
+  useEffect(() => {
+    setStartDate(monthStart)
+    setIsOpen(false)
+  }, [monthStart])
+
+  const visibleStudents = useMemo(() => students
+    .map(student => {
+      const issues = student.issues.filter(issue => issue.date >= startDate)
+      return issues.length > 0 ? { ...student, issues } : null
+    })
+    .filter((student): student is RetestIssueStudent => student !== null), [startDate, students])
+
+  const renderStudent = (student: RetestIssueStudent) => (
+    <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
+      <div className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:w-[130px]">
+          <span className="truncate text-sm font-semibold text-slate-800">{student.name}</span>
+          <span className="truncate text-xs text-slate-400">{student.className}</span>
+        </div>
+        <div className="mt-1 flex min-w-0 flex-1 flex-wrap gap-1.5 sm:mt-0">
+          {student.issues.map(issue => (
+            <div
+              key={issue.retestId}
+              title={`${formatDateKo(issue.date)} · ${issue.label} · ${issue.originalScore}${issue.unit}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-600"
+            >
+              <span className="shrink-0 font-semibold text-slate-400">{issue.date.slice(5).replace('-', '/')}</span>
+              <span className={`shrink-0 font-semibold ${issue.type === 'vocab' ? 'text-purple-600' : 'text-blue-600'}`}>{issue.label}</span>
+              <span className="shrink-0 text-slate-500">{issue.originalScore}{issue.unit}</span>
+              <span className="shrink-0 font-semibold text-red-500">대상</span>
+              <button
+                type="button"
+                onClick={() => onCompleteIssue(student, issue)}
+                className="ml-0.5 shrink-0 rounded border border-blue-200 bg-white px-1.5 py-0.5 font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+              >
+                재시험 완료
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <section className="flex h-[390px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-5 py-3.5">
+        <RotateCcw size={15} className="text-purple-500" />
+        <h2 className="flex-1 text-sm font-semibold text-slate-800">단어·Daily 재시험 대상자</h2>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${visibleStudents.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{visibleStudents.length}명</span>
+        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">전체 보기</button>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2">
+        <label htmlFor="retest-issue-start-date" className="text-xs font-medium text-slate-500">조회 시작일</label>
+        <input
+          id="retest-issue-start-date"
+          type="date"
+          min={monthStart}
+          max={monthEnd}
+          value={startDate}
+          onChange={event => event.target.value && setStartDate(event.target.value)}
+          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        />
+        <span className="text-xs text-slate-400">부터</span>
+        {startDate !== monthStart && (
+          <button type="button" onClick={() => setStartDate(monthStart)} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700">이번 달 전체</button>
+        )}
+      </div>
+      {visibleStudents.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">선택한 날짜 이후 단어·Daily 재시험 대상자가 없습니다</div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto">{visibleStudents.map(renderStudent)}</div>
+      )}
+      {isOpen && (
+        <DashboardModal title={`${formatDateKo(startDate)}부터 단어·Daily 재시험 대상자`} count={visibleStudents.length} onClose={() => setIsOpen(false)}>
+          {visibleStudents.length === 0 ? <div className="px-5 py-10 text-center text-xs text-slate-400">해당 학생이 없습니다</div> : visibleStudents.map(renderStudent)}
+        </DashboardModal>
+      )}
+    </section>
+  )
+}
+
 // ─── 메인 대시보드 ────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { state, dispatch, getCurrentSession, selectedYM, setSelectedYM, globalScheduleEvents } = useApp()
@@ -750,7 +701,6 @@ export default function DashboardPage() {
     ).sort((a: { startDate: string }, b: { startDate: string }) => a.startDate.localeCompare(b.startDate)),
     [isAdmin, viewingUid, ownEvents, globalScheduleEvents]
   )
-  const scheduleEvents = allEvents
 
   // 월 목록
   const availableMonths = useMemo(() => {
@@ -995,6 +945,57 @@ export default function DashboardPage() {
     )
   }, [selectedYM, state.classes, state.homeworks, state.students])
 
+  const retestIssueStudents = useMemo<RetestIssueStudent[]>(() => {
+    const activeStudents = new Map(state.students.filter(student => student.active).map(student => [student.id, student]))
+    const classMap = new Map(state.classes.map(cls => [cls.id, cls]))
+    const issues = new Map<string, RetestIssueStudent>()
+
+    for (const retest of state.retests) {
+      if (retest.passed !== null || (retest.type !== 'vocab' && retest.type !== 'daily')) continue
+      const student = activeStudents.get(retest.studentId)
+      if (!student) continue
+      const cls = classMap.get(student.classId)
+      if (!cls) continue
+      const date = retest.retestDate ?? getClassDate(retest.sessionNum, cls.days, cls.weekdays)
+      if (!isInMonth(date, selectedYM)) continue
+      const config = state.sessionTestConfigs.find(
+        item => item.sessionNum === retest.sessionNum && item.classId === student.classId
+      ) ?? state.sessionTestConfigs.find(
+        item => item.sessionNum === retest.sessionNum && !item.classId
+      )
+      const isVocab = retest.type === 'vocab'
+      const label = isVocab
+        ? (config?.vocabName ?? '단어')
+        : (config?.dailyName === 'Daily Test' || !config?.dailyName ? 'Daily' : config.dailyName)
+      const unit = (isVocab ? config?.vocabMode : config?.dailyMode) === '개수' ? '개' as const : '점' as const
+      const issue = issues.get(student.id) ?? {
+        studentId: student.id,
+        name: student.name,
+        className: cls.name,
+        issues: [],
+      }
+      issue.issues.push({
+        retestId: retest.id,
+        date,
+        type: retest.type,
+        label,
+        originalScore: retest.originalScore,
+        unit,
+        retestScore: retest.retestScore,
+      })
+      issues.set(student.id, issue)
+    }
+
+    for (const issue of issues.values()) {
+      issue.issues.sort((a, b) => b.date.localeCompare(a.date) || a.label.localeCompare(b.label, 'ko'))
+    }
+
+    return [...issues.values()].sort((a, b) =>
+      (b.issues[0]?.date ?? '').localeCompare(a.issues[0]?.date ?? '') ||
+      a.name.localeCompare(b.name, 'ko')
+    )
+  }, [selectedYM, state.classes, state.retests, state.sessionTestConfigs, state.students])
+
   const classPopulationRows = useMemo(() => {
     const monthStart = `${selectedYM}-01`
     const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
@@ -1090,6 +1091,17 @@ export default function DashboardPage() {
   const completeTodayRetest = (item: TodayRetestItem, label = '재시험') => {
     if (!confirm(`${item.name} ${label}을 통과 처리하겠습니까?`)) return
     dispatch({ type: 'SAVE_RETEST', payload: { id: item.id, retestScore: null, passed: true } })
+  }
+
+  const completeRetestIssue = (
+    student: RetestIssueStudent,
+    issue: RetestIssueStudent['issues'][number]
+  ) => {
+    if (!confirm(`${student.name}의 ${issue.label} 재시험을 완료 처리하겠습니까?`)) return
+    dispatch({
+      type: 'SAVE_RETEST',
+      payload: { id: issue.retestId, retestScore: issue.retestScore, passed: true },
+    })
   }
 
   const completeTodayHomework = (item: TodayHomeworkItem) => {
@@ -1232,16 +1244,8 @@ export default function DashboardPage() {
   return (
     <div className="mobile-dashboard-page max-w-[1600px] mx-auto space-y-5 pb-16">
       {/* 헤더 */}
-      <div className="mobile-dashboard-heading notion-page-heading flex items-start justify-between gap-4 border-b border-slate-200 pb-5 pt-2">
-        <div className="flex items-center gap-3">
-          <div className="notion-page-icon flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/15 text-blue-400"><LayoutDashboard size={22} /></div>
-          <div>
-          <h1 className="text-2xl font-bold text-slate-800">대시보드</h1>
-          <p className="mt-1 text-sm font-medium text-slate-500">
-            {todayYear}년 {todayMonth}월 {todayDate}일
-          </p>
-          </div>
-        </div>
+      <div className="mobile-dashboard-heading notion-page-heading flex items-center justify-between gap-4 border-b border-slate-200 pb-5 pt-2">
+        <h1 className="text-2xl font-bold text-slate-800">{todayYear}년 {todayMonth}월 {todayDate}일</h1>
         <div className="mobile-month-picker flex items-center gap-2 shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1">
           <Calendar size={15} className="text-slate-400" />
           <button
@@ -1276,35 +1280,34 @@ export default function DashboardPage() {
           onRemove={id => dispatch({ type: 'DELETE_SCHEDULE_EVENT', payload: id })}
           readOnly={isJogyo}
         />
-        <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <DashboardMemoPanel />
-            <HomeworkIssuePanel
-              students={homeworkIssueStudents}
-              selectedYM={selectedYM}
-              onCompleteIssue={completeHomeworkIssue}
-            />
-            <div className="lg:col-span-2">
-              <TodayFocusPanel
-                title="오늘 확인"
-                emptyText="오늘 확인할 대상이 없습니다"
-                rows={todayTaskRows}
-                onCompleteRetest={completeTodayRetest}
-                onCompleteHomework={completeTodayHomework}
-              />
-            </div>
-          </div>
-          <div className="space-y-3">
-            <MiniCalendar year={selectedYear} month={selectedMonth} scheduleEvents={scheduleEvents} />
-            <ScheduleListPanel events={scheduleEvents} todayStr={todayStr} />
-          </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <DashboardMemoPanel />
+          <HomeworkIssuePanel
+            students={homeworkIssueStudents}
+            selectedYM={selectedYM}
+            onCompleteIssue={completeHomeworkIssue}
+          />
+          <RetestIssuePanel
+            students={retestIssueStudents}
+            selectedYM={selectedYM}
+            onCompleteIssue={completeRetestIssue}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
+          <TodayFocusPanel
+            title="오늘 확인"
+            emptyText="오늘 확인할 대상이 없습니다"
+            rows={todayTaskRows}
+            onCompleteRetest={completeTodayRetest}
+            onCompleteHomework={completeTodayHomework}
+          />
+          <ClassPopulationPanel rows={classPopulationRows} />
         </div>
       </section>
 
       <section className="space-y-3">
         <h2 className="text-lg font-bold text-slate-800">운영 현황</h2>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <ClassPopulationPanel rows={classPopulationRows} />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <ManagementNeededPanel students={managementStudents} />
           <MonthlyFlowPanel registered={monthlyFlow.registered} withdrawn={monthlyFlow.withdrawn} />
         </div>
@@ -1366,7 +1369,7 @@ function ClassPopulationPanel({
   const total = rows.reduce((sum, row) => sum + row.activeCount, 0)
 
   return (
-    <section className="h-72 overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <section className="h-[390px] overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200">
         <Users size={15} className="text-blue-500" />
         <h2 className="font-semibold text-slate-800 text-sm flex-1">반별 인원 현황</h2>
@@ -1375,7 +1378,7 @@ function ClassPopulationPanel({
       {rows.length === 0 ? (
         <div className="px-5 py-20 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
       ) : (
-        <div className="max-h-[216px] divide-y divide-slate-50 overflow-y-auto">
+        <div className="max-h-[334px] divide-y divide-slate-50 overflow-y-auto">
           {rows.map(row => (
             <div key={row.classId} className="flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">

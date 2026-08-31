@@ -42,7 +42,7 @@ function MemoRow({ item }: { item: TodoItem }) {
             onChange={event => setDraft(event.target.value)}
             onBlur={save}
             onKeyDown={event => {
-              if (event.key === 'Enter') save()
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.keyCode !== 229) save()
               if (event.key === 'Escape') {
                 setDraft(item.title)
                 setEditing(false)
@@ -117,7 +117,11 @@ export default function TodoPage() {
             <input
               value={text}
               onChange={event => setText(event.target.value)}
-              onKeyDown={event => event.key === 'Enter' && addMemo()}
+              onKeyDown={event => {
+                if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return
+                event.preventDefault()
+                addMemo()
+              }}
               placeholder="메모를 입력하고 Enter"
               className="min-w-0 flex-1 border-0 bg-transparent px-1 py-1 text-sm text-slate-800 outline-none placeholder:text-slate-400"
             />
