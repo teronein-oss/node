@@ -366,6 +366,23 @@ export default function GradePage() {
   )
 
   const createMessage = (row: GradeRow) => {
+    const studentRetests = state.retests.filter(
+      retest => retest.studentId === row.studentId && retest.sessionNum === selectedSession
+    )
+    const getRetestStatus = (
+      type: string,
+      score: string,
+      threshold: number
+    ): AchievementScoreItem['retestStatus'] => {
+      const retests = studentRetests.filter(retest => retest.type === type)
+      if (retests.some(retest => retest.passed === true)) return '완료'
+      const scoreNumber = score !== '' ? Number(score) : null
+      if (needsRetest(scoreNumber, threshold) || (score === '' && retests.some(retest => retest.passed !== true))) {
+        return '대상'
+      }
+      return undefined
+    }
+
     const scores: AchievementScoreItem[] = []
     if (showVocabTest) {
       scores.push({
@@ -373,6 +390,8 @@ export default function GradePage() {
         score: row.vocabScore,
         total: vocabTotal,
         mode: vocabMode,
+        threshold: vocabThreshold,
+        retestStatus: getRetestStatus('vocab', row.vocabScore, vocabThreshold),
       })
     }
     scores.push({
@@ -380,13 +399,19 @@ export default function GradePage() {
       score: row.dailyScore,
       total: dailyTotal,
       mode: dailyMode,
+      threshold: dailyThreshold,
+      retestStatus: getRetestStatus('daily', row.dailyScore, dailyThreshold),
     })
     for (const col of sessionCols) {
+      const score = row.extras[col.id] ?? ''
+      const threshold = col.threshold ?? 0
       scores.push({
         label: col.name,
-        score: row.extras[col.id] ?? '',
+        score,
         total: col.total ?? 100,
         mode: col.mode ?? '점수',
+        threshold,
+        retestStatus: threshold > 0 ? getRetestStatus(col.id, score, threshold) : undefined,
       })
     }
 

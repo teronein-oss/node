@@ -5,6 +5,8 @@ export interface AchievementScoreItem {
   score: string
   total: number
   mode: '점수' | '개수'
+  threshold?: number
+  retestStatus?: '대상' | '완료'
 }
 
 export interface AchievementHomeworkItem {
@@ -37,10 +39,14 @@ export function buildVocabMessageLabel(name: string, range: string) {
   return `${trimmedRange} ${name}`
 }
 
-function formatScore({ score, total, mode }: AchievementScoreItem, absent: boolean) {
+function formatScore({ score, total, mode, threshold, retestStatus }: AchievementScoreItem, absent: boolean) {
   if (absent) return '결석'
-  if (score === '') return '미입력'
-  return `${score}/${total}${mode === '개수' ? '개' : '점'}`
+  const unit = mode === '개수' ? '개' : '점'
+  const result = score === '' ? '미입력' : `${score}/${total}${unit}`
+  const details: string[] = []
+  if (threshold && threshold > 0) details.push(`커트라인 ${threshold}${unit}`)
+  if (retestStatus) details.push(`재시험 ${retestStatus}`)
+  return details.length > 0 ? `${result} (${details.join(' / ')})` : result
 }
 
 function formatHomework(
