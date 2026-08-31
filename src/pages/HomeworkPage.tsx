@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ChevronDown, ChevronUp, Calendar, Trash2, RotateCcw, Plus, Pencil, Check, X, AlertTriangle, Cloud, CloudOff, LoaderCircle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { getWeekStart, getClassDate, formatDateKo, fmtDate } from '../utils/helpers'
@@ -41,6 +41,20 @@ export default function HomeworkPage() {
       today,
     })
   }, [selectedCls, selectedMonthInfo])
+
+  const didSelectOpeningDateRef = useRef(false)
+
+  useEffect(() => {
+    if (didSelectOpeningDateRef.current) return
+    if (selectedYM !== currentYM) {
+      setSelectedYM(currentYM)
+      return
+    }
+    if (classDates.length === 0) return
+    const openingDate = classDates.find(item => item.date === todayStr) ?? classDates[classDates.length - 1]
+    setSelectedSession(openingDate.sessionNum)
+    didSelectOpeningDateRef.current = true
+  }, [classDates, currentYM, selectedYM, setSelectedSession, setSelectedYM, todayStr])
 
   const classStudents = useMemo(
     () => state.students

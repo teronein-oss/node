@@ -55,6 +55,20 @@ export default function GradePage() {
     })
   }, [selectedCls, selectedMonthInfo])
 
+  const didSelectOpeningDateRef = useRef(false)
+
+  useEffect(() => {
+    if (didSelectOpeningDateRef.current) return
+    if (selectedYM !== currentYM) {
+      setSelectedYM(currentYM)
+      return
+    }
+    if (classDates.length === 0) return
+    const openingDate = classDates.find(item => item.date === todayStr) ?? classDates[classDates.length - 1]
+    setSelectedSession(openingDate.sessionNum)
+    didSelectOpeningDateRef.current = true
+  }, [classDates, currentYM, selectedYM, setSelectedSession, setSelectedYM, todayStr])
+
   const [rows, setRows] = useState<GradeRow[]>([])
   const [saved, setSaved] = useState(false)
   const isDirtyRef = useRef(false)
