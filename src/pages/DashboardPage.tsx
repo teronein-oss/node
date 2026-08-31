@@ -419,6 +419,8 @@ interface HomeworkIssueStudent {
   insufficientCount: number
   missingCount: number
   issues: {
+    assignmentId: string
+    itemId: string
     checkDate: string
     homeworkText: string
     status: '미흡' | '미제출'
@@ -620,7 +622,15 @@ function DashboardMemoPanel() {
   )
 }
 
-function HomeworkIssuePanel({ students, selectedYM }: { students: HomeworkIssueStudent[]; selectedYM: string }) {
+function HomeworkIssuePanel({
+  students,
+  selectedYM,
+  onCompleteIssue,
+}: {
+  students: HomeworkIssueStudent[]
+  selectedYM: string
+  onCompleteIssue: (student: HomeworkIssueStudent, issue: HomeworkIssueStudent['issues'][number]) => void
+}) {
   const [isOpen, setIsOpen] = useState(false)
   const monthStart = `${selectedYM}-01`
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
@@ -653,22 +663,25 @@ function HomeworkIssuePanel({ students, selectedYM }: { students: HomeworkIssueS
           <span className="truncate text-xs text-slate-400">{student.className}</span>
         </div>
         <div className="mt-1 flex min-w-0 flex-1 flex-wrap gap-1.5 sm:mt-0">
-          {student.issues.map((issue, index) => (
-            <span
-              key={`${issue.checkDate}-${issue.homeworkText}-${issue.status}-${index}`}
+          {student.issues.map(issue => (
+            <div
+              key={`${issue.assignmentId}-${issue.itemId}`}
               title={`${formatDateKo(issue.checkDate)} · ${issue.homeworkText} · ${issue.status}`}
               className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-600"
             >
               <span className="shrink-0 font-semibold text-slate-400">{issue.checkDate.slice(5).replace('-', '/')}</span>
               <span className="max-w-[260px] truncate">{issue.homeworkText}</span>
               <span className={`shrink-0 font-semibold ${issue.status === '미제출' ? 'text-red-500' : 'text-orange-500'}`}>{issue.status}</span>
-            </span>
+              <button
+                type="button"
+                onClick={() => onCompleteIssue(student, issue)}
+                className="ml-0.5 shrink-0 rounded border border-blue-200 bg-white px-1.5 py-0.5 font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+              >
+                재확인 완료
+              </button>
+            </div>
           ))}
         </div>
-      </div>
-      <div className="mt-0.5 flex shrink-0 gap-1.5">
-        {student.insufficientCount > 0 && <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-600">미흡 {student.insufficientCount}</span>}
-        {student.missingCount > 0 && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">미제출 {student.missingCount}</span>}
       </div>
     </div>
   )
@@ -956,6 +969,8 @@ export default function DashboardPage() {
           if (status.status === '미제출') issue.missingCount += 1
           if (status.status === '미흡') issue.insufficientCount += 1
           issue.issues.push({
+            assignmentId: homework.id,
+            itemId: item.id,
             checkDate,
             homeworkText: item.text.trim() || homework.description.trim() || '숙제 내용 없음',
             status: status.status,
@@ -1089,6 +1104,22 @@ export default function DashboardPage() {
     } else {
       dispatch({ type: 'UPDATE_HOMEWORK_STATUS', payload: { studentId: item.studentId, sessionNum: item.sessionNum, status: '재확인완료' } })
     }
+  }
+
+  const completeHomeworkIssue = (
+    student: HomeworkIssueStudent,
+    issue: HomeworkIssueStudent['issues'][number]
+  ) => {
+    if (!confirm(`${student.name}의 '${issue.homeworkText}' 항목을 재확인 완료 처리하겠습니까?`)) return
+    dispatch({
+      type: 'SET_ITEM_STUDENT_STATUS',
+      payload: {
+        assignmentId: issue.assignmentId,
+        itemId: issue.itemId,
+        studentId: student.studentId,
+        status: '재확인완료',
+      },
+    })
   }
 
   const goWeek = (offset: number) => {
@@ -1248,7 +1279,11 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 gap-4 items-start xl:grid-cols-[1fr_480px]">
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <DashboardMemoPanel />
-            <HomeworkIssuePanel students={homeworkIssueStudents} selectedYM={selectedYM} />
+            <HomeworkIssuePanel
+              students={homeworkIssueStudents}
+              selectedYM={selectedYM}
+              onCompleteIssue={completeHomeworkIssue}
+            />
             <div className="lg:col-span-2">
               <TodayFocusPanel
                 title="오늘 확인"
