@@ -1041,8 +1041,6 @@ export default function DashboardPage() {
 
     return {
       active: state.students.filter(s => s.active).length,
-      registered: registeredStudents.length,
-      withdrawn: withdrawnStudents.length,
       classRows: classRows.sort((a, b) => b.active - a.active || a.className.localeCompare(b.className, 'ko')),
     }
   }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students, todayStr])
@@ -1331,8 +1329,6 @@ export default function DashboardPage() {
             year={selectedYear}
             month={selectedMonth}
             active={monthlyFlow.active}
-            registered={monthlyFlow.registered}
-            withdrawn={monthlyFlow.withdrawn}
             classRows={monthlyFlow.classRows}
           />
         </div>
@@ -1426,15 +1422,11 @@ function MonthlyFlowPanel({
   year,
   month,
   active,
-  registered,
-  withdrawn,
   classRows,
 }: {
   year: number
   month: number
   active: number
-  registered: number
-  withdrawn: number
   classRows: { classId: string; className: string; active: number; registered: number; withdrawn: number }[]
 }) {
   return (
@@ -1444,24 +1436,14 @@ function MonthlyFlowPanel({
         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">현재 재원 {active}명</span>
       </div>
       <div className="px-5 py-4">
-        <div className="grid grid-cols-2 divide-x divide-slate-100">
-          <div>
-            <div className="text-xs font-semibold text-slate-400">신규 등록</div>
-            <div className="mt-1 text-2xl font-bold text-emerald-600">{registered}<span className="ml-1 text-sm">명</span></div>
-          </div>
-          <div className="pl-5">
-            <div className="text-xs font-semibold text-slate-400">퇴원</div>
-            <div className="mt-1 text-2xl font-bold text-orange-500">{withdrawn}<span className="ml-1 text-sm">명</span></div>
-          </div>
-        </div>
-        <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+        <div className="overflow-hidden rounded-lg border border-slate-100">
           <div className="grid grid-cols-[minmax(0,1fr)_56px_48px_48px] bg-slate-50 px-3 py-1.5 text-[10px] font-semibold text-slate-400">
             <span>반</span>
             <span className="text-right">재원</span>
             <span className="text-right">등록</span>
             <span className="text-right">퇴원</span>
           </div>
-          <div className="max-h-[91px] overflow-y-auto">
+          <div className="max-h-[166px] overflow-y-auto">
             {classRows.length === 0 ? (
               <div className="px-3 py-5 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
             ) : classRows.map(row => (
