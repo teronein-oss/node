@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { createBrowserRouter, Navigate, useRouteError } from 'react-router-dom'
 import AppLayout from '../components/AppLayout'
 import { useAuth } from '../context/AuthContext'
@@ -43,7 +43,13 @@ const AdminManagePage = lazy(() => import('../pages/AdminManagePage'))
 const PrincipalDashboardPage = lazy(() => import('../pages/PrincipalDashboardPage'))
 const RetestDiagnosticsPage = lazy(() => import('../pages/RetestDiagnosticsPage'))
 const MessagesPage = lazy(() => import('../pages/MessagesPage'))
-const ReportAdminPage = lazy(() => import('../pages/ReportAdminPage'))
+
+function ReportPortalRedirect() {
+  useEffect(() => {
+    window.location.replace('/report')
+  }, [])
+  return <PageLoader />
+}
 
 function PageLoader() {
   return (
@@ -98,7 +104,7 @@ export const router = createBrowserRouter([
       { path: 'admin/manage', element: <AdminGuard><Lazy><AdminManagePage /></Lazy></AdminGuard> },
       { path: 'admin/retest-diagnostics', element: <AdminGuard><Lazy><RetestDiagnosticsPage /></Lazy></AdminGuard> },
       { path: 'admin/messages', element: <AdminGuard><Lazy><MessagesPage /></Lazy></AdminGuard> },
-      { path: 'admin/reports', element: <AdminGuard><Lazy><ReportAdminPage /></Lazy></AdminGuard> },
+      { path: 'admin/reports', element: <ReportPortalRedirect /> },
     ],
   },
 ])

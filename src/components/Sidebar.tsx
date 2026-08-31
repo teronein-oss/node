@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2 } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
 
@@ -27,6 +27,7 @@ type SidebarItem = {
   icon: React.ElementType
   label: string
   end?: boolean
+  external?: boolean
   tone?: 'default' | 'emerald' | 'amber'
 }
 
@@ -41,23 +42,41 @@ function SidebarSection({ title, children }: { title: string; children: React.Re
 
 function SidebarLink({ item, onClose }: { item: SidebarItem; onClose: () => void }) {
   const Icon = item.icon
+  const inactive = item.tone === 'amber'
+    ? 'text-[#9a6a22] hover:bg-[#f2ead8] hover:text-[#795119]'
+    : item.tone === 'emerald'
+      ? 'text-[#3f7b63] hover:bg-[#eaf3ee] hover:text-[#2f654f]'
+      : 'text-[#5f5e5b] hover:bg-[#efefed] hover:text-[#37352f]'
+  const baseClassName = 'group flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors'
+
+  if (item.external) {
+    return (
+      <a
+        href={item.to}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClose}
+        className={`${baseClassName} ${inactive}`}
+      >
+        <Icon size={16} strokeWidth={1.9} className="shrink-0 opacity-90" />
+        <span className="truncate">{item.label}</span>
+        <ExternalLink size={13} className="ml-auto shrink-0 opacity-60" />
+      </a>
+    )
+  }
+
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onClose}
       className={({ isActive }) => {
-        const inactive = item.tone === 'amber'
-          ? 'text-[#9a6a22] hover:bg-[#f2ead8] hover:text-[#795119]'
-          : item.tone === 'emerald'
-            ? 'text-[#3f7b63] hover:bg-[#eaf3ee] hover:text-[#2f654f]'
-            : 'text-[#5f5e5b] hover:bg-[#efefed] hover:text-[#37352f]'
         const active = item.tone === 'amber'
           ? 'bg-[#f3ead5] text-[#8a5d1c]'
           : item.tone === 'emerald'
             ? 'bg-[#e6f0ea] text-[#356d56]'
             : 'bg-[#e9e9e7] text-[#2f2f2f]'
-        return `group flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors ${isActive ? active : inactive}`
+        return `${baseClassName} ${isActive ? active : inactive}`
       }}
     >
       <Icon size={16} strokeWidth={1.9} className="shrink-0 opacity-90" />
@@ -151,7 +170,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             <SidebarSection title="관리자">
               <SidebarLink item={{ to: '/admin', icon: Shield, label: '관리자 모드', tone: 'amber' }} onClose={onClose} />
               <SidebarLink item={{ to: '/admin/messages', icon: MessageSquareText, label: '문자 발송', tone: 'amber' }} onClose={onClose} />
-              <SidebarLink item={{ to: '/admin/reports', icon: FileKey2, label: '성적표 게시', tone: 'amber' }} onClose={onClose} />
+              <SidebarLink item={{ to: '/report', icon: FileKey2, label: '성적확인 시스템', tone: 'amber', external: true }} onClose={onClose} />
             </SidebarSection>
           )}
         </nav>

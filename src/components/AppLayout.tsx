@@ -23,7 +23,7 @@ export default function AppLayout() {
     '/admin': '관리자 모드',
     '/admin/manage': '사용자 관리',
     '/admin/messages': '문자 발송',
-    '/admin/reports': '성적표 게시',
+    '/admin/reports': '성적확인 시스템',
   } as Record<string, string>)[pathname] ?? 'SEUM'
 
   const exitViewingMode = () => {

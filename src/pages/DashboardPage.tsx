@@ -1014,32 +1014,38 @@ export default function DashboardPage() {
 
   const monthlyFlow = useMemo(() => {
     const monthStart = `${selectedYM}-01`
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate()
     const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
     const registeredStudents = state.students.filter(s => inRange(s.registeredAt, monthStart, monthEnd))
     const withdrawnStudents = state.students.filter(s => {
       const withdrawnAt = getWithdrawnDate(s, todayStr)
       return inRange(withdrawnAt, monthStart, monthEnd)
     })
-    const weeks = Array.from({ length: Math.ceil(daysInMonth / 7) }, (_, index) => {
-      const startDay = index * 7 + 1
-      const endDay = Math.min(startDay + 6, daysInMonth)
-      const start = `${selectedYM}-${String(startDay).padStart(2, '0')}`
-      const end = `${selectedYM}-${String(endDay).padStart(2, '0')}`
-      return {
-        label: `${startDay}~${endDay}일`,
-        registered: registeredStudents.filter(s => inRange(s.registeredAt, start, end)).length,
-        withdrawn: withdrawnStudents.filter(s => inRange(getWithdrawnDate(s, todayStr), start, end)).length,
-      }
-    })
+    const knownClassIds = new Set(state.classes.map(cls => cls.id))
+    const classRows = state.classes.map(cls => ({
+      classId: cls.id,
+      className: cls.name,
+      active: state.students.filter(s => s.active && s.classId === cls.id).length,
+      registered: registeredStudents.filter(s => s.classId === cls.id).length,
+      withdrawn: withdrawnStudents.filter(s => s.classId === cls.id).length,
+    }))
+    const unassignedRow = {
+      classId: 'unassigned',
+      className: '미지정/삭제된 반',
+      active: state.students.filter(s => s.active && !knownClassIds.has(s.classId)).length,
+      registered: registeredStudents.filter(s => !knownClassIds.has(s.classId)).length,
+      withdrawn: withdrawnStudents.filter(s => !knownClassIds.has(s.classId)).length,
+    }
+    if (unassignedRow.active + unassignedRow.registered + unassignedRow.withdrawn > 0) {
+      classRows.push(unassignedRow)
+    }
 
     return {
       active: state.students.filter(s => s.active).length,
       registered: registeredStudents.length,
       withdrawn: withdrawnStudents.length,
-      weeks,
+      classRows: classRows.sort((a, b) => b.active - a.active || a.className.localeCompare(b.className, 'ko')),
     }
-  }, [selectedMonth, selectedYM, selectedYear, state.students, todayStr])
+  }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students, todayStr])
 
   const managementStudents = useMemo<ManagementStudent[]>(() => {
     const activeStudents = state.students.filter(s => s.active)
@@ -1327,7 +1333,7 @@ export default function DashboardPage() {
             active={monthlyFlow.active}
             registered={monthlyFlow.registered}
             withdrawn={monthlyFlow.withdrawn}
-            weeks={monthlyFlow.weeks}
+            classRows={monthlyFlow.classRows}
           />
         </div>
       </section>
@@ -1422,57 +1428,51 @@ function MonthlyFlowPanel({
   active,
   registered,
   withdrawn,
-  weeks,
+  classRows,
 }: {
   year: number
   month: number
   active: number
   registered: number
   withdrawn: number
-  weeks: { label: string; registered: number; withdrawn: number }[]
+  classRows: { classId: string; className: string; active: number; registered: number; withdrawn: number }[]
 }) {
-  const maxValue = Math.max(1, ...weeks.flatMap(week => [week.registered, week.withdrawn]))
-  const barHeight = (value: number) => value === 0 ? 0 : Math.max(8, Math.round((value / maxValue) * 48))
-
   return (
     <section className="h-72 overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
-        <h2 className="font-semibold text-slate-800 text-sm">{year}년 {month}월 등록/퇴원 현황</h2>
+        <h2 className="font-semibold text-slate-800 text-sm">{year}년 {month}월 반별 등록/퇴원 현황</h2>
         <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">현재 재원 {active}명</span>
       </div>
-      <div className="px-5 py-5">
+      <div className="px-5 py-4">
         <div className="grid grid-cols-2 divide-x divide-slate-100">
           <div>
             <div className="text-xs font-semibold text-slate-400">신규 등록</div>
-            <div className="mt-2 text-3xl font-bold text-emerald-600">{registered}<span className="ml-1 text-base">명</span></div>
+            <div className="mt-1 text-2xl font-bold text-emerald-600">{registered}<span className="ml-1 text-sm">명</span></div>
           </div>
           <div className="pl-5">
             <div className="text-xs font-semibold text-slate-400">퇴원</div>
-            <div className="mt-2 text-3xl font-bold text-orange-500">{withdrawn}<span className="ml-1 text-base">명</span></div>
+            <div className="mt-1 text-2xl font-bold text-orange-500">{withdrawn}<span className="ml-1 text-sm">명</span></div>
           </div>
         </div>
-        <div className="mt-5 flex h-[86px] items-end gap-2 border-b border-slate-100 pb-1">
-          {weeks.map(week => (
-            <div key={week.label} className="flex h-full flex-1 flex-col justify-end">
-              <div className="flex flex-1 items-end justify-center gap-1">
-                <div
-                  className="w-3 rounded-t bg-emerald-500"
-                  style={{ height: `${barHeight(week.registered)}px` }}
-                  title={`${week.label} 등록 ${week.registered}명`}
-                />
-                <div
-                  className="w-3 rounded-t bg-orange-400"
-                  style={{ height: `${barHeight(week.withdrawn)}px` }}
-                  title={`${week.label} 퇴원 ${week.withdrawn}명`}
-                />
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+          <div className="grid grid-cols-[minmax(0,1fr)_56px_48px_48px] bg-slate-50 px-3 py-1.5 text-[10px] font-semibold text-slate-400">
+            <span>반</span>
+            <span className="text-right">재원</span>
+            <span className="text-right">등록</span>
+            <span className="text-right">퇴원</span>
+          </div>
+          <div className="max-h-[91px] overflow-y-auto">
+            {classRows.length === 0 ? (
+              <div className="px-3 py-5 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
+            ) : classRows.map(row => (
+              <div key={row.classId} className="grid grid-cols-[minmax(0,1fr)_56px_48px_48px] border-t border-slate-50 px-3 py-1.5 text-xs">
+                <span className="truncate font-medium text-slate-700">{row.className}</span>
+                <span className="text-right font-semibold text-blue-600">{row.active}명</span>
+                <span className="text-right font-semibold text-emerald-600">{row.registered}명</span>
+                <span className="text-right font-semibold text-orange-500">{row.withdrawn}명</span>
               </div>
-              <div className="mt-1 text-center text-[10px] text-slate-400">{week.label}</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />등록</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-400" />퇴원</span>
+            ))}
+          </div>
         </div>
       </div>
     </section>
