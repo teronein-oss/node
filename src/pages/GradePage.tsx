@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { Save, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, RotateCcw } from 'lucide-react'
+import { Save, Check, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Plus, Calendar, Copy, MessageSquareText, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { needsRetest, getWeekStart, getClassDate, formatDateKo, fmtDate, normalizeClassWeekdays } from '../utils/helpers'
 import { buildMonthOptions, getClassDatesForMonth, getCurrentYM, getDefaultClassIdForToday } from '../utils/academic'
 import { isDefaultAcademy } from '../utils/academy'
+import { buildAchievementMessage, buildVocabMessageLabel, type AchievementScoreItem } from '../utils/achievementMessage'
 import { Pencil, Trash2, X } from 'lucide-react'
 
 interface GradeRow {
@@ -77,6 +78,9 @@ export default function GradePage() {
   const [retestTimeSelections, setRetestTimeSelections] = useState<Record<string, string>>({})
   const [bulkRetestDate, setBulkRetestDate] = useState('')
   const [bulkRetestTime, setBulkRetestTime] = useState('')
+  const [messageStudentId, setMessageStudentId] = useState<string | null>(null)
+  const [messageDraft, setMessageDraft] = useState('')
+  const [messageCopied, setMessageCopied] = useState(false)
 
   const sessionConfig = state.sessionTestConfigs.find(
     c => c.sessionNum === selectedSession && c.classId === selectedClass
@@ -354,6 +358,67 @@ export default function GradePage() {
     () => ['15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00'],
     []
   )
+
+  const selectedClassDate = useMemo(
+    () => classDates.find(item => item.sessionNum === selectedSession)?.date
+      ?? getClassDate(selectedSession, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays),
+    [classDates, selectedSession, selectedCls]
+  )
+
+  const createMessage = (row: GradeRow) => {
+    const scores: AchievementScoreItem[] = []
+    if (showVocabTest) {
+      scores.push({
+        label: buildVocabMessageLabel(vocabName, vocabRange),
+        score: row.vocabScore,
+        total: vocabTotal,
+        mode: vocabMode,
+      })
+    }
+    scores.push({
+      label: dailyName === 'Daily Test' ? 'DT' : dailyName,
+      score: row.dailyScore,
+      total: dailyTotal,
+      mode: dailyMode,
+    })
+    for (const col of sessionCols) {
+      scores.push({
+        label: col.name,
+        score: row.extras[col.id] ?? '',
+        total: col.total ?? 100,
+        mode: col.mode ?? '점수',
+      })
+    }
+
+    // 성적을 입력하는 수업일에는 바로 전 회차에 출제한 숙제를 검사한다.
+    const checkedHomework = state.homeworks.find(
+      homework => homework.classId === selectedClass && homework.sessionNum === selectedSession - 1
+    )
+    const homeworkItems = (checkedHomework?.items ?? []).map(item => ({
+      text: item.text,
+      status: item.studentStatuses?.find(status => status.studentId === row.studentId)?.status ?? '제출' as const,
+    }))
+    const homeworkStatus = state.grades.find(
+      grade => grade.studentId === row.studentId && grade.sessionNum === selectedSession
+    )?.homeworkDone
+
+    setMessageStudentId(row.studentId)
+    setMessageDraft(buildAchievementMessage({
+      date: selectedClassDate,
+      studentName: row.name,
+      absent: row.attendance === '결석',
+      scores,
+      homeworkItems,
+      homeworkStatus,
+    }))
+    setMessageCopied(false)
+  }
+
+  const copyMessage = async () => {
+    await navigator.clipboard.writeText(messageDraft)
+    setMessageCopied(true)
+    setTimeout(() => setMessageCopied(false), 2000)
+  }
 
   const renderRetestScheduleControls = (
     studentId: string,
@@ -776,6 +841,8 @@ export default function GradePage() {
                 {/* 상태 */}
                 <th className="text-center px-4 py-3 w-28">상태</th>
 
+                <th className="text-center px-4 py-3 w-28">문자</th>
+
                 {/* 항목 추가 (마지막 컬럼) */}
                 <th className="text-center px-4 py-3 w-32">
                   {showAddCol ? (
@@ -820,7 +887,7 @@ export default function GradePage() {
             <tbody className="divide-y divide-slate-50">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={(showVocabTest ? 5 : 4) + sessionCols.length} className="text-center py-10 text-slate-400">
+                  <td colSpan={(showVocabTest ? 6 : 5) + sessionCols.length} className="text-center py-10 text-slate-400">
                     이 반에 등록된 학생이 없습니다
                   </td>
                 </tr>
@@ -990,6 +1057,17 @@ export default function GradePage() {
                       )}
                     </td>
 
+                    <td className="px-4 py-2.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => createMessage(row)}
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-600 transition-colors hover:bg-blue-100"
+                      >
+                        <MessageSquareText size={14} />
+                        문자 만들기
+                      </button>
+                    </td>
+
                     {/* 항목 추가 컬럼 빈 셀 */}
                     <td className="px-4 py-2.5"></td>
                   </tr>
@@ -1013,6 +1091,63 @@ export default function GradePage() {
           {' '}입력 시 자동으로 재시험 대상에 추가됩니다
         </div>
       </div>
+
+      {messageStudentId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="achievement-message-title"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setMessageStudentId(null)
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 id="achievement-message-title" className="font-bold text-slate-800">성취도 안내 문자</h2>
+                <p className="mt-1 text-xs text-slate-500">내용을 확인하거나 수정한 뒤 복사해 문자에 붙여 넣으세요.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMessageStudentId(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="닫기"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <textarea
+                value={messageDraft}
+                onChange={event => {
+                  setMessageDraft(event.target.value)
+                  setMessageCopied(false)
+                }}
+                rows={18}
+                className="w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setMessageStudentId(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                onClick={copyMessage}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                {messageCopied ? <Check size={16} /> : <Copy size={16} />}
+                {messageCopied ? '복사됨' : '문자 내용 복사'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
