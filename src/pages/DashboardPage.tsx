@@ -237,6 +237,7 @@ interface TodayStudentTask {
 interface HomeworkIssueStudent {
   studentId: string
   name: string
+  classId: string
   className: string
   insufficientCount: number
   missingCount: number
@@ -465,14 +466,17 @@ function DashboardMemoPanel() {
 
 function HomeworkIssuePanel({
   students,
+  classes,
   selectedYM,
   onCompleteIssue,
 }: {
   students: HomeworkIssueStudent[]
+  classes: Class[]
   selectedYM: string
   onCompleteIssue: (student: HomeworkIssueStudent, issue: HomeworkIssueStudent['issues'][number]) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [classFilter, setClassFilter] = useState('all')
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
   const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
 
@@ -480,7 +484,14 @@ function HomeworkIssuePanel({
     setIsOpen(false)
   }, [selectedYM])
 
+  useEffect(() => {
+    if (classFilter !== 'all' && !classes.some(cls => cls.id === classFilter)) {
+      setClassFilter('all')
+    }
+  }, [classFilter, classes])
+
   const visibleStudents = useMemo(() => students
+    .filter(student => classFilter === 'all' || student.classId === classFilter)
     .map(student => {
       const issues = student.issues.filter(issue => issue.checkDate >= MIDTERM_PREP_START_DATE && issue.checkDate <= monthEnd)
       if (issues.length === 0) return null
@@ -491,7 +502,7 @@ function HomeworkIssuePanel({
         missingCount: issues.filter(issue => issue.status === '미제출').length,
       }
     })
-    .filter((student): student is HomeworkIssueStudent => student !== null), [monthEnd, students])
+    .filter((student): student is HomeworkIssueStudent => student !== null), [classFilter, monthEnd, students])
 
   const renderStudent = (student: HomeworkIssueStudent) => (
     <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
@@ -528,7 +539,17 @@ function HomeworkIssuePanel({
     <section className="flex h-[390px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-5 py-3.5">
         <BookX size={15} className="text-orange-500" />
-        <h2 className="flex-1 text-sm font-semibold text-slate-800">숙제 미흡·미제출자</h2>
+        <h2 className="text-sm font-semibold text-slate-800">숙제 미흡·미제출자</h2>
+        <select
+          aria-label="숙제 미흡자 반 선택"
+          value={classFilter}
+          onChange={event => setClassFilter(event.target.value)}
+          className="min-w-0 max-w-[116px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 outline-none focus:border-blue-400"
+        >
+          <option value="all">전체</option>
+          {classes.map(cls => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+        </select>
+        <span className="flex-1" />
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${visibleStudents.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{visibleStudents.length}명</span>
         <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">전체 보기</button>
       </div>
@@ -884,6 +905,7 @@ export default function DashboardPage() {
           const issue = issues.get(student.id) ?? {
             studentId: student.id,
             name: student.name,
+            classId: student.classId,
             className: studentClass?.name ?? '',
             insufficientCount: 0,
             missingCount: 0,
@@ -1197,6 +1219,7 @@ export default function DashboardPage() {
           <DashboardMemoPanel />
           <HomeworkIssuePanel
             students={homeworkIssueStudents}
+            classes={state.classes}
             selectedYM={selectedYM}
             onCompleteIssue={completeHomeworkIssue}
           />
