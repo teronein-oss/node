@@ -253,6 +253,7 @@ interface HomeworkIssueStudent {
 interface RetestIssueStudent {
   studentId: string
   name: string
+  classId: string
   className: string
   issues: {
     retestId: string
@@ -582,14 +583,17 @@ function HomeworkIssuePanel({
 
 function RetestIssuePanel({
   students,
+  classes,
   selectedYM,
   onCompleteIssue,
 }: {
   students: RetestIssueStudent[]
+  classes: Class[]
   selectedYM: string
   onCompleteIssue: (student: RetestIssueStudent, issue: RetestIssueStudent['issues'][number]) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [classFilter, setClassFilter] = useState('all')
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
   const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
 
@@ -597,12 +601,19 @@ function RetestIssuePanel({
     setIsOpen(false)
   }, [selectedYM])
 
+  useEffect(() => {
+    if (classFilter !== 'all' && !classes.some(cls => cls.id === classFilter)) {
+      setClassFilter('all')
+    }
+  }, [classFilter, classes])
+
   const visibleStudents = useMemo(() => students
+    .filter(student => classFilter === 'all' || student.classId === classFilter)
     .map(student => {
       const issues = student.issues.filter(issue => issue.date >= MIDTERM_PREP_START_DATE && issue.date <= monthEnd)
       return issues.length > 0 ? { ...student, issues } : null
     })
-    .filter((student): student is RetestIssueStudent => student !== null), [monthEnd, students])
+    .filter((student): student is RetestIssueStudent => student !== null), [classFilter, monthEnd, students])
 
   const renderStudent = (student: RetestIssueStudent) => (
     <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
@@ -640,7 +651,17 @@ function RetestIssuePanel({
     <section className="flex h-[390px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 px-5 py-3.5">
         <RotateCcw size={15} className="text-purple-500" />
-        <h2 className="flex-1 text-sm font-semibold text-slate-800">단어·Daily 재시험 대상자</h2>
+        <h2 className="text-sm font-semibold text-slate-800">단어·Daily 재시험 대상자</h2>
+        <select
+          aria-label="재시험 대상자 반 선택"
+          value={classFilter}
+          onChange={event => setClassFilter(event.target.value)}
+          className="min-w-0 max-w-[116px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 outline-none focus:border-blue-400"
+        >
+          <option value="all">전체</option>
+          {classes.map(cls => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+        </select>
+        <span className="flex-1" />
         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${visibleStudents.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{visibleStudents.length}명</span>
         <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">전체 보기</button>
       </div>
@@ -965,6 +986,7 @@ export default function DashboardPage() {
       const issue = issues.get(student.id) ?? {
         studentId: student.id,
         name: student.name,
+        classId: student.classId,
         className: cls.name,
         issues: [],
       }
@@ -1225,6 +1247,7 @@ export default function DashboardPage() {
           />
           <RetestIssuePanel
             students={retestIssueStudents}
+            classes={state.classes}
             selectedYM={selectedYM}
             onCompleteIssue={completeRetestIssue}
           />
