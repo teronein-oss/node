@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, BookX, Check, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Plus, RotateCcw, StickyNote, Trash2, Users, X } from 'lucide-react'
+import { BookX, Check, CheckCircle, ChevronUp, ChevronLeft, ChevronRight, Calendar, Megaphone, Plus, RotateCcw, StickyNote, Trash2, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import type { Class, HomeworkItem, ScheduleEvent } from '../types'
@@ -42,10 +42,6 @@ function inRange(date: DateValue, start: string, end: string) {
 function getWithdrawnDate(student: { active: boolean; withdrawnAt?: DateValue }, fallbackDate: string) {
   if (student.active) return undefined
   return toDateKey(student.withdrawnAt) ?? fallbackDate
-}
-
-function isInMonth(date: DateValue, ym: string) {
-  return toDateKey(date)?.startsWith(`${ym}-`) ?? false
 }
 
 function DashboardModal({
@@ -235,16 +231,6 @@ interface TodayStudentTask {
   vocab?: TodayRetestItem
   daily?: TodayRetestItem
   homework?: TodayHomeworkItem
-}
-
-interface ManagementStudent {
-  studentId: string
-  name: string
-  className: string
-  retestCount: number
-  homeworkMissingCount: number
-  total: number
-  reasons: string[]
 }
 
 interface HomeworkIssueStudent {
@@ -991,27 +977,6 @@ export default function DashboardPage() {
     )
   }, [state.classes, state.retests, state.sessionTestConfigs, state.students])
 
-  const classPopulationRows = useMemo(() => {
-    const monthStart = `${selectedYM}-01`
-    const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
-    return state.classes
-      .map(cls => {
-        const activeCount = state.students.filter(s => s.active && s.classId === cls.id).length
-        const withdrawnInMonth = state.students.filter(s => {
-          const withdrawnAt = getWithdrawnDate(s, todayStr)
-          return s.classId === cls.id && inRange(withdrawnAt, monthStart, monthEnd)
-        }).length
-        return {
-          classId: cls.id,
-          className: cls.name,
-          classDays: cls.days,
-          activeCount,
-          withdrawnInMonth,
-        }
-      })
-      .sort((a, b) => b.activeCount - a.activeCount || a.className.localeCompare(b.className, 'ko'))
-  }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students, todayStr])
-
   const monthlyFlow = useMemo(() => {
     const monthStart = `${selectedYM}-01`
     const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
@@ -1044,65 +1009,6 @@ export default function DashboardPage() {
       classRows: classRows.sort((a, b) => b.active - a.active || a.className.localeCompare(b.className, 'ko')),
     }
   }, [selectedMonth, selectedYM, selectedYear, state.classes, state.students, todayStr])
-
-  const managementStudents = useMemo<ManagementStudent[]>(() => {
-    const activeStudents = state.students.filter(s => s.active)
-    const map = new Map<string, ManagementStudent>()
-    const classById = new Map(state.classes.map(cls => [cls.id, cls]))
-
-    for (const student of activeStudents) {
-      const cls = state.classes.find(c => c.id === student.classId)
-      map.set(student.id, {
-        studentId: student.id,
-        name: student.name,
-        className: cls?.name ?? '',
-        retestCount: 0,
-        homeworkMissingCount: 0,
-        total: 0,
-        reasons: [],
-      })
-    }
-
-    for (const retest of state.retests) {
-      if (retest.passed !== null) continue
-      const basisDate = retest.retestDate ?? retest.createdAt
-      if (!isInMonth(basisDate, selectedYM)) continue
-      const target = map.get(retest.studentId)
-      if (!target) continue
-      target.retestCount += 1
-    }
-
-    for (const hw of state.homeworks) {
-      const cls = classById.get(hw.classId)
-      const checkDate = cls ? getClassDate(hw.sessionNum + 1, cls.days, cls.weekdays) : hw.weekStart
-      if (!isInMonth(checkDate, selectedYM)) continue
-      const missingStudents = new Set<string>()
-      for (const item of hw.items ?? []) {
-        for (const ss of item.studentStatuses ?? []) {
-          if (map.has(ss.studentId) && ss.status === '미제출') missingStudents.add(ss.studentId)
-        }
-      }
-      for (const studentId of missingStudents) {
-        const target = map.get(studentId)
-        if (!target) continue
-        target.homeworkMissingCount += 1
-      }
-    }
-
-    return [...map.values()]
-      .map(student => {
-        const reasons: string[] = []
-        if (student.retestCount >= 3) reasons.push(`재시험 ${student.retestCount}회`)
-        if (student.homeworkMissingCount >= 3) reasons.push(`숙제 미제출 ${student.homeworkMissingCount}회`)
-        return {
-          ...student,
-          total: student.retestCount + student.homeworkMissingCount,
-          reasons,
-        }
-      })
-      .filter(student => student.reasons.length > 0)
-      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
-  }, [state.classes, state.students, state.retests, state.homeworks, selectedYM])
 
   const completeTodayRetest = (item: TodayRetestItem, label = '재시험') => {
     if (!confirm(`${item.name} ${label}을 통과 처리하겠습니까?`)) return
@@ -1309,7 +1215,7 @@ export default function DashboardPage() {
             onCompleteIssue={completeRetestIssue}
           />
         </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <TodayFocusPanel
             title="오늘 확인"
             emptyText="오늘 확인할 대상이 없습니다"
@@ -1317,15 +1223,7 @@ export default function DashboardPage() {
             onCompleteRetest={completeTodayRetest}
             onCompleteHomework={completeTodayHomework}
           />
-          <ClassPopulationPanel rows={classPopulationRows} />
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-bold text-slate-800">운영 현황</h2>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <ManagementNeededPanel students={managementStudents} />
-          <MonthlyFlowPanel
+          <ClassPopulationPanel
             year={selectedYear}
             month={selectedMonth}
             active={monthlyFlow.active}
@@ -1383,42 +1281,6 @@ export default function DashboardPage() {
 }
 
 function ClassPopulationPanel({
-  rows,
-}: {
-  rows: { classId: string; className: string; classDays: string; activeCount: number; withdrawnInMonth: number }[]
-}) {
-  const total = rows.reduce((sum, row) => sum + row.activeCount, 0)
-
-  return (
-    <section className="h-[390px] overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200">
-        <Users size={15} className="text-blue-500" />
-        <h2 className="font-semibold text-slate-800 text-sm flex-1">반별 인원 현황</h2>
-        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">전체 {total}명</span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="px-5 py-20 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
-      ) : (
-        <div className="max-h-[334px] divide-y divide-slate-50 overflow-y-auto">
-          {rows.map(row => (
-            <div key={row.classId} className="flex items-center gap-3 px-5 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold text-slate-800">{row.className}</div>
-                <div className="mt-0.5 text-xs text-slate-400">{getClassDaysLabel(row.classDays)}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-bold text-slate-800">{row.activeCount}명</div>
-                <div className="text-[11px] text-slate-400">월 퇴원 {row.withdrawnInMonth}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function MonthlyFlowPanel({
   year,
   month,
   active,
@@ -1430,10 +1292,13 @@ function MonthlyFlowPanel({
   classRows: { classId: string; className: string; active: number; registered: number; withdrawn: number }[]
 }) {
   return (
-    <section className="h-72 overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <section className="h-[390px] overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
-        <h2 className="font-semibold text-slate-800 text-sm">{year}년 {month}월 반별 등록/퇴원 현황</h2>
-        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">현재 재원 {active}명</span>
+        <div>
+          <h2 className="font-semibold text-slate-800 text-sm">반별 인원 현황</h2>
+          <p className="mt-0.5 text-[11px] text-slate-400">{year}년 {month}월 등록·퇴원 기준</p>
+        </div>
+        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-600">전체 {active}명</span>
       </div>
       <div className="px-5 py-4">
         <div className="overflow-hidden rounded-lg border border-slate-100">
@@ -1443,7 +1308,7 @@ function MonthlyFlowPanel({
             <span className="text-right">등록</span>
             <span className="text-right">퇴원</span>
           </div>
-          <div className="max-h-[166px] overflow-y-auto">
+          <div className="max-h-[275px] overflow-y-auto">
             {classRows.length === 0 ? (
               <div className="px-3 py-5 text-center text-xs text-slate-400">등록된 반이 없습니다</div>
             ) : classRows.map(row => (
@@ -1615,58 +1480,6 @@ function WeeklyOverviewPanel({
             </tbody>
           </table>
         </div>
-      )}
-    </section>
-  )
-}
-
-function ManagementNeededPanel({ students }: { students: ManagementStudent[] }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const renderStudent = (student: ManagementStudent) => (
-    <div key={student.studentId} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
-      <span className={`h-2.5 w-2.5 rounded-full ${student.total >= 5 ? 'bg-red-500' : 'bg-orange-400'}`} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-slate-800">{student.name}</span>
-          <span className="text-xs text-slate-400">{student.className}</span>
-        </div>
-        <div className="mt-1 flex flex-wrap gap-1">
-          {student.reasons.map(reason => (
-            <span key={reason} className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">{reason}</span>
-          ))}
-        </div>
-      </div>
-      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">{student.total}회</span>
-    </div>
-  )
-
-  return (
-    <section className="h-72 overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-200">
-        <AlertTriangle size={15} className="text-orange-500" />
-        <h2 className="font-semibold text-slate-800 text-sm flex-1">관리 필요 학생</h2>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${students.length > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-          {students.length}명
-        </span>
-        <button type="button" onClick={() => setIsOpen(true)} className="text-xs font-semibold text-blue-600 hover:text-blue-700">
-          전체 보기
-        </button>
-      </div>
-      {students.length === 0 ? (
-        <div className="px-5 py-20 text-center text-xs text-slate-400">관리 기준에 해당하는 학생이 없습니다</div>
-      ) : (
-        <div className="max-h-[216px] divide-y divide-slate-50 overflow-y-auto">
-          {students.map(renderStudent)}
-        </div>
-      )}
-      {isOpen && (
-        <DashboardModal title="관리 필요 학생 전체" count={students.length} onClose={() => setIsOpen(false)}>
-          {students.length === 0 ? (
-            <div className="px-5 py-10 text-center text-xs text-slate-400">관리 기준에 해당하는 학생이 없습니다</div>
-          ) : (
-            <div className="divide-y divide-slate-50">{students.map(renderStudent)}</div>
-          )}
-        </DashboardModal>
       )}
     </section>
   )
