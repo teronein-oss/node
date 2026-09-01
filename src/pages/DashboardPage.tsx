@@ -74,6 +74,7 @@ function DashboardModal({
 }
 
 const WEEK_DAYS = ['월', '화', '수', '목', '금', '토'] as const
+const MIDTERM_PREP_START_DATE = '2026-08-24'
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00')
@@ -472,19 +473,16 @@ function HomeworkIssuePanel({
   onCompleteIssue: (student: HomeworkIssueStudent, issue: HomeworkIssueStudent['issues'][number]) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const monthStart = `${selectedYM}-01`
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
   const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
-  const [startDate, setStartDate] = useState(monthStart)
 
   useEffect(() => {
-    setStartDate(monthStart)
     setIsOpen(false)
-  }, [monthStart])
+  }, [selectedYM])
 
   const visibleStudents = useMemo(() => students
     .map(student => {
-      const issues = student.issues.filter(issue => issue.checkDate >= startDate && issue.checkDate <= monthEnd)
+      const issues = student.issues.filter(issue => issue.checkDate >= MIDTERM_PREP_START_DATE && issue.checkDate <= monthEnd)
       if (issues.length === 0) return null
       return {
         ...student,
@@ -493,7 +491,7 @@ function HomeworkIssuePanel({
         missingCount: issues.filter(issue => issue.status === '미제출').length,
       }
     })
-    .filter((student): student is HomeworkIssueStudent => student !== null), [monthEnd, startDate, students])
+    .filter((student): student is HomeworkIssueStudent => student !== null), [monthEnd, students])
 
   const renderStudent = (student: HomeworkIssueStudent) => (
     <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
@@ -540,14 +538,12 @@ function HomeworkIssuePanel({
           id="homework-issue-start-date"
           type="date"
           max={monthEnd}
-          value={startDate}
-          onChange={event => event.target.value && setStartDate(event.target.value)}
-          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          value={MIDTERM_PREP_START_DATE}
+          readOnly
+          aria-readonly="true"
+          className="cursor-default rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 outline-none"
         />
-        <span className="text-xs text-slate-400">부터</span>
-        {startDate !== monthStart && (
-          <button type="button" onClick={() => setStartDate(monthStart)} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700">이번 달 전체</button>
-        )}
+        <span className="text-xs text-slate-400">부터 · 중간 대비</span>
       </div>
       {visibleStudents.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">선택한 날짜 이후 숙제 미흡·미제출자가 없습니다</div>
@@ -555,7 +551,7 @@ function HomeworkIssuePanel({
         <div className="min-h-0 flex-1 overflow-y-auto">{visibleStudents.map(renderStudent)}</div>
       )}
       {isOpen && (
-        <DashboardModal title={`${formatDateKo(startDate)}부터 ${formatDateKo(monthEnd)}까지 숙제 미흡·미제출자`} count={visibleStudents.length} onClose={() => setIsOpen(false)}>
+        <DashboardModal title={`${formatDateKo(MIDTERM_PREP_START_DATE)}부터 ${formatDateKo(monthEnd)}까지 숙제 미흡·미제출자`} count={visibleStudents.length} onClose={() => setIsOpen(false)}>
           {visibleStudents.length === 0 ? <div className="px-5 py-10 text-center text-xs text-slate-400">해당 학생이 없습니다</div> : visibleStudents.map(renderStudent)}
         </DashboardModal>
       )}
@@ -573,22 +569,19 @@ function RetestIssuePanel({
   onCompleteIssue: (student: RetestIssueStudent, issue: RetestIssueStudent['issues'][number]) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const monthStart = `${selectedYM}-01`
   const [selectedYear, selectedMonth] = selectedYM.split('-').map(Number)
   const monthEnd = fmtDate(new Date(selectedYear, selectedMonth, 0))
-  const [startDate, setStartDate] = useState(monthStart)
 
   useEffect(() => {
-    setStartDate(monthStart)
     setIsOpen(false)
-  }, [monthStart])
+  }, [selectedYM])
 
   const visibleStudents = useMemo(() => students
     .map(student => {
-      const issues = student.issues.filter(issue => issue.date >= startDate && issue.date <= monthEnd)
+      const issues = student.issues.filter(issue => issue.date >= MIDTERM_PREP_START_DATE && issue.date <= monthEnd)
       return issues.length > 0 ? { ...student, issues } : null
     })
-    .filter((student): student is RetestIssueStudent => student !== null), [monthEnd, startDate, students])
+    .filter((student): student is RetestIssueStudent => student !== null), [monthEnd, students])
 
   const renderStudent = (student: RetestIssueStudent) => (
     <div key={student.studentId} className="flex items-start gap-3 border-b border-slate-50 px-4 py-2.5 last:border-b-0">
@@ -636,14 +629,12 @@ function RetestIssuePanel({
           id="retest-issue-start-date"
           type="date"
           max={monthEnd}
-          value={startDate}
-          onChange={event => event.target.value && setStartDate(event.target.value)}
-          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          value={MIDTERM_PREP_START_DATE}
+          readOnly
+          aria-readonly="true"
+          className="cursor-default rounded-md border border-slate-200 bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 outline-none"
         />
-        <span className="text-xs text-slate-400">부터</span>
-        {startDate !== monthStart && (
-          <button type="button" onClick={() => setStartDate(monthStart)} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700">이번 달 전체</button>
-        )}
+        <span className="text-xs text-slate-400">부터 · 중간 대비</span>
       </div>
       {visibleStudents.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-slate-400">선택한 날짜 이후 단어·Daily 재시험 대상자가 없습니다</div>
@@ -651,7 +642,7 @@ function RetestIssuePanel({
         <div className="min-h-0 flex-1 overflow-y-auto">{visibleStudents.map(renderStudent)}</div>
       )}
       {isOpen && (
-        <DashboardModal title={`${formatDateKo(startDate)}부터 ${formatDateKo(monthEnd)}까지 단어·Daily 재시험 대상자`} count={visibleStudents.length} onClose={() => setIsOpen(false)}>
+        <DashboardModal title={`${formatDateKo(MIDTERM_PREP_START_DATE)}부터 ${formatDateKo(monthEnd)}까지 단어·Daily 재시험 대상자`} count={visibleStudents.length} onClose={() => setIsOpen(false)}>
           {visibleStudents.length === 0 ? <div className="px-5 py-10 text-center text-xs text-slate-400">해당 학생이 없습니다</div> : visibleStudents.map(renderStudent)}
         </DashboardModal>
       )}

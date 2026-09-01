@@ -396,9 +396,18 @@ export default function GradePage() {
       }
       return undefined
     }
+    const getRetestSchedule = (type: string) => {
+      const pendingRetest = studentRetests.find(retest => retest.type === type && retest.passed === null)
+      const key = `${row.studentId}-${type}`
+      return {
+        retestDate: retestDateSelections[key] ?? pendingRetest?.retestDate ?? nextClassDate,
+        retestTime: retestTimeSelections[key] ?? pendingRetest?.retestTime,
+      }
+    }
 
     const scores: AchievementScoreItem[] = []
     if (showVocabTest) {
+      const schedule = getRetestSchedule('vocab')
       scores.push({
         label: buildVocabMessageLabel(vocabName, vocabRange),
         score: row.vocabScore,
@@ -406,8 +415,10 @@ export default function GradePage() {
         mode: vocabMode,
         threshold: vocabThreshold,
         retestStatus: getRetestStatus('vocab', row.vocabScore, vocabThreshold),
+        ...schedule,
       })
     }
+    const dailySchedule = getRetestSchedule('daily')
     scores.push({
       label: dailyName === 'Daily Test' ? 'DT' : dailyName,
       score: row.dailyScore,
@@ -415,10 +426,12 @@ export default function GradePage() {
       mode: dailyMode,
       threshold: dailyThreshold,
       retestStatus: getRetestStatus('daily', row.dailyScore, dailyThreshold),
+      ...dailySchedule,
     })
     for (const col of sessionCols) {
       const score = row.extras[col.id] ?? ''
       const threshold = col.threshold ?? 0
+      const schedule = getRetestSchedule(col.id)
       scores.push({
         label: col.name,
         score,
@@ -426,6 +439,7 @@ export default function GradePage() {
         mode: col.mode ?? '점수',
         threshold,
         retestStatus: threshold > 0 ? getRetestStatus(col.id, score, threshold) : undefined,
+        ...schedule,
       })
     }
 
