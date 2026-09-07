@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { deleteField, onSnapshot, setDoc, updateDoc } from 'firebase/firestore'
-import type { HomeworkAssignment, ScheduleEvent } from '../types'
+import type { HomeworkAssignment, ScheduleEvent, ScheduleEventColor } from '../types'
 import type { Action, AppState } from './AppContext'
 import { appDataDoc, configDoc, homeworkDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
 
@@ -314,6 +314,7 @@ export function useAppPersistence({
         title: event.title as string,
         type: 'all' as const,
         time: event.time as string | undefined,
+        color: event.color as ScheduleEventColor | undefined,
         completed: (event.completed as boolean | undefined) ?? false,
         createdAt: event.createdAt as string,
       })))

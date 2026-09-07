@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useState, useMemo, type ReactNode } from 'react'
-import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, TodoItem, TodoPriority, ExamInfo, WeeklyProgress, ScheduleEvent, ClinicSchedule, SessionTestConfig } from '../types'
+import type { Class, Student, GradeRecord, RetestRecord, HomeworkAssignment, HomeworkItem, HomeworkStatus, ScoreColumn, SessionScope, NoticeItem, TodoItem, TodoPriority, ExamInfo, WeeklyProgress, ScheduleEvent, ScheduleEventColor, ClinicSchedule, SessionTestConfig } from '../types'
 import { CLASS_NAME_MIGRATION, LEGACY_CLASS_ID_MIGRATION } from '../data/initialData'
 import { genId, getWeekStart, getSessionNum, getWeekStartForSession, needsRetest, getMonthSessions, getClassDate } from '../utils/helpers'
 import { useAppPersistence } from './useAppPersistence'
@@ -72,7 +72,7 @@ export type Action =
   | { type: 'COMPLETE_SCHEDULE_EVENT'; payload: string }
   | { type: 'TOGGLE_SCHEDULE_EVENT'; payload: string }
   | { type: 'DELETE_SCHEDULE_EVENT'; payload: string }
-  | { type: 'UPDATE_SCHEDULE_EVENT'; payload: { id: string; title: string; startDate: string; endDate: string; time?: string; type: 'personal' | 'all' } }
+  | { type: 'UPDATE_SCHEDULE_EVENT'; payload: { id: string; title: string; startDate: string; endDate: string; time?: string; type: 'personal' | 'all'; color?: ScheduleEventColor } }
   | { type: 'CLEAR_SESSION_GRADES'; payload: { sessionNum: number; studentIds: string[] } }
   | { type: 'ADD_CLINIC_SCHEDULE'; payload: Omit<ClinicSchedule, 'id' | 'createdAt'> }
   | { type: 'DELETE_CLINIC_SCHEDULE'; payload: string }
@@ -692,7 +692,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         ...state,
         scheduleEvents: (state.scheduleEvents ?? []).map(e =>
           e.id === action.payload.id
-            ? { ...e, title: action.payload.title, startDate: action.payload.startDate, endDate: action.payload.endDate, time: action.payload.time, type: action.payload.type }
+            ? { ...e, title: action.payload.title, startDate: action.payload.startDate, endDate: action.payload.endDate, time: action.payload.time, type: action.payload.type, color: action.payload.color }
             : e
         ),
       }
@@ -882,8 +882,10 @@ export function normalizeState(parsed: AppState): AppState {
         id: ev['id'] as string,
         startDate: (ev['startDate'] as string | undefined) ?? legacyDate,
         endDate: (ev['endDate'] as string | undefined) ?? legacyDate,
+        time: ev['time'] as string | undefined,
         title: ev['title'] as string,
         type: ev['type'] as 'personal' | 'all',
+        color: ev['color'] as ScheduleEventColor | undefined,
         completed: (ev['completed'] as boolean | undefined) ?? false,
         createdAt: ev['createdAt'] as string,
       }

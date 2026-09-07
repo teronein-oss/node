@@ -1,7 +1,11 @@
+import { useMemo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2, ExternalLink } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, ChevronRight, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useApp } from '../context/AppContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
+import { fmtDate } from '../utils/helpers'
+import type { ScheduleEvent, ScheduleEventColor } from '../types'
 
 interface SidebarProps {
   open: boolean
@@ -21,6 +25,27 @@ const OPERATION_ITEMS = [
   { to: '/schedule', icon: CalendarDays, label: '업무 일정표' },
   { to: '/student-dashboard', icon: TableProperties, label: '학생 대시보드' },
 ]
+
+const SCHEDULE_DOT_CLASSES: Record<ScheduleEventColor, string> = {
+  green: 'bg-green-500',
+  blue: 'bg-blue-500',
+  indigo: 'bg-indigo-500',
+  purple: 'bg-purple-500',
+  pink: 'bg-pink-500',
+  orange: 'bg-orange-500',
+  red: 'bg-red-500',
+  slate: 'bg-slate-500',
+}
+
+function getScheduleDotClass(event: ScheduleEvent) {
+  const fallback: ScheduleEventColor = event.type === 'all' ? 'red' : 'green'
+  return SCHEDULE_DOT_CLASSES[event.color ?? fallback] ?? SCHEDULE_DOT_CLASSES[fallback]
+}
+
+function formatScheduleDate(date: string) {
+  const [, month, day] = date.split('-').map(Number)
+  return `${month}/${day}`
+}
 
 type SidebarItem = {
   to: string
@@ -87,7 +112,9 @@ function SidebarLink({ item, onClose }: { item: SidebarItem; onClose: () => void
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const { user, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingAcademyId, viewingAcademyName, viewingJogyoTeachers, signOut, jogyoTeachers, switchTeacher, setViewingUid } = useAuth()
+  const { state, globalScheduleEvents } = useApp()
   const navigate = useNavigate()
+  const todayStr = fmtDate(new Date())
   // 다른 사용자 대시보드 조회 중이면 그 사용자의 역할 기준으로 메뉴 필터
   const effectiveRole = viewingUid ? (viewingUserRole ?? '') : (user?.role ?? '')
   const effectiveAcademyId = viewingUid ? viewingAcademyId : user?.academyId
@@ -100,6 +127,35 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   }
   const visibleLearningItems = LEARNING_ITEMS.filter(filterItem)
   const visibleOperationItems = OPERATION_ITEMS.filter(filterItem)
+
+  const sidebarSchedule = useMemo(() => {
+    const localEvents = state.scheduleEvents ?? []
+    const globalIds = new Set(globalScheduleEvents.map(event => event.id))
+    const events = [
+      ...localEvents.filter(event => !globalIds.has(event.id)),
+      ...globalScheduleEvents,
+    ]
+
+    const byTimeAndTitle = (a: ScheduleEvent, b: ScheduleEvent) =>
+      (a.time ?? '99:99').localeCompare(b.time ?? '99:99') || a.title.localeCompare(b.title, 'ko')
+    const todayEvents = events
+      .filter(event => !event.completed && event.startDate <= todayStr && event.endDate >= todayStr)
+      .sort(byTimeAndTitle)
+    const nextEvent = events
+      .filter(event => !event.completed && event.startDate > todayStr)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || byTimeAndTitle(a, b))[0]
+
+    return {
+      todayEvents,
+      previewEvents: todayEvents.length > 0 ? todayEvents.slice(0, 2) : nextEvent ? [nextEvent] : [],
+    }
+  }, [globalScheduleEvents, state.scheduleEvents, todayStr])
+
+  const openScheduleDate = (event: ScheduleEvent) => {
+    const date = event.startDate <= todayStr && event.endDate >= todayStr ? todayStr : event.startDate
+    navigate(`/schedule?date=${date}`)
+    onClose()
+  }
 
   // 실제 조교 본인: 담당 선생님 2명 이상
   const isOwnJogyoSwitch = !viewingUid && user?.role === '조교' && jogyoTeachers.length > 1
@@ -152,6 +208,60 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           <NavLink to="/todo" onClick={onClose} aria-label="메모" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><StickyNote size={17} /></NavLink>
           <NavLink to="/classes" onClick={onClose} aria-label="반 설정" className="flex h-8 items-center justify-center rounded-md text-[#787774] hover:bg-[#efefed] hover:text-[#37352f]"><Settings2 size={17} /></NavLink>
         </div>
+
+        {!isJogyo && (
+          <section className="mx-3 mb-2 overflow-hidden rounded-lg border border-[#dededb] bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() => { navigate(`/schedule?date=${todayStr}`); onClose() }}
+              className="flex w-full items-center gap-2 border-b border-[#eeeeeb] px-3 py-2 text-left transition-colors hover:bg-[#f7f7f5]"
+            >
+              <CalendarDays size={14} className="shrink-0 text-blue-500" />
+              <span className="flex-1 text-[12px] font-semibold text-[#37352f]">오늘 일정</span>
+              <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600">
+                {sidebarSchedule.todayEvents.length}
+              </span>
+              <ChevronRight size={13} className="text-[#b4b4af]" />
+            </button>
+
+            <div className="px-2 py-1.5">
+              {sidebarSchedule.previewEvents.length === 0 ? (
+                <p className="px-1 py-2 text-[11px] text-[#9b9a97]">예정된 일정이 없습니다</p>
+              ) : (
+                sidebarSchedule.previewEvents.map(event => {
+                  const isToday = event.startDate <= todayStr && event.endDate >= todayStr
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => openScheduleDate(event)}
+                      className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-[#f1f1ef]"
+                    >
+                      <span className={`mt-1 h-2 w-2 shrink-0 rounded-sm ${getScheduleDotClass(event)}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1 text-[10px] text-[#9b9a97]">
+                          {!isToday && <span>다음 일정 · {formatScheduleDate(event.startDate)}</span>}
+                          {isToday && <span>{event.time || '종일'}</span>}
+                          {event.type === 'all' && <span className="rounded bg-red-50 px-1 text-[9px] font-medium text-red-500">전체</span>}
+                        </span>
+                        <span className="block truncate text-[11px] font-medium text-[#565550]">{event.title}</span>
+                      </span>
+                    </button>
+                  )
+                })
+              )}
+              {sidebarSchedule.todayEvents.length > 2 && (
+                <button
+                  type="button"
+                  onClick={() => { navigate(`/schedule?date=${todayStr}`); onClose() }}
+                  className="w-full px-1.5 py-1 text-left text-[10px] font-medium text-blue-500 hover:text-blue-700"
+                >
+                  외 {sidebarSchedule.todayEvents.length - 2}개 일정 보기
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* 메뉴 */}
         <nav className="notion-sidebar-scroll flex-1 overflow-y-auto px-1">

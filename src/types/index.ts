@@ -150,6 +150,8 @@ export interface ExamInfo {
   updatedAt: string
 }
 
+export type ScheduleEventColor = 'green' | 'blue' | 'indigo' | 'purple' | 'pink' | 'orange' | 'red' | 'slate'
+
 export interface ScheduleEvent {
   id: string
   startDate: string  // YYYY-MM-DD
@@ -157,6 +159,7 @@ export interface ScheduleEvent {
   time?: string      // HH:MM (24h), optional
   title: string
   type: 'personal' | 'all'
+  color?: ScheduleEventColor
   completed: boolean
   createdAt: string
 }
