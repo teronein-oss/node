@@ -71,6 +71,23 @@ const toAppData = (state: AppState): Omit<AppState, 'homeworks'> => {
 const getGlobalEvents = (events: ScheduleEvent[] = []) =>
   events.filter(event => event.type === 'all')
 
+const preserveScheduleEventColors = (
+  incomingEvents: ScheduleEvent[] = [],
+  currentEvents: ScheduleEvent[] = [],
+) => {
+  const currentColors = new Map(
+    currentEvents
+      .filter(event => event.color !== undefined)
+      .map(event => [event.id, event.color] as const)
+  )
+
+  return incomingEvents.map(event => {
+    if (event.color !== undefined) return event
+    const currentColor = currentColors.get(event.id)
+    return currentColor === undefined ? event : { ...event, color: currentColor }
+  })
+}
+
 const wait = (delay: number) => new Promise(resolve => setTimeout(resolve, delay))
 
 const approximateBytes = (value: unknown) =>
@@ -368,7 +385,14 @@ export function useAppPersistence({
         appSnapshotState = normalized
 
         if (initialized && !hasPendingAppChanges.current && appSaveTimer.current === null) {
-          const merged = normalizeState({ ...normalized, homeworks: stateRef.current.homeworks })
+          const merged = normalizeState({
+            ...normalized,
+            homeworks: stateRef.current.homeworks,
+            scheduleEvents: preserveScheduleEventColors(
+              normalized.scheduleEvents,
+              stateRef.current.scheduleEvents,
+            ),
+          })
           stateRef.current = merged
           baseDispatch({ type: 'LOAD', payload: merged })
         }
