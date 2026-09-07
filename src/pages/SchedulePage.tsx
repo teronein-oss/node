@@ -195,7 +195,7 @@ function CalendarMonthGrid({
                   <div
                     key={dayIndex}
                     className={`
-                      min-h-[80px] select-none border-r border-slate-100 px-1 pb-1 pt-2
+                      min-h-[40px] select-none border-r border-slate-100 px-1 pb-1 pt-2
                       transition-colors last:border-r-0
                       ${!date
                         ? 'cursor-default bg-slate-50/40'
