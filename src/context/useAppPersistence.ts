@@ -384,6 +384,8 @@ export function useAppPersistence({
         const normalized = normalizeState(rawState)
         appSnapshotState = normalized
 
+        let stateToPersist = normalized
+
         if (initialized && !hasPendingAppChanges.current && appSaveTimer.current === null) {
           const merged = normalizeState({
             ...normalized,
@@ -395,10 +397,13 @@ export function useAppPersistence({
           })
           stateRef.current = merged
           baseDispatch({ type: 'LOAD', payload: merged })
+          // 서버 스냅샷에 색상이 빠져 있으면 화면에서만 복원하지 말고 Firestore에도
+          // 복원된 값을 다시 기록한다. 그렇지 않으면 다음 앱 로드 때 기본색으로 돌아간다.
+          stateToPersist = merged
         }
 
         const rawAppData = toAppData(rawState)
-        const normalizedAppData = toAppData(normalized)
+        const normalizedAppData = toAppData(stateToPersist)
         if (JSON.stringify(rawAppData) !== JSON.stringify(normalizedAppData)) {
           setDoc(firestoreDoc, normalizedAppData).catch(error => console.error('데이터 정규화 저장 실패:', (error as { code?: string }).code))
         }

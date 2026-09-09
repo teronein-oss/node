@@ -105,8 +105,6 @@ function computePlacements(week: (Date | null)[], events: ScheduleEvent[]): Even
   return placements
 }
 
-const MAX_LANES = 3
-
 const SCHEDULE_COLORS: Array<{
   value: ScheduleEventColor
   label: string
@@ -173,14 +171,7 @@ function CalendarMonthGrid({
       {weeks.map((week, weekIndex) => {
         const placements = computePlacements(week, events)
         const maxLane = placements.length > 0 ? Math.max(...placements.map(placement => placement.lane)) : -1
-        const visibleLanes = Math.min(maxLane + 1, MAX_LANES)
-
-        const overflowByCol: number[] = Array(7).fill(0)
-        for (const placement of placements) {
-          if (placement.lane >= MAX_LANES) {
-            for (let col = placement.startCol; col <= placement.endCol; col++) overflowByCol[col]++
-          }
-        }
+        const visibleLanes = maxLane + 1
 
         return (
           <div key={weekIndex} className="border-b border-slate-100 last:border-b-0">
@@ -231,11 +222,6 @@ function CalendarMonthGrid({
                         {holiday}
                       </p>
                     )}
-                    {overflowByCol[dayIndex] > 0 && (
-                      <p className="mt-0.5 text-center text-[10px] font-medium text-slate-400">
-                        +{overflowByCol[dayIndex]}개
-                      </p>
-                    )}
                   </div>
                 )
               })}
@@ -248,7 +234,10 @@ function CalendarMonthGrid({
                   .map(placement => (
                     <div
                       key={placement.event.id}
-                      style={{ gridColumn: `${placement.startCol + 1} / ${placement.endCol + 2}` }}
+                      style={{
+                        gridColumn: `${placement.startCol + 1} / ${placement.endCol + 2}`,
+                        gridRow: '1',
+                      }}
                       className={`
                         my-[1px] flex h-5 cursor-pointer items-center overflow-hidden whitespace-nowrap
                         px-1.5 text-[10px] font-medium text-white transition-colors
