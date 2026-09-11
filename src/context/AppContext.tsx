@@ -180,6 +180,7 @@ export function appReducer(state: AppState, action: Action): AppState {
 
       const newRetests: RetestRecord[] = []
       const retestIdsToRemove = new Set<string>()
+      const retestScoreUpdates = new Map<string, number>()
 
       for (const g of newGrades) {
         const gClassId = state.students.find(s => s.id === g.studentId)?.classId
@@ -192,10 +193,10 @@ export function appReducer(state: AppState, action: Action): AppState {
             ? (sessionCfg?.vocabThreshold ?? state.vocabThreshold)
             : (sessionCfg?.dailyThreshold ?? state.dailyThreshold)
           if (needsRetest(score, threshold)) {
-            const exists = state.retests.some(
+            const existing = state.retests.find(
               r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === type
             )
-            if (!exists) {
+            if (!existing) {
               newRetests.push({
                 id: genId(),
                 studentId: g.studentId,
@@ -207,6 +208,8 @@ export function appReducer(state: AppState, action: Action): AppState {
                 scheduledNote: '',
                 createdAt: now,
               })
+            } else if (existing.passed === null) {
+              retestScoreUpdates.set(existing.id, score!)
             }
           } else {
             // 점수가 기준 이상으로 수정됐으면 미처리 재시험 레코드 제거
@@ -219,26 +222,27 @@ export function appReducer(state: AppState, action: Action): AppState {
 
         // 추가 항목 재시험 처리
         for (const [colId, score] of Object.entries(g.extras)) {
-          if (score === null) continue
           const sessionColsForGrade = sessionCfg?.scoreColumns ?? []
           const col = sessionColsForGrade.find(c => c.id === colId) ?? state.scoreColumns.find(c => c.id === colId)
           if (!col?.threshold || col.threshold <= 0) continue
           if (needsRetest(score, col.threshold)) {
-            const exists = state.retests.some(
+            const existing = state.retests.find(
               r => r.studentId === g.studentId && r.sessionNum === g.sessionNum && r.type === colId
             )
-            if (!exists) {
+            if (!existing) {
               newRetests.push({
                 id: genId(),
                 studentId: g.studentId,
                 sessionNum: g.sessionNum,
                 type: colId,
-                originalScore: score,
+                originalScore: score!,
                 retestScore: null,
                 passed: null,
                 scheduledNote: '',
                 createdAt: now,
               })
+            } else if (existing.passed === null) {
+              retestScoreUpdates.set(existing.id, score!)
             }
           } else {
             const pendingRecords = state.retests.filter(
@@ -275,7 +279,12 @@ export function appReducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         grades: [...filtered, ...newGrades],
-        retests: [...state.retests.filter(r => !retestIdsToRemove.has(r.id)), ...newRetests],
+        retests: [
+          ...state.retests
+            .filter(r => !retestIdsToRemove.has(r.id))
+            .map(r => retestScoreUpdates.has(r.id) ? { ...r, originalScore: retestScoreUpdates.get(r.id)! } : r),
+          ...newRetests,
+        ],
         sessionTestConfigs: newSessionConfigs,
       }
     }

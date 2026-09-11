@@ -18,7 +18,7 @@ interface GradeRow {
 }
 
 export default function GradePage() {
-  const { state, dispatch, getScope, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
+  const { state, dispatch, saveStatus, saveError, getScope, selectedYM, setSelectedYM, selectedSession, setSelectedSession } = useApp()
   const { user, viewingAcademyId } = useAuth()
   const showVocabTest = isDefaultAcademy(viewingAcademyId ?? user?.academyId)
 
@@ -68,10 +68,6 @@ export default function GradePage() {
     setSelectedSession(openingDate.sessionNum)
     didSelectOpeningDateRef.current = true
   }, [classDates, currentYM, selectedYM, setSelectedSession, setSelectedYM, todayStr])
-
-  const [rows, setRows] = useState<GradeRow[]>([])
-  const [saved, setSaved] = useState(false)
-  const isDirtyRef = useRef(false)
 
   const [showAddCol, setShowAddCol] = useState(false)
   const [newColName, setNewColName] = useState('')
@@ -156,19 +152,19 @@ export default function GradePage() {
     })
   }
 
-  useEffect(() => {
+  // 입력값은 페이지 이동으로 사라지는 임시 상태 대신 공용 성적 상태에서 읽는다.
+  const rows = useMemo<GradeRow[]>(() => {
     const students = state.students
       .filter(s => s.classId === selectedClass && s.active)
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 
-    isDirtyRef.current = false
     const curSessionCols = (state.sessionTestConfigs.find(
       c => c.sessionNum === selectedSession && c.classId === selectedClass
     ) ?? state.sessionTestConfigs.find(
       c => c.sessionNum === selectedSession && !c.classId
     ))?.scoreColumns ?? []
 
-    const newRows = students.map(s => {
+    return students.map(s => {
       const existing = state.grades.find(
         g => g.studentId === s.id && g.sessionNum === selectedSession
       )
@@ -186,12 +182,12 @@ export default function GradePage() {
         attendance: (existing?.attendance === '결석' ? '결석' : '출석') as '출석' | '결석',
       }
     })
-    setRows(newRows)
-    setSaved(false)
+  }, [selectedClass, selectedSession, state.students, state.grades, state.sessionTestConfigs])
+
+  useEffect(() => {
     setConfirmClear(false)
     setRetestDateSelections({})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClass, selectedSession, state.students, state.sessionTestConfigs])
+  }, [selectedClass, selectedSession])
 
   const buildPayload = (currentRows: GradeRow[], sessionNum: number) => {
     const weekStart = getWeekStart(new Date(getClassDate(sessionNum, selectedCls?.days ?? 'mon-fri', selectedCls?.weekdays) + 'T00:00:00'))
@@ -204,7 +200,7 @@ export default function GradePage() {
       extras: Object.fromEntries(
         sessionCols.map(col => [
           col.id,
-          r.extras[col.id] !== '' ? Number(r.extras[col.id]) : null,
+          r.extras[col.id] != null && r.extras[col.id] !== '' ? Number(r.extras[col.id]) : null,
         ])
       ),
       homeworkDone: state.grades.find(g => g.studentId === r.studentId && g.sessionNum === sessionNum)?.homeworkDone ?? null,
@@ -214,43 +210,25 @@ export default function GradePage() {
 
   const handleSave = () => {
     dispatch({ type: 'SAVE_GRADES', payload: buildPayload(rows, selectedSession) })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
   }
 
-  useEffect(() => {
-    if (!isDirtyRef.current) return
-    const timer = setTimeout(() => {
-      if (!isDirtyRef.current) return
-      dispatch({ type: 'SAVE_GRADES', payload: buildPayload(rows, selectedSession) })
-      setSaved(true)
-      isDirtyRef.current = false
-      setTimeout(() => setSaved(false), 3000)
-    }, 800)
-    return () => clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows])
+  // 서버 저장 지연은 useAppPersistence에 맡기고 입력은 즉시 공용 상태에 반영한다.
+  const saveRow = (row: GradeRow) => {
+    dispatch({ type: 'SAVE_GRADES', payload: buildPayload([row], selectedSession) })
+  }
 
-  const updateRow = (idx: number, field: keyof GradeRow, value: string) => {
-    isDirtyRef.current = true
-    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
-    setSaved(false)
+  const updateRow = (idx: number, field: 'vocabScore' | 'dailyScore', value: string) => {
+    saveRow({ ...rows[idx], [field]: value })
   }
 
   const toggleAttendance = (idx: number) => {
-    isDirtyRef.current = true
-    setRows(prev => prev.map((r, i) =>
-      i !== idx ? r : { ...r, attendance: r.attendance === '출석' ? '결석' : '출석' }
-    ))
-    setSaved(false)
+    const row = rows[idx]
+    saveRow({ ...row, attendance: row.attendance === '출석' ? '결석' : '출석' })
   }
 
   const updateExtra = (idx: number, colId: string, value: string) => {
-    isDirtyRef.current = true
-    setRows(prev => prev.map((r, i) =>
-      i === idx ? { ...r, extras: { ...r.extras, [colId]: value } } : r
-    ))
-    setSaved(false)
+    const row = rows[idx]
+    saveRow({ ...row, extras: { ...row.extras, [colId]: value } })
   }
 
   const handleAddCol = () => {
@@ -616,7 +594,6 @@ export default function GradePage() {
                       .map(s => s.id)
                     dispatch({ type: 'CLEAR_SESSION_GRADES', payload: { sessionNum: selectedSession, studentIds } })
                     setConfirmClear(false)
-                    isDirtyRef.current = false
                   }}
                   className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                 >
@@ -643,11 +620,15 @@ export default function GradePage() {
               onClick={handleSave}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
             >
-              {saved ? <CheckCircle size={16} /> : <Save size={16} />}
-              {saved ? '저장됨' : '저장'}
+              {saveStatus === 'saved' ? <CheckCircle size={16} /> : <Save size={16} />}
+              {saveStatus === 'saving' ? '저장 중...' : saveStatus === 'saved' ? '저장됨' : saveStatus === 'error' ? '다시 저장' : '저장'}
             </button>
           </div>
         </div>
+
+        {saveStatus === 'error' && (
+          <p role="alert" className="px-5 py-3 text-sm text-red-600">{saveError}</p>
+        )}
 
         {/* 범위 입력 */}
         <div className="mobile-grade-ranges flex flex-wrap items-center gap-3 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
