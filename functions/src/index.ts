@@ -106,6 +106,7 @@ interface SaveActualExamScoresInput extends ActualExamScoreAdminInput {
   scores?: unknown
 }
 
+
 function messageService(): SolapiMessageService {
   return new SolapiMessageService(solapiApiKey.value(), solapiApiSecret.value())
 }
@@ -133,7 +134,7 @@ function syncJobId(academyId: string, logId: string): string {
 async function authorizeAdmin(auth: { uid: string; token: Record<string, unknown> } | undefined, requestedAcademyId: unknown): Promise<AuthorizedSender> {
   if (!auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다.')
   const email = typeof auth.token.email === 'string' ? auth.token.email : ''
-  if (email === SUPER_ADMIN_EMAIL) {
+  if (email === SUPER_ADMIN_EMAIL && auth.token.email_verified === true) {
     return {
       uid: auth.uid,
       email,
@@ -1254,3 +1255,5 @@ export const publishBaekhyeonStudentReports = onCall<PublishStudentReportsInput>
     expiresAt: expiresAt.toMillis(),
   }
 })
+
+export { registerNodeAccount, activateNodeAccount } from './signup'

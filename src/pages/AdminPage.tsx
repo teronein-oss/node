@@ -4,9 +4,9 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users, Settings } from 'lucide-react'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
 import { appDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
-import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, academyInviteCode, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
+import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
 
-function AdminTabs() {
+function AdminTabs({ isAdmin }: { isAdmin: boolean }) {
   const { pathname } = useLocation()
   return (
     <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
@@ -17,18 +17,18 @@ function AdminTabs() {
       >
         <Clock size={14} />가입 관리
       </Link>
-      <Link
+      {isAdmin && <Link
         to="/admin/manage"
         className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors
           ${pathname === '/admin/manage' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
       >
         <Settings size={14} />계정 관리
-      </Link>
+      </Link>}
     </div>
   )
 }
 
-const ROLE_OPTIONS = ['원장', '선생님', '조교', '학생', '학부모']
+const MEMBER_ROLE_OPTIONS = ['선생님', '조교']
 
 export default function AdminPage() {
   const { approveUser, rejectUser, deleteRegistration, updateUserRole, setViewingUid, addTeacherToJogyo, removeTeacherFromJogyo, isAdmin, user } = useAuth()
@@ -89,6 +89,9 @@ export default function AdminPage() {
   const getJogyoUids = (r: RegistrationInfo) =>
     r.assignedTeacherUids ?? (r.assignedTeacherUid ? [r.assignedTeacherUid] : [])
 
+  const roleOptions = (currentRole: string) =>
+    [...new Set([currentRole, ...(isAdmin ? ['원장'] : []), ...MEMBER_ROLE_OPTIONS])]
+
   const unassignedJogyo = jogyoList.filter(r => getJogyoUids(r).length === 0)
 
   const handleApprove = async (uid: string) => {
@@ -102,13 +105,14 @@ export default function AdminPage() {
   }
 
   const handleDelete = async (uid: string) => {
+    if (uid === user?.uid) return
     if (!confirm('삭제하시겠습니까?')) return
     await deleteRegistration(uid)
     await load()
   }
 
   const handleRoleChange = async (reg: RegistrationInfo, role: string) => {
-    if (reg.role === role) return
+    if (reg.role === role || reg.uid === user?.uid || (!isAdmin && role === '원장')) return
     await updateUserRole(reg.uid, role)
     await load()
   }
@@ -129,6 +133,7 @@ export default function AdminPage() {
   }
 
   const handleResetData = async (uid: string, name: string, academyId?: string) => {
+    if (!isAdmin || uid === user?.uid) return
     if (!confirm(`"${name}" 계정의 모든 데이터(반, 학생, 성적 등)를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return
     await deleteDoc(appDataDoc(uid, academyId ?? user?.academyId))
     await deleteDoc(sharedStudentRosterDoc(uid, academyId ?? user?.academyId))
@@ -146,14 +151,7 @@ export default function AdminPage() {
     <div className="max-w-3xl mx-auto space-y-8">
       <div className="space-y-4">
         <h1 className="text-xl font-bold text-slate-800">관리자 패널</h1>
-        <AdminTabs />
-        {user?.academyId && (
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-            <p className="text-xs font-semibold text-blue-700">학원 초대코드</p>
-            <p className="mt-1 text-sm font-bold text-slate-800">{academyInviteCode(user.academyId)}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{user.academyName} 구성원 가입 시 이 코드를 입력합니다</p>
-          </div>
-        )}
+        <AdminTabs isAdmin={isAdmin} />
         {isAdmin && academyGroups.length > 0 && (
           <div className="rounded-xl border border-slate-200 bg-white p-3">
             <p className="mb-2 text-xs font-semibold text-slate-500">학원별 관리</p>
@@ -256,10 +254,11 @@ export default function AdminPage() {
                       <select
                         value={teacher.role}
                         onChange={e => handleRoleChange(teacher, e.target.value)}
+                        disabled={teacher.uid === user?.uid}
                         className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
                         title="권한 변경"
                       >
-                        {ROLE_OPTIONS.map(role => (
+                        {roleOptions(teacher.role).map(role => (
                           <option key={role} value={role}>{role}</option>
                         ))}
                       </select>
@@ -269,19 +268,19 @@ export default function AdminPage() {
                       >
                         <Eye size={13} />대시보드 보기
                       </button>
-                      <button
+                      {isAdmin && teacher.uid !== user?.uid && <button
                         onClick={() => handleResetData(teacher.uid, teacher.displayName, teacher.academyId)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-200 transition-colors"
                         title="반·학생·성적 데이터 초기화"
                       >
                         <RotateCcw size={13} />초기화
-                      </button>
-                      <button
+                      </button>}
+                      {teacher.uid !== user?.uid && <button
                         onClick={() => handleDelete(teacher.uid)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-xs font-medium hover:bg-red-100 hover:text-red-600 transition-colors"
                       >
                         <Trash2 size={13} />삭제
-                      </button>
+                      </button>}
                     </div>
                   </div>
 
@@ -331,7 +330,7 @@ export default function AdminPage() {
                               className="border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
                               title="권한 변경"
                             >
-                              {ROLE_OPTIONS.map(role => (
+                              {roleOptions(jogyo.role).map(role => (
                                 <option key={role} value={role}>{role}</option>
                               ))}
                             </select>
@@ -443,7 +442,7 @@ export default function AdminPage() {
                     className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
                     title="권한 변경"
                   >
-                    {ROLE_OPTIONS.map(role => (
+                    {roleOptions(jogyo.role).map(role => (
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
@@ -484,7 +483,7 @@ export default function AdminPage() {
                     className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-600 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
                     title="권한 변경"
                   >
-                    {ROLE_OPTIONS.map(role => (
+                    {roleOptions(reg.role).map(role => (
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>

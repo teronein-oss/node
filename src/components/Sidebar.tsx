@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, ChevronRight, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, MessageSquareText, FileKey2, Search, ChevronsUpDown, Settings2, ExternalLink } from 'lucide-react'
+import { LayoutDashboard, BookOpen, Users, X, ClipboardList, CalendarDays, ChevronRight, LogOut, Shield, Stethoscope, TableProperties, BookOpenCheck, BarChart3, StickyNote, FileKey2, Search, ChevronsUpDown, Settings2, ExternalLink } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useApp } from '../context/AppContext'
 import { DEFAULT_ACADEMY_ID } from '../utils/academy'
@@ -122,6 +122,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const isPrincipal = effectiveRole === '원장' || effectiveRole === '관리자'
   const filterItem = (item: { to: string }) => {
     if (isJogyo && item.to === '/schedule') return false
+    if (viewingUid && item.to === '/student-dashboard') return false
     if (item.to === '/student-dashboard' && effectiveAcademyId !== DEFAULT_ACADEMY_ID) return false
     return true
   }
@@ -190,7 +191,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="flex h-12 items-center gap-2 px-2.5">
           <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-[#efefed]">
             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-[#dededb] bg-white text-xs font-semibold text-[#565550]">S</div>
-            <span className="truncate text-[13px] font-semibold text-[#37352f]">{viewingAcademyName ?? user?.academyName ?? 'SEUM Academy'}</span>
+            <span className="truncate text-[13px] font-semibold text-[#37352f]">{viewingAcademyName ?? user?.academyName ?? 'NODE'}</span>
             <ChevronsUpDown size={13} className="ml-auto shrink-0 text-[#a4a39f]" />
           </div>
           <button
@@ -279,7 +280,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           {(isAdmin || isAcademyAdmin) && (
             <SidebarSection title="관리자">
               <SidebarLink item={{ to: '/admin', icon: Shield, label: '관리자 모드', tone: 'amber' }} onClose={onClose} />
-              <SidebarLink item={{ to: '/admin/messages', icon: MessageSquareText, label: '문자 발송', tone: 'amber' }} onClose={onClose} />
               <SidebarLink item={{ to: '/report', icon: FileKey2, label: '성적확인 시스템', tone: 'amber', external: true }} onClose={onClose} />
             </SidebarSection>
           )}

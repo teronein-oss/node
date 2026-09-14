@@ -958,11 +958,13 @@ export function AppProvider({
   uid,
   academyId,
   isAdmin = false,
+  readOnly = false,
 }: {
   children: ReactNode
   uid: string
   academyId?: string
   isAdmin?: boolean
+  readOnly?: boolean
 }) {
   const [state, baseDispatch] = useReducer(appReducer, DEFAULT_STATE)
   const [loading, setLoading] = useState(true)
@@ -972,6 +974,7 @@ export function AppProvider({
     uid,
     academyId,
     isAdmin,
+    readOnly,
     state,
     loading,
     baseDispatch,

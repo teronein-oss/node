@@ -59,7 +59,7 @@ function AuthGate() {
   const academyId = viewingAcademyId ?? user?.academyId
   // 다른 사용자 대시보드 조회 중에는 isAdmin=false — globalScheduleEvents 구독 활성화 + 불필요한 sync 방지
   return (
-    <AppProvider key={`${academyId ?? 'default'}-${uid}`} uid={uid} academyId={academyId} isAdmin={(isAdmin || isAcademyAdmin) && !viewingUid}>
+    <AppProvider key={`${academyId ?? 'default'}-${uid}`} uid={uid} academyId={academyId} isAdmin={(isAdmin || isAcademyAdmin) && !viewingUid} readOnly={Boolean(viewingUid)}>
       <AppInner />
     </AppProvider>
   )

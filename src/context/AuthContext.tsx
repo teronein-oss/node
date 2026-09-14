@@ -1,20 +1,25 @@
 import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react'
 import {
   GoogleAuthProvider,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   setPersistence,
   browserSessionPersistence,
+  reload,
   type User,
 } from 'firebase/auth'
+import { httpsCallable } from 'firebase/functions'
 import {
   onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, getDoc, deleteField, query, where,
 } from 'firebase/firestore'
-import { auth } from '../firebase'
+import { auth, functions } from '../firebase'
 import { displayName } from '../utils/displayName'
-import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_INVITE_CODE, DEFAULT_ACADEMY_NAME, createInviteCode, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
-import { academyDoc, configDoc, registrationDoc, registrationsCollection, userDoc } from '../utils/firestorePaths'
+import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
+import { configDoc, registrationDoc, registrationsCollection, userDoc } from '../utils/firestorePaths'
 
 export const ADMIN_EMAIL = 'teronein@gmail.com'
 
@@ -23,7 +28,7 @@ export interface RegistrationInfo {
   email: string
   displayName: string
   role: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'pending_email' | 'approved' | 'rejected'
   createdAt: string
   academyId?: string
   academyName?: string
@@ -40,13 +45,7 @@ export interface UserProfile {
   academyName: string
 }
 
-export interface AcademyRegistrationInput {
-  mode: 'join' | 'create'
-  academyName?: string
-  inviteCode?: string
-}
-
-export type RegistrationStatus = 'loading' | 'none' | 'pending' | 'approved' | 'rejected'
+export type RegistrationStatus = 'loading' | 'none' | 'pending' | 'pending_email' | 'approved' | 'rejected'
 
 interface AuthContextValue {
   firebaseUser: User | null
@@ -63,12 +62,15 @@ interface AuthContextValue {
   viewingJogyoTeachers: Array<{ uid: string; displayName: string }>
   setViewingUid: (uid: string | null, name?: string, role?: string, jogyoTeachers?: Array<{ uid: string; displayName: string }>, academyId?: string, academyName?: string) => void
   signInWithGoogle: () => Promise<void>
+  signInWithEmail: (email: string, password: string) => Promise<void>
+  resetPassword: (email: string) => Promise<void>
+  resendVerificationEmail: () => Promise<void>
+  activateEmailAccount: () => Promise<void>
   signOut: () => Promise<void>
   approvedTeachers: Array<{ uid: string; displayName: string }>
   jogyoTeacherUids: string[]
   jogyoTeachers: Array<{ uid: string; displayName: string }>
   switchTeacher: (uid: string) => void
-  submitRegistration: (name: string, role: string, assignedTeacherUid?: string | null, academy?: AcademyRegistrationInput) => Promise<void>
   // Admin
   approveUser: (uid: string) => Promise<void>
   rejectUser: (uid: string) => Promise<void>
@@ -80,10 +82,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
-
-const ROLES = ['관리자', '원장', '선생님', '조교', '학생', '학부모'] as const
-
-export { ROLES }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null)
@@ -151,7 +149,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setFirebaseUser(fbUser)
       setRegistrationStatus('loading')
-      const adminUser = fbUser.email === ADMIN_EMAIL
+      setUser(null)
+      setIsAcademyAdmin(false)
+      setAdminUid(null)
+      setJogyoTeacherUids([])
+      const adminUser = fbUser.email === ADMIN_EMAIL && fbUser.emailVerified
       setIsAdmin(adminUser)
 
       if (adminUser) {
@@ -205,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!snap.exists()) {
           setRegistrationStatus('none')
           setUser(null)
+          setIsAcademyAdmin(false)
         } else {
           const data = snap.data() as RegistrationInfo
           const academyId = normalizeAcademyId(data.academyId)
@@ -231,6 +234,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null)
             setIsAcademyAdmin(false)
             setRegistrationStatus('rejected')
+          } else if (data.status === 'pending_email') {
+            setUser(null)
+            setIsAcademyAdmin(false)
+            setRegistrationStatus('pending_email')
           } else {
             setUser(null)
             setIsAcademyAdmin(false)
@@ -253,7 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!firebaseUser) {
+    if (!firebaseUser || !user) {
       setApprovedTeachers([])
       return
     }
@@ -278,52 +285,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithPopup(auth, provider)
   }
 
+  const signInWithEmail = async (email: string, password: string) => {
+    await setPersistence(auth, browserSessionPersistence)
+    await signInWithEmailAndPassword(auth, email.trim(), password)
+  }
+
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email.trim())
+  }
+
+  const resendVerificationEmail = async () => {
+    if (!auth.currentUser) throw new Error('로그인이 필요합니다.')
+    await sendEmailVerification(auth.currentUser)
+  }
+
+  const activateEmailAccount = async () => {
+    if (!auth.currentUser) throw new Error('로그인이 필요합니다.')
+    await reload(auth.currentUser)
+    if (!auth.currentUser.emailVerified) throw new Error('이메일 인증을 먼저 완료해 주세요.')
+    await httpsCallable(functions, 'activateNodeAccount')()
+  }
+
   const signOut = async () => {
     setViewingUid(null)
     await firebaseSignOut(auth)
-  }
-
-  const submitRegistration = async (name: string, role: string, assignedTeacherUid?: string | null, academy?: AcademyRegistrationInput) => {
-    if (!firebaseUser) return
-    let academyId = DEFAULT_ACADEMY_ID
-    let academyName = DEFAULT_ACADEMY_NAME
-    if (academy?.mode === 'create') {
-      academyName = academy.academyName?.trim() || DEFAULT_ACADEMY_NAME
-      academyId = createInviteCode(academyName)
-      await setDoc(academyDoc(academyId), {
-        id: academyId,
-        name: academyName,
-        inviteCode: academyId,
-        ownerUid: firebaseUser.uid,
-        createdAt: new Date().toISOString(),
-      }, { merge: true })
-    } else if (academy?.mode === 'join' && academy.inviteCode?.trim()) {
-      const inviteCode = academy.inviteCode.trim().toUpperCase()
-      if (inviteCode === DEFAULT_ACADEMY_INVITE_CODE) {
-        academyId = DEFAULT_ACADEMY_ID
-        academyName = DEFAULT_ACADEMY_NAME
-      } else {
-        academyId = inviteCode
-        const academySnap = await getDoc(academyDoc(academyId))
-        if (!academySnap.exists()) throw new Error('academy-not-found')
-        const academyData = academySnap.data() as { name?: string }
-        academyName = academyData.name ?? academyId
-      }
-    }
-    const regRef = registrationDoc(firebaseUser.uid, DEFAULT_ACADEMY_ID)
-    const regData: RegistrationInfo = {
-      uid: firebaseUser.uid,
-      email: firebaseUser.email ?? '',
-      displayName: name.trim(),
-      role,
-      status: 'pending',
-      academyId,
-      academyName,
-      createdAt: new Date().toISOString(),
-    }
-    if (assignedTeacherUid) regData.assignedTeacherUid = assignedTeacherUid
-    await setDoc(regRef, regData)
-    setRegistrationStatus('pending')
   }
 
   const approveUser = async (uid: string) => {
@@ -413,7 +398,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       firebaseUser, user, registrationStatus, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingAcademyId, viewingAcademyName, viewingJogyoTeachers, setViewingUid,
       approvedTeachers, jogyoTeacherUids, jogyoTeachers, switchTeacher,
-      signInWithGoogle, signOut, submitRegistration,
+      signInWithGoogle, signInWithEmail, resetPassword, resendVerificationEmail, activateEmailAccount, signOut,
       approveUser, rejectUser, deleteRegistration, updateUserRole, assignTeacher, addTeacherToJogyo, removeTeacherFromJogyo,
     }}>
       {children}

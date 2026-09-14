@@ -8,6 +8,7 @@ interface UseAppPersistenceParams {
   uid: string
   academyId?: string
   isAdmin: boolean
+  readOnly: boolean
   state: AppState
   loading: boolean
   baseDispatch: Dispatch<Action>
@@ -124,6 +125,7 @@ export function useAppPersistence({
   uid,
   academyId,
   isAdmin,
+  readOnly,
   state,
   loading,
   baseDispatch,
@@ -294,6 +296,8 @@ export function useAppPersistence({
       return
     }
 
+    if (readOnly) return
+
     const nextState = reduceState(stateRef.current, action)
     stateRef.current = nextState
     baseDispatch({ type: 'LOAD', payload: nextState })
@@ -313,7 +317,7 @@ export function useAppPersistence({
         { merge: true }
       ).catch(error => console.error('전체 일정 동기화 실패:', (error as { code?: string }).code))
     }
-  }, [academyId, baseDispatch, isAdmin, reduceState, scheduleActionTypes, scheduleAppSave, scheduleHomeworkSave])
+  }, [academyId, baseDispatch, isAdmin, readOnly, reduceState, scheduleActionTypes, scheduleAppSave, scheduleHomeworkSave])
 
   // 비관리자: 학원 전체 공지 일정을 구독한다.
   useEffect(() => {
@@ -351,7 +355,7 @@ export function useAppPersistence({
     const applyInitialState = () => {
       if (initialized || !appSnapshotState || !homeworkSnapshotReceived) return
 
-      const pending = parsePendingHomework(pendingHomeworkKey)
+      const pending = readOnly ? null : parsePendingHomework(pendingHomeworkKey)
       const serverUpdatedAt = homeworkSnapshotData?.clientUpdatedAt ?? 0
       const pendingIsNewer = pending && pending.clientUpdatedAt > serverUpdatedAt
       const selectedHomeworks = pendingIsNewer
@@ -364,15 +368,15 @@ export function useAppPersistence({
       initialized = true
       setLoading(false)
 
-      if (pendingIsNewer) {
+      if (!readOnly && pendingIsNewer) {
         scheduleHomeworkSave(pending.homeworks, homeworkSnapshotData === null && appSnapshotState.homeworks.length > 0)
-      } else if (homeworkSnapshotData === null && appSnapshotState.homeworks.length > 0) {
+      } else if (!readOnly && homeworkSnapshotData === null && appSnapshotState.homeworks.length > 0) {
         scheduleHomeworkSave(appSnapshotState.homeworks, appDocumentExists)
-      } else if (pending && !pendingIsNewer) {
+      } else if (!readOnly && pending && !pendingIsNewer) {
         localStorage.removeItem(pendingHomeworkKey)
       }
 
-      if (!appDocumentExists) {
+      if (!readOnly && !appDocumentExists) {
         setDoc(firestoreDoc, toAppData(merged)).catch(error => markSaveError(error))
       }
     }
@@ -404,14 +408,14 @@ export function useAppPersistence({
 
         const rawAppData = toAppData(rawState)
         const normalizedAppData = toAppData(stateToPersist)
-        if (JSON.stringify(rawAppData) !== JSON.stringify(normalizedAppData)) {
+        if (!readOnly && JSON.stringify(rawAppData) !== JSON.stringify(normalizedAppData)) {
           setDoc(firestoreDoc, normalizedAppData).catch(error => console.error('데이터 정규화 저장 실패:', (error as { code?: string }).code))
         }
       } else {
         let legacyState: AppState | null = null
         try {
           const saved = localStorage.getItem(legacyStorageKey)
-          if (saved) legacyState = normalizeState(JSON.parse(saved) as AppState)
+          if (saved && !readOnly) legacyState = normalizeState(JSON.parse(saved) as AppState)
         } catch {
           legacyState = null
         }
@@ -453,7 +457,7 @@ export function useAppPersistence({
       unsubscribeApp()
       unsubscribeHomework()
     }
-  }, [baseDispatch, firestoreDoc, homeworkDoc, legacyStorageKey, markSaveError, normalizeState, pendingHomeworkKey, scheduleHomeworkSave, setLoading])
+  }, [baseDispatch, firestoreDoc, homeworkDoc, legacyStorageKey, markSaveError, normalizeState, pendingHomeworkKey, readOnly, scheduleHomeworkSave, setLoading])
 
   // 관리자 데이터 로드 후 전체 공지 일정도 공유 문서에 맞춘다.
   useEffect(() => {
@@ -468,14 +472,14 @@ export function useAppPersistence({
   }, [isAdmin, loading])
 
   useEffect(() => {
-    if (loading) return
+    if (loading || readOnly) return
     setDoc(sharedStudentRosterDoc(uid, academyId), {
       uid,
       classes: toFirestoreData(state.classes ?? []),
       students: toFirestoreData(state.students ?? []),
       updatedAt: new Date().toISOString(),
     }, { merge: true }).catch(error => console.error('공유 학생 명단 동기화 실패:', (error as { code?: string }).code))
-  }, [uid, academyId, loading, state.classes, state.students])
+  }, [uid, academyId, loading, readOnly, state.classes, state.students])
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {

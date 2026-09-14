@@ -1,250 +1,202 @@
-import { useState } from 'react'
-import { GraduationCap, LogIn, UserPlus } from 'lucide-react'
-import { useAuth, ROLES } from '../context/AuthContext'
+import { useState, type FormEvent } from 'react'
+import { GraduationCap, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48">
-      <path fill="#4285F4" d="M47.5 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h13.2c-.6 3-2.3 5.6-5 7.3v6h8c4.7-4.3 7.3-10.7 7.3-17.4z" />
-      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-8-6c-2.1 1.4-4.8 2.2-7.9 2.2-6.1 0-11.2-4.1-13.1-9.6H2.7v6.2C6.7 43 14.8 48 24 48z" />
-      <path fill="#FBBC05" d="M10.9 28.8c-.5-1.4-.7-2.9-.7-4.4s.2-3 .7-4.4v-6.2H2.7C1 16.9 0 20.3 0 24s1 7.1 2.7 10.2l8.2-5.4z" />
-      <path fill="#EA4335" d="M24 9.5c3.4 0 6.5 1.2 8.9 3.5l6.6-6.6C35.9 2.5 30.4 0 24 0 14.8 0 6.7 5 2.7 12.2l8.2 5.4C12.8 13.6 17.9 9.5 24 9.5z" />
-    </svg>
-  )
+type Screen = 'login' | 'signup' | 'reset'
+type AccountType = 'personal' | 'academy' | 'invited'
+
+const accountTypes: Array<{ id: AccountType; title: string; description: string }> = [
+  { id: 'personal', title: '개인 강사', description: '내 이름으로 학습관리 공간을 만듭니다.' },
+  { id: 'academy', title: '학원 원장', description: '학원 공간을 만들고 강사를 초대합니다.' },
+  { id: 'invited', title: '초대받은 구성원', description: '강사 또는 조교로 기존 공간에 참여합니다.' },
+]
+
+function authError(error: unknown) {
+  const code = (error as { code?: string })?.code
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return '이메일 또는 비밀번호를 확인해 주세요.'
+  if (code === 'auth/too-many-requests') return '로그인 시도가 많습니다. 잠시 후 다시 시도해 주세요.'
+  if (code === 'auth/invalid-email') return '올바른 이메일 주소를 입력해 주세요.'
+  if (code === 'auth/popup-blocked') return 'Google 로그인 팝업을 허용해 주세요.'
+  if (code === 'auth/popup-closed-by-user') return 'Google 로그인 창이 닫혔습니다.'
+  return '요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'
 }
 
-type Mode = 'select' | 'register'
-
 export default function LoginPage() {
-  const { firebaseUser, registrationStatus, signInWithGoogle, signOut, submitRegistration } = useAuth()
-  const [mode, setMode] = useState<Mode>('select')
-  const [name, setName] = useState('')
-  const [role, setRole] = useState<string>(ROLES[0])
-  const [academyMode, setAcademyMode] = useState<'join' | 'create'>('join')
-  const [academyName, setAcademyName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const { firebaseUser, registrationStatus, signInWithEmail, signInWithGoogle, resetPassword, resendVerificationEmail, activateEmailAccount, signOut } = useAuth()
+  const [screen, setScreen] = useState<Screen>('login')
+  const [accountType, setAccountType] = useState<AccountType>('personal')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
-  const handleGoogleLogin = async (nextMode?: Mode) => {
+  const switchScreen = (next: Screen) => {
+    setScreen(next)
     setError('')
-    if (nextMode) setMode(nextMode)
+    setNotice('')
+    setPassword('')
+  }
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
     try {
-      await signInWithGoogle()
-    } catch (e: unknown) {
-      const code = (e as { code?: string })?.code ?? ''
-      if (code === 'auth/popup-blocked') {
-        setError('팝업이 차단되었습니다. 브라우저에서 팝업을 허용해주세요.')
-      } else if (code === 'auth/popup-closed-by-user') {
-        setError('로그인 창이 닫혔습니다. 다시 시도해주세요.')
-      } else if (code === 'auth/unauthorized-domain') {
-        setError('인증되지 않은 도메인입니다. Firebase 콘솔에서 도메인을 등록해주세요.')
-      } else {
-        setError(`오류: ${code || '알 수 없는 오류'}`)
-      }
+      await signInWithEmail(email, password)
+    } catch (loginError) {
+      setError(authError(loginError))
+    } finally {
+      setBusy(false)
     }
   }
 
-  const handleSubmit = async () => {
-    if (!name.trim()) return
-    if (academyMode === 'create' && !academyName.trim()) return
-    if (academyMode === 'join' && !inviteCode.trim()) return
-    setSubmitting(true)
+  const handleReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setBusy(true)
     setError('')
     try {
-      await submitRegistration(
-        name.trim(),
-        academyMode === 'create' ? '원장' : role,
-        undefined,
-        { mode: academyMode, academyName, inviteCode }
-      )
-    } catch (e: unknown) {
-      const message = (e as Error)?.message
-      setError(message === 'academy-not-found'
-        ? '초대코드에 해당하는 학원을 찾을 수 없습니다.'
-        : '가입신청 중 오류가 발생했습니다.')
-      setSubmitting(false)
+      await resetPassword(email)
+      setNotice('비밀번호 재설정 메일을 보냈습니다. 받은편지함을 확인해 주세요.')
+    } catch (resetError) {
+      setError(authError(resetError))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleLegacyGoogle = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await signInWithGoogle()
+    } catch (loginError) {
+      setError(authError(loginError))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleEmailActivation = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await activateEmailAccount()
+    } catch (activationError) {
+      const message = (activationError as Error).message
+      setError(message?.includes('이메일 인증') ? message : '인증 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleResendVerification = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await resendVerificationEmail()
+      setNotice('인증 메일을 다시 보냈습니다.')
+    } catch (sendError) {
+      setError(authError(sendError))
+    } finally {
+      setBusy(false)
     }
   }
 
   if (registrationStatus === 'loading') {
-    return (
-      <div className="notion-login min-h-screen flex items-center justify-center bg-[#f7f7f5]">
-        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]"><div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" /></div>
   }
 
+  const blockedMessage = registrationStatus === 'pending_email'
+    ? '이메일 인증이 완료될 때까지 대시보드를 사용할 수 없습니다.'
+    : registrationStatus === 'pending'
+      ? '가입 승인 대기 중입니다.'
+      : registrationStatus === 'rejected'
+        ? '이 계정의 가입이 승인되지 않았습니다.'
+        : '이 계정은 NODE 가입이 완료되지 않았습니다.'
+
   return (
-    <div className="notion-login min-h-screen bg-[#f7f7f5] flex items-center justify-center p-4">
-      <div className="notion-login-card w-full max-w-sm rounded-lg border border-[#e3e3e0] bg-white p-8">
-        {/* 로고 */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-[#eef4fb]">
-            <GraduationCap size={30} className="text-[#4f7fa8]" />
-          </div>
-          <h1 className="text-xl font-bold text-[#37352f]">SEUM</h1>
-          <p className="mt-1 text-sm text-[#787774]">학원 관리 워크스페이스</p>
+    <div className="notion-login flex min-h-screen items-center justify-center bg-[#f7f7f5] p-4">
+      <div className={`notion-login-card w-full rounded-xl border border-[#e3e3e0] bg-white p-7 shadow-sm ${screen === 'signup' && !firebaseUser ? 'max-w-lg' : 'max-w-sm'}`}>
+        <div className="mb-7 flex flex-col items-center">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-[#eef4fb]"><GraduationCap size={27} className="text-[#4f7fa8]" /></div>
+          <h1 className="text-xl font-bold text-[#37352f]">NODE</h1>
+          <p className="mt-1 text-sm text-[#787774]">학생 관리 워크스페이스</p>
         </div>
 
-        {!firebaseUser ? (
-          /* ── 로그인/회원가입 선택 ── */
-          <div className="space-y-3">
-            {error && <p className="text-xs text-red-500 text-center">{error}</p>}
-
-            <button
-              onClick={() => handleGoogleLogin('select')}
-              className="w-full flex items-center justify-center gap-3 py-3 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
-            >
-              <LogIn size={16} className="text-slate-500" />
-              로그인
-            </button>
-
-            <button
-              onClick={() => handleGoogleLogin('register')}
-              className="w-full flex items-center justify-center gap-3 py-3 bg-blue-600 rounded-xl text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-            >
-              <UserPlus size={16} />
-              회원가입
-            </button>
-
-            <div className="flex items-center gap-2 my-1">
-              <div className="flex-1 h-px bg-slate-100" />
-              <span className="text-xs text-slate-300">Google 계정으로 진행</span>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
-
-            <div className="flex justify-center">
-              <GoogleIcon />
-            </div>
-
-            <p className="text-xs text-slate-400 text-center pt-1">
-              개인 데이터는 안전하게 암호화됩니다
-            </p>
-          </div>
-
-        ) : registrationStatus === 'none'
-          || ((registrationStatus === 'approved' || registrationStatus === 'rejected') && mode === 'register') ? (
-          /* ── 가입신청 폼 ── */
-          <div className="space-y-4">
-            <div className="text-center mb-2">
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <GoogleIcon />
-                <p className="text-xs text-slate-500 truncate">{firebaseUser.email}</p>
+        {firebaseUser ? (
+          <div className="space-y-4 text-center">
+            <ShieldCheck size={28} className="mx-auto text-slate-400" />
+            <p className="text-sm font-semibold text-slate-700">{blockedMessage}</p>
+            <p className="break-all text-xs text-slate-500">{firebaseUser.email}</p>
+            {registrationStatus === 'pending_email' && (
+              <div className="space-y-2">
+                <button onClick={handleEmailActivation} disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">이메일 인증 완료 확인</button>
+                <button onClick={handleResendVerification} disabled={busy} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">인증 메일 다시 보내기</button>
               </div>
-              <p className="text-sm font-semibold text-slate-700">가입 정보를 입력해주세요</p>
-              <p className="text-xs text-slate-400 mt-0.5">관리자 승인 후 서비스를 이용할 수 있습니다</p>
-            </div>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              placeholder="실명 입력"
-              autoFocus
-              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setAcademyMode('join')}
-                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${academyMode === 'join' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-              >
-                초대코드 참여
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcademyMode('create')}
-                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${academyMode === 'create' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-              >
-                새 학원 만들기
-              </button>
-            </div>
-            {academyMode === 'join' ? (
-              <>
-                <input
-                  type="text"
-                  value={inviteCode}
-                  onChange={e => setInviteCode(e.target.value.toUpperCase())}
-                  placeholder="학원 초대코드"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                />
-                <select
-                  value={role}
-                  onChange={e => setRole(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400 bg-white"
-                >
-                  {ROLES.filter(r => r !== '관리자').map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <input
-                type="text"
-                value={academyName}
-                onChange={e => setAcademyName(e.target.value)}
-                placeholder="학원 이름"
-                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-              />
             )}
-            {error && <p className="text-xs text-red-500 text-center">{error}</p>}
-            <button
-              onClick={handleSubmit}
-              disabled={
-                !name.trim()
-                || submitting
-                || (academyMode === 'create' && !academyName.trim())
-                || (academyMode === 'join' && !inviteCode.trim())
-              }
-              className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 transition-colors"
-            >
-              {submitting ? '신청 중...' : '가입신청'}
-            </button>
-            <button
-              onClick={signOut}
-              className="w-full py-2 text-xs text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              다른 계정으로 로그인
-            </button>
+            {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+            {notice && <p role="status" className="text-xs text-emerald-700">{notice}</p>}
+            <button onClick={signOut} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50">다른 계정으로 로그인</button>
           </div>
-
-        ) : registrationStatus === 'pending' ? (
-          /* ── 승인 대기 ── */
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto text-3xl">⏳</div>
-            <div>
-              <p className="font-semibold text-slate-800">승인 대기 중입니다</p>
-              <p className="text-sm text-slate-500 mt-1">관리자의 승인 후 이용할 수 있습니다</p>
+        ) : screen === 'login' ? (
+          <>
+            <h2 className="mb-4 text-base font-semibold text-slate-800">이메일로 로그인</h2>
+            <form className="space-y-3" onSubmit={handleLogin}>
+              <label className="block text-xs font-medium text-slate-600">이메일
+                <input type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block text-xs font-medium text-slate-600">비밀번호
+                <input type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+              </label>
+              {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+              <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? '로그인 중...' : '로그인'}</button>
+            </form>
+            <div className="mt-3 flex justify-between text-xs">
+              <button onClick={() => switchScreen('reset')} className="text-slate-500 hover:text-slate-800">비밀번호 찾기</button>
+              <button onClick={() => switchScreen('signup')} className="font-semibold text-blue-600 hover:text-blue-800">회원가입</button>
             </div>
-            <button onClick={signOut} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
-              로그아웃
-            </button>
-          </div>
-
-        ) : registrationStatus === 'rejected' ? (
-          /* ── 거절 ── */
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-3xl">🚫</div>
-            <div>
-              <p className="font-semibold text-red-700">허락되지 않은 계정입니다</p>
-              <p className="text-sm text-slate-500 mt-1">관리자에게 문의하세요</p>
+            <div className="my-5 border-t border-slate-100" />
+            <button onClick={handleLegacyGoogle} disabled={busy} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">기존 사용자 Google 로그인</button>
+          </>
+        ) : screen === 'reset' ? (
+          <>
+            <h2 className="mb-2 text-base font-semibold text-slate-800">비밀번호 찾기</h2>
+            <p className="mb-4 text-xs text-slate-500">가입한 이메일로 재설정 링크를 보내드립니다.</p>
+            <form className="space-y-3" onSubmit={handleReset}>
+              <label className="block text-xs font-medium text-slate-600">이메일
+                <input type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+              </label>
+              {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+              {notice && <p role="status" className="text-xs text-emerald-700">{notice}</p>}
+              <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">재설정 메일 보내기</button>
+            </form>
+            <button onClick={() => switchScreen('login')} className="mt-4 text-xs text-slate-500 hover:text-slate-800">로그인으로 돌아가기</button>
+          </>
+        ) : (
+          <>
+            <h2 className="text-base font-semibold text-slate-800">NODE 회원가입</h2>
+            <p className="mb-5 mt-1 text-xs text-slate-500">가입 유형을 선택한 뒤 약관 동의와 휴대폰 본인확인을 진행합니다.</p>
+            <div className="space-y-2" role="radiogroup" aria-label="가입 유형">
+              {accountTypes.map(type => (
+                <button key={type.id} type="button" role="radio" aria-checked={accountType === type.id} onClick={() => setAccountType(type.id)} className={`w-full rounded-lg border px-4 py-3 text-left ${accountType === type.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                  <span className="block text-sm font-semibold text-slate-800">{type.title}</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">{type.description}</span>
+                </button>
+              ))}
             </div>
-            <button
-              onClick={() => {
-                setMode('register')
-                setError('')
-              }}
-              className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
-            >
-              가입신청 다시 하기
-            </button>
-            <button onClick={signOut} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
-              로그아웃
-            </button>
-          </div>
-
-        ) : null}
+            <div className="mt-5 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Mail size={15} />서비스 약관 및 개인정보 안내</p>
+              <p className="text-xs leading-5 text-slate-500">약관 문안과 휴대폰 본인확인 서비스가 준비되는 동안 신규 가입은 열리지 않습니다.</p>
+              <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><ShieldCheck size={15} />휴대폰 실명·본인확인</p>
+              <p className="text-xs leading-5 text-slate-500">통신사 인증이 완료된 이름으로 계정을 만들 예정입니다.</p>
+              <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><LockKeyhole size={15} />이메일·비밀번호 설정</p>
+              <p className="text-xs leading-5 text-slate-500">본인확인 후 이메일 인증을 거쳐 가입이 완료됩니다.</p>
+            </div>
+            <button disabled className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white opacity-50">본인확인 준비 중</button>
+            <button onClick={() => switchScreen('login')} className="mt-4 w-full text-xs text-slate-500 hover:text-slate-800">로그인으로 돌아가기</button>
+          </>
+        )}
       </div>
     </div>
   )

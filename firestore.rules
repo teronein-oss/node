@@ -6,7 +6,9 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return signedIn() && request.auth.token.email == 'teronein@gmail.com';
+      return signedIn()
+        && request.auth.token.email == 'teronein@gmail.com'
+        && request.auth.token.email_verified == true;
     }
 
     function regPath(uid) {
@@ -63,8 +65,9 @@ service cloud.firestore {
     }
 
     match /academies/{academyId} {
-      allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read: if isAcademyMember(academyId);
+      // 학원 생성과 가입 확정은 검증된 Cloud Function에서만 수행합니다.
+      allow create: if false;
       allow update, delete: if isAcademyAdmin(academyId);
 
       match /config/{docId} {
@@ -73,30 +76,39 @@ service cloud.firestore {
       }
 
       match /appData/{userId} {
-        allow read, write: if isSuperAdmin()
+        allow read: if isSuperAdmin()
           || (isAcademyMember(academyId) && request.auth.uid == userId)
           || isAcademyAdmin(academyId)
+          || (isAcademyMember(academyId) && isAssignedJogyo(userId));
+        allow write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
           || (isAcademyMember(academyId) && isAssignedJogyo(userId));
       }
 
       match /homeworkData/{userId} {
-        allow read, write: if isSuperAdmin()
+        allow read: if isSuperAdmin()
           || (isAcademyMember(academyId) && request.auth.uid == userId)
           || isAcademyAdmin(academyId)
+          || (isAcademyMember(academyId) && isAssignedJogyo(userId));
+        allow write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
           || (isAcademyMember(academyId) && isAssignedJogyo(userId));
       }
 
       match /users/{userId} {
-        allow read, write: if isSuperAdmin()
+        allow read: if isSuperAdmin()
           || (isAcademyMember(academyId) && request.auth.uid == userId)
           || isAcademyAdmin(academyId);
+        allow write: if isSuperAdmin() || isAcademyAdmin(academyId);
       }
 
       match /sharedStudentRosters/{userId} {
-        allow read: if isAcademyMember(academyId);
-        allow write: if isSuperAdmin()
+        allow read: if isSuperAdmin()
           || (isAcademyMember(academyId) && request.auth.uid == userId)
           || isAcademyAdmin(academyId)
+          || (isAcademyMember(academyId) && isAssignedJogyo(userId));
+        allow write: if isSuperAdmin()
+          || (isAcademyMember(academyId) && request.auth.uid == userId)
           || (isAcademyMember(academyId) && isAssignedJogyo(userId));
       }
 
@@ -144,19 +156,55 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 가입 정책, 제공사 검증 결과와 중복가입 키는 서버에서만 관리합니다.
+    match /signupConfig/{docId} {
+      allow read, write: if false;
+    }
+
+    match /identityVerificationTickets/{ticketHash} {
+      allow read, write: if false;
+    }
+
+    match /identityClaims/{subjectHash} {
+      allow read, write: if false;
+    }
+
     match /registrations/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow create: if false;
+      allow read: if signedIn() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
-      allow read, update, delete: if signedIn()
+      allow read: if signedIn()
         && resource.data.academyId == myAcademyId()
         && isAcademyAdmin(resource.data.academyId);
+      allow delete: if signedIn()
+        && resource.data.academyId == myAcademyId()
+        && isAcademyAdmin(resource.data.academyId)
+        && resource.data.role in ['선생님', '조교']
+        && request.auth.uid != userId;
+      allow update: if signedIn()
+        && resource.data.academyId == myAcademyId()
+        && isAcademyAdmin(resource.data.academyId)
+        && request.auth.uid != userId
+        && resource.data.role in ['선생님', '조교']
+        && request.resource.data.role in ['선생님', '조교']
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'role', 'assignedTeacherUid', 'assignedTeacherUids'])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+          || (
+            resource.data.status in ['pending', 'rejected']
+            && request.resource.data.status in ['approved', 'rejected']
+          )
+        );
     }
 
     match /users/{userId} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
-      allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
+      allow read, write: if isDefaultMember()
+        && (myRegistration().role == '관리자' || myRegistration().role == '원장')
+        && hasRegistration(userId)
+        && get(regPath(userId)).data.academyId == 'node-default';
     }
 
     match /config/{docId} {
@@ -165,18 +213,18 @@ service cloud.firestore {
     }
 
     match /appData/{userId} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if isDefaultMember() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
-      allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
+      allow read: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
       allow read, write: if isDefaultMember() && isAssignedJogyo(userId);
       allow read: if isDefaultMember()
         && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
     }
 
     match /homeworkData/{userId} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read, write: if isDefaultMember() && request.auth.uid == userId;
       allow read, write: if isSuperAdmin();
-      allow read, write: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
+      allow read: if isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장');
       allow read, write: if isDefaultMember() && isAssignedJogyo(userId);
       allow read: if isDefaultMember()
         && get(/databases/$(database)/documents/config/sharedData).data.adminUid == userId;
@@ -185,8 +233,7 @@ service cloud.firestore {
     match /sharedStudentRosters/{userId} {
       allow read: if isDefaultMember();
       allow write: if isSuperAdmin()
-        || (signedIn() && request.auth.uid == userId)
-        || (isDefaultMember() && (myRegistration().role == '관리자' || myRegistration().role == '원장'))
+        || (isDefaultMember() && request.auth.uid == userId)
         || (isDefaultMember() && isAssignedJogyo(userId));
     }
 

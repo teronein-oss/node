@@ -16,6 +16,12 @@ function AdminGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function SuperAdminGuard({ children }: { children: React.ReactNode }) {
+  const { isAdmin, viewingUid } = useAuth()
+  if (!isAdmin || viewingUid) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 function PrincipalGuard({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, viewingUid } = useAuth()
   if ((!isAdmin && user?.role !== '원장' && user?.role !== '관리자') || viewingUid) return <Navigate to="/" replace />
@@ -23,9 +29,9 @@ function PrincipalGuard({ children }: { children: React.ReactNode }) {
 }
 
 function StudentDashboardGuard({ children }: { children: React.ReactNode }) {
-  const { user, viewingUid, viewingAcademyId } = useAuth()
-  const effectiveAcademyId = viewingUid ? viewingAcademyId : user?.academyId
-  if (effectiveAcademyId !== DEFAULT_ACADEMY_ID) return <Navigate to="/" replace />
+  const { user, viewingUid } = useAuth()
+  if (viewingUid) return <Navigate to="/" replace />
+  if (user?.academyId !== DEFAULT_ACADEMY_ID) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -42,7 +48,6 @@ const AdminPage = lazy(() => import('../pages/AdminPage'))
 const AdminManagePage = lazy(() => import('../pages/AdminManagePage'))
 const PrincipalDashboardPage = lazy(() => import('../pages/PrincipalDashboardPage'))
 const RetestDiagnosticsPage = lazy(() => import('../pages/RetestDiagnosticsPage'))
-const MessagesPage = lazy(() => import('../pages/MessagesPage'))
 
 function ReportPortalRedirect() {
   useEffect(() => {
@@ -101,9 +106,9 @@ export const router = createBrowserRouter([
       { path: 'schedule', element: <ScheduleGuard><Lazy><SchedulePage /></Lazy></ScheduleGuard> },
       { path: 'principal', element: <PrincipalGuard><Lazy><PrincipalDashboardPage /></Lazy></PrincipalGuard> },
       { path: 'admin', element: <AdminGuard><Lazy><AdminPage /></Lazy></AdminGuard> },
-      { path: 'admin/manage', element: <AdminGuard><Lazy><AdminManagePage /></Lazy></AdminGuard> },
+      { path: 'admin/manage', element: <SuperAdminGuard><Lazy><AdminManagePage /></Lazy></SuperAdminGuard> },
       { path: 'admin/retest-diagnostics', element: <AdminGuard><Lazy><RetestDiagnosticsPage /></Lazy></AdminGuard> },
-      { path: 'admin/messages', element: <AdminGuard><Lazy><MessagesPage /></Lazy></AdminGuard> },
+      { path: 'admin/messages', element: <Navigate to="/" replace /> },
       { path: 'admin/reports', element: <ReportPortalRedirect /> },
     ],
   },

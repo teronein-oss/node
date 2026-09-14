@@ -24,7 +24,7 @@ export default function AppLayout() {
     '/admin/manage': '사용자 관리',
     '/admin/messages': '문자 발송',
     '/admin/reports': '성적확인 시스템',
-  } as Record<string, string>)[pathname] ?? 'SEUM'
+  } as Record<string, string>)[pathname] ?? 'NODE'
 
   const exitViewingMode = () => {
     setViewingUid(null)
@@ -41,8 +41,8 @@ export default function AppLayout() {
           <div className="flex shrink-0 items-center justify-between border-b border-[#ead9b0] bg-[#fbf3db] px-4 py-2">
             <p className="text-xs font-medium text-[#8a6424]">
               {viewingUserName
-                ? `${viewingUserName}님의 대시보드를 보고 있습니다`
-                : '다른 사용자의 대시보드를 보고 있습니다'}
+                ? `${viewingUserName}님의 대시보드를 조회 중입니다 · 읽기 전용`
+                : '다른 사용자의 대시보드를 조회 중입니다 · 읽기 전용'}
             </p>
             <button
               onClick={exitViewingMode}
@@ -58,7 +58,7 @@ export default function AppLayout() {
         <header className="notion-page-topbar hidden h-12 shrink-0 items-center border-b border-[#e9e9e7] bg-white px-4 lg:flex">
           <span className="truncate text-[13px] font-semibold text-[#37352f]">{pageTitle}</span>
           <div className="ml-auto flex items-center gap-1 text-[#9b9a97]">
-            <span className="mr-2 text-[11px]">SEUM workspace</span>
+            <span className="mr-2 text-[11px]">WORKSPACE</span>
             <button type="button" aria-label="즐겨찾기" className="rounded-md p-1.5 hover:bg-[#f1f1ef] hover:text-[#37352f]"><Star size={16} /></button>
             <button type="button" aria-label="더 보기" className="rounded-md p-1.5 hover:bg-[#f1f1ef] hover:text-[#37352f]"><MoreHorizontal size={17} /></button>
           </div>
@@ -73,7 +73,7 @@ export default function AppLayout() {
           >
             <Menu size={22} />
           </button>
-          <span className="text-sm font-semibold text-[#37352f]">SEUM</span>
+          <span className="text-sm font-semibold text-[#37352f]">NODE</span>
         </header>
 
         {/* 메인 콘텐츠 */}

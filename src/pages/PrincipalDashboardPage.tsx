@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getDoc, getDocs } from 'firebase/firestore'
+import { getDoc, getDocs, query, where } from 'firebase/firestore'
 import { BarChart3, Loader2, PieChart, TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import type { Class, Student } from '../types'
@@ -93,7 +93,7 @@ export default function PrincipalDashboardPage() {
         if (!cancelled) setLoading(false)
         return
       }
-      const regSnap = await getDocs(registrationsCollection(academyId))
+      const regSnap = await getDocs(query(registrationsCollection(), where('academyId', '==', academyId)))
       const teacherList: TeacherInfo[] = []
       regSnap.forEach(docSnap => {
         const data = docSnap.data()
