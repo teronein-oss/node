@@ -9,12 +9,17 @@ export const seedDocuments = documents => {
 }
 const snapshot = path => {
   const data = readDocuments()[path]
-  return { exists: () => data !== undefined, data: () => structuredClone(data) }
+  return { exists: () => data !== undefined, data: () => structuredClone(data), metadata: { fromCache: false } }
 }
 export const emitSnapshot = (path, data) => {
   for (const listener of listeners.get(path) ?? []) {
-    listener({ exists: () => true, data: () => structuredClone(data) })
+    listener({ exists: () => true, data: () => structuredClone(data), metadata: { fromCache: false } })
   }
+}
+export const writeDocumentSilently = (path, data) => {
+  const documents = readDocuments()
+  documents[path] = structuredClone(data)
+  localStorage.setItem(storageKey, JSON.stringify(documents))
 }
 export const onSnapshot = (path, callback) => {
   const subscribers = listeners.get(path) ?? new Set()

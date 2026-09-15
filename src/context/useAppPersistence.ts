@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type 
 import { deleteField, onSnapshot, setDoc, updateDoc } from 'firebase/firestore'
 import type { HomeworkAssignment, ScheduleEvent, ScheduleEventColor } from '../types'
 import type { Action, AppState } from './AppContext'
+import { buildAppDataPatch, valuesEqual, type AppData, type AppDataPatch } from './appDataPatch'
 import { appDataDoc, configDoc, homeworkDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
 
 interface UseAppPersistenceParams {
@@ -64,7 +65,7 @@ const FIRESTORE_WARNING_BYTES = 900_000
 
 const toFirestoreData = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
-const toAppData = (state: AppState): Omit<AppState, 'homeworks'> => {
+const toAppData = (state: AppState): AppData => {
   const { homeworks: _homeworks, ...appData } = state
   return toFirestoreData(appData)
 }
@@ -155,6 +156,7 @@ export function useAppPersistence({
   const hasPendingAppChanges = useRef(false)
   const hasPendingHomeworkChanges = useRef(false)
   const appWriteChain = useRef<Promise<void>>(Promise.resolve())
+  const pendingAppPatch = useRef<AppDataPatch>({})
   const homeworkWriteChain = useRef<Promise<void>>(Promise.resolve())
   const saveErrorRef = useRef<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<AppSaveStatus>('idle')
@@ -205,16 +207,11 @@ export function useAppPersistence({
     throw lastError
   }, [])
 
-  const enqueueAppWrite = useCallback((nextState: AppState, version: number) => {
-    const data = toAppData(nextState)
-    if (approximateBytes(data) > FIRESTORE_WARNING_BYTES) {
-      markSaveError(new Error('앱 데이터 문서가 Firestore 용량 제한에 근접했습니다.'))
-      return
-    }
-
+  const enqueueAppWrite = useCallback((patch: AppDataPatch, version: number) => {
     appWriteChain.current = appWriteChain.current
       .catch(() => undefined)
-      .then(() => writeWithRetry(() => setDoc(firestoreDoc, data)))
+      // 다른 탭이나 기기에서 갱신한 메모·일정을 보존하도록 변경된 최상위 필드만 병합한다.
+      .then(() => writeWithRetry(() => setDoc(firestoreDoc, patch, { merge: true })))
       .then(() => {
         if (version === appChangeVersion.current) hasPendingAppChanges.current = false
         refreshSaveStatus()
@@ -255,16 +252,26 @@ export function useAppPersistence({
       })
   }, [firestoreDoc, homeworkDoc, markSaveError, pendingHomeworkKey, refreshSaveStatus, writeWithRetry])
 
-  const scheduleAppSave = useCallback((nextState: AppState) => {
+  const scheduleAppSave = useCallback((previousState: AppState, nextState: AppState) => {
+    const patch = buildAppDataPatch(previousState, nextState)
+    if (Object.keys(patch).length === 0) return
+    if (approximateBytes(toAppData(nextState)) > FIRESTORE_WARNING_BYTES) {
+      markSaveError(new Error('앱 데이터 문서가 Firestore 용량 제한에 근접했습니다.'))
+      return
+    }
+
     const version = ++appChangeVersion.current
+    pendingAppPatch.current = { ...pendingAppPatch.current, ...patch }
     hasPendingAppChanges.current = true
     markSaving()
     if (appSaveTimer.current) clearTimeout(appSaveTimer.current)
     appSaveTimer.current = setTimeout(() => {
       appSaveTimer.current = null
-      enqueueAppWrite(nextState, version)
+      const queuedPatch = pendingAppPatch.current
+      pendingAppPatch.current = {}
+      enqueueAppWrite(queuedPatch, version)
     }, 250)
-  }, [enqueueAppWrite, markSaving])
+  }, [enqueueAppWrite, markSaveError, markSaving])
 
   const scheduleHomeworkSave = useCallback((homeworks: HomeworkAssignment[], removeLegacy = false) => {
     const version = ++homeworkChangeVersion.current
@@ -298,7 +305,8 @@ export function useAppPersistence({
 
     if (readOnly) return
 
-    const nextState = reduceState(stateRef.current, action)
+    const previousState = stateRef.current
+    const nextState = reduceState(previousState, action)
     stateRef.current = nextState
     baseDispatch({ type: 'LOAD', payload: nextState })
     if (loadingRef.current) return
@@ -307,10 +315,14 @@ export function useAppPersistence({
       scheduleHomeworkSave(nextState.homeworks)
     }
     if (!HOMEWORK_ONLY_ACTION_TYPES.has(action.type)) {
-      scheduleAppSave(nextState)
+      scheduleAppSave(previousState, nextState)
     }
 
-    if (isAdmin && scheduleActionTypes.has(action.type)) {
+    const globalScheduleChanged = !valuesEqual(
+      getGlobalEvents(previousState.scheduleEvents),
+      getGlobalEvents(nextState.scheduleEvents),
+    )
+    if (isAdmin && scheduleActionTypes.has(action.type) && globalScheduleChanged) {
       setDoc(
         configDoc(academyId),
         { globalScheduleEvents: toFirestoreData(getGlobalEvents(nextState.scheduleEvents)) },
@@ -406,10 +418,10 @@ export function useAppPersistence({
           stateToPersist = merged
         }
 
-        const rawAppData = toAppData(rawState)
-        const normalizedAppData = toAppData(stateToPersist)
-        if (!readOnly && JSON.stringify(rawAppData) !== JSON.stringify(normalizedAppData)) {
-          setDoc(firestoreDoc, normalizedAppData).catch(error => console.error('데이터 정규화 저장 실패:', (error as { code?: string }).code))
+        const normalizedPatch = buildAppDataPatch(rawState, stateToPersist)
+        // 캐시에서 먼저 도착한 오래된 스냅샷은 절대 서버에 되쓰지 않는다.
+        if (!readOnly && !snapshot.metadata.fromCache && Object.keys(normalizedPatch).length > 0) {
+          setDoc(firestoreDoc, normalizedPatch, { merge: true }).catch(error => console.error('데이터 정규화 저장 실패:', (error as { code?: string }).code))
         }
       } else {
         let legacyState: AppState | null = null
@@ -458,18 +470,6 @@ export function useAppPersistence({
       unsubscribeHomework()
     }
   }, [baseDispatch, firestoreDoc, homeworkDoc, legacyStorageKey, markSaveError, normalizeState, pendingHomeworkKey, readOnly, scheduleHomeworkSave, setLoading])
-
-  // 관리자 데이터 로드 후 전체 공지 일정도 공유 문서에 맞춘다.
-  useEffect(() => {
-    if (!isAdmin || loading) return
-    setDoc(
-      configDoc(academyId),
-      { globalScheduleEvents: toFirestoreData(getGlobalEvents(state.scheduleEvents)) },
-      { merge: true }
-    ).catch(error => console.error('전체 일정 동기화 실패:', (error as { code?: string }).code))
-  // loading이 false로 바뀌는 최초 시점에만 실행한다.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, loading])
 
   useEffect(() => {
     if (loading || readOnly) return

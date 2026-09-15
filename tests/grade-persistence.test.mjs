@@ -110,6 +110,39 @@ test('grade edits survive navigation and persist through the app save queue', as
     assert.deepEqual(await scores().evaluateAll(inputs => inputs.map(input => input.value)), ['88', '76', '43'])
   })
 
+  await t.test('a stale tab cannot erase schedules or memos while saving another field', async () => {
+    await page.clock.runFor(350)
+    await page.evaluate(() => {
+      const path = 'appData/teacher-test'
+      const remote = window.gradeTest.readDocuments()[path]
+      remote.scheduleEvents = [{
+        id: 'remote-schedule',
+        title: '다른 기기에서 추가한 일정',
+        startDate: '2026-09-20',
+        endDate: '2026-09-20',
+        type: 'personal',
+        completed: false,
+        createdAt: '2026-09-11T03:00:00.000Z',
+      }]
+      remote.todos = [{
+        id: 'remote-memo',
+        title: '다른 기기에서 추가한 메모',
+        date: '2026-09-11',
+        priority: 'none',
+        completed: false,
+        createdAt: '2026-09-11T03:00:00.000Z',
+      }]
+      window.gradeTest.writeDocumentSilently(path, remote)
+    })
+
+    await scores().nth(0).fill('84')
+    await page.clock.runFor(350)
+    const stored = await page.evaluate(() => window.gradeTest.readDocuments()['appData/teacher-test'])
+    assert.equal(stored.scheduleEvents.find(event => event.id === 'remote-schedule')?.title, '다른 기기에서 추가한 일정')
+    assert.equal(stored.todos.find(todo => todo.id === 'remote-memo')?.title, '다른 기기에서 추가한 메모')
+    assert.equal(stored.grades.find(grade => grade.studentId === 'student-a')?.vocabScore, 84)
+  })
+
   await t.test('multi-digit scores update pending retest scores and retain schedules', async () => {
     await scores().nth(0).fill('7')
     await page.evaluate(() => {

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Link, Routes, Route } from 'react-router-dom'
 import { AppProvider, useApp, normalizeState } from '../../src/context/AppContext'
 import GradePage from '../../src/pages/GradePage'
-import { seedDocuments, readDocuments, emitSnapshot, setFailWrites } from './grade-firestore'
+import { seedDocuments, readDocuments, emitSnapshot, setFailWrites, writeDocumentSilently } from './grade-firestore'
 
 seedDocuments({
   'appData/teacher-test': normalizeState({
@@ -22,7 +22,7 @@ seedDocuments({
 
 function TestApp() {
   const app = useApp()
-  window.gradeTest = { app, readDocuments, emitSnapshot, setFailWrites }
+  window.gradeTest = { app, readDocuments, emitSnapshot, setFailWrites, writeDocumentSilently }
   if (app.loading) return <p>Loading test data...</p>
   return (
     <MemoryRouter initialEntries={['/grades']}>
