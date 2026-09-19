@@ -14,7 +14,7 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
-import type { StudentCumulativeExam, StudentCumulativeReportData, StudentReportData } from '../types/studentReport'
+import type { StudentCumulativeExam, StudentCumulativeReportData, StudentReportData, StudentTypeAnalysis } from '../types/studentReport'
 
 function score(value: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
@@ -22,6 +22,47 @@ function score(value: number) {
 
 function isAttendedExam(exam: StudentCumulativeExam): exam is StudentCumulativeExam & { attended: true; result: NonNullable<StudentCumulativeExam['result']> } {
   return exam.attended && exam.result !== null
+}
+
+function combineTypeAnalysis(exams: StudentCumulativeExam[]): StudentTypeAnalysis[] {
+  const groups = new Map<string, {
+    category: string
+    detailType: string
+    correct: number
+    total: number
+    cohortWeightedTotal: number
+    missedQuestions: string[]
+  }>()
+
+  exams.filter(isAttendedExam).forEach(exam => {
+    exam.typeAnalysis.forEach(type => {
+      const key = `${type.category}\u0000${type.detailType}`
+      const group = groups.get(key) ?? {
+        category: type.category,
+        detailType: type.detailType,
+        correct: 0,
+        total: 0,
+        cohortWeightedTotal: 0,
+        missedQuestions: [],
+      }
+      group.correct += type.correct
+      group.total += type.total
+      group.cohortWeightedTotal += type.cohortRate * type.total
+      group.missedQuestions.push(...type.missedQuestions.map(value => `${exam.round}차 ${typeof value === 'number' ? `${value}번` : value}`))
+      groups.set(key, group)
+    })
+  })
+
+  return [...groups.values()].map(group => ({
+    category: group.category,
+    detailType: group.detailType,
+    correct: group.correct,
+    total: group.total,
+    missedCount: group.total - group.correct,
+    accuracy: Math.round(group.correct / Math.max(group.total, 1) * 1000) / 10,
+    cohortRate: Math.round(group.cohortWeightedTotal / Math.max(group.total, 1) * 10) / 10,
+    missedQuestions: group.missedQuestions,
+  }))
 }
 
 function SummaryCard({ label, value, total, average, caption, tone }: {
@@ -68,6 +109,8 @@ export default function StudentCumulativeDashboard({
     () => data.exams.filter(exam => exam.termId === term?.termId).sort((first, second) => first.round - second.round),
     [data.exams, term?.termId],
   )
+  const cumulativeTypeAnalysis = useMemo(() => combineTypeAnalysis(exams), [exams])
+  const maxRound = exams.reduce((highest, exam) => Math.max(highest, exam.round), 0)
   const attendedExams = exams.filter(isAttendedExam)
   const hasWritten = exams.some(exam => exam.averages.written > 0 || (exam.result?.writtenScore ?? 0) > 0)
   const actualScore = (data.actualScores ?? []).find(item => item.termId === term?.termId)
@@ -94,7 +137,7 @@ export default function StudentCumulativeDashboard({
   const selectedRoundExam = analysisRound === 'all' ? null : exams.find(exam => exam.round === analysisRound)
   const selectedRoundAbsent = selectedRoundExam?.attended === false
   const selectedAnalysis = analysisRound === 'all'
-    ? data.typeAnalysis
+    ? cumulativeTypeAnalysis
     : selectedRoundExam?.typeAnalysis ?? []
   const normalizedAnalysis = selectedAnalysis.map(type => ({
     ...type,
@@ -131,7 +174,7 @@ export default function StudentCumulativeDashboard({
               <div className="m3-chip inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-blue-50"><ShieldCheck size={14} />본인 확인 완료</div>
               <p className="mt-5 text-sm text-blue-100/70">{data.school} {data.grade}학년</p>
               <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{data.studentName} 학생 누적 리포트</h1>
-              <p className="mt-3 text-sm leading-6 text-blue-50/70">1~4차 점수 변화와 누적 성취를 한 번에 확인할 수 있습니다.</p>
+              <p className="mt-3 text-sm leading-6 text-blue-50/70">1~{maxRound}차 점수 변화와 누적 성취를 한 번에 확인할 수 있습니다.</p>
             </div>
             <div className="m3-hero-meta grid w-full grid-cols-[1fr_auto_1fr] gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm sm:w-auto sm:gap-6 sm:px-5">
               <div><p className="text-[11px] text-blue-100/65">누적 성취</p><p className="mt-1 text-xl font-black">{attendedExams.length ? `상위 ${cumulativeTopPercent}%` : '미응시'}</p></div>

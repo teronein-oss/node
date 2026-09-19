@@ -19,6 +19,7 @@ import {
 import { functions } from '../firebase'
 import StudentCumulativeDashboard from './StudentCumulativeDashboard'
 import TeacherReportDashboard from './TeacherReportDashboard'
+import { getSampleEnglishReport } from './sampleEnglishReports'
 import type { StudentCumulativeReportData, StudentReportData, StudentReportResponse, TeacherDashboardResponse, TeacherStudentReportResponse } from '../types/studentReport'
 
 const fetchStudentReport = httpsCallable<{ code: string }, StudentReportResponse>(functions, 'getStudentReport')
@@ -245,16 +246,23 @@ export default function StudentReportPage() {
     setLoading(true)
     setError('')
     try {
-      const access = await resolveReportPortalAccess({ code })
-      if (access.data.role === 'teacher') {
-        const result = await fetchTeacherDashboard({ code })
-        setTeacherDashboard(result.data)
-      } else {
-        const result = await fetchStudentReport({ code })
-        if (!result.data.report && !result.data.cumulative) throw new Error('성적 데이터가 없습니다.')
-        setReport(result.data.report)
-        setCumulative(result.data.cumulative)
+      const sampleReport = getSampleEnglishReport(code)
+      if (sampleReport) {
+        setReport(null)
+        setCumulative(sampleReport)
         setShowDetail(false)
+      } else {
+        const access = await resolveReportPortalAccess({ code })
+        if (access.data.role === 'teacher') {
+          const result = await fetchTeacherDashboard({ code })
+          setTeacherDashboard(result.data)
+        } else {
+          const result = await fetchStudentReport({ code })
+          if (!result.data.report && !result.data.cumulative) throw new Error('성적 데이터가 없습니다.')
+          setReport(result.data.report)
+          setCumulative(result.data.cumulative)
+          setShowDetail(false)
+        }
       }
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (requestError) {
