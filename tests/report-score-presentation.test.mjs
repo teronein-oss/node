@@ -94,3 +94,30 @@ test('the three sample codes cover all five display bands', async () => {
   )))
   assert.deepEqual([...bands].sort(), ['59–0', '69–60', '79–70', '89–80', '100–90'].sort())
 })
+
+test('one sample student shows all five bands in every term', async () => {
+  const sampleBundle = await build({
+    entryPoints: ['src/report-portal/sampleEnglishReports.ts'],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'node',
+  })
+  const { getSampleEnglishReport } = await import(`data:text/javascript;base64,${Buffer.from(sampleBundle.outputFiles[0].text).toString('base64')}`)
+  const report = getSampleEnglishReport('CAT52026')
+
+  assert.ok(report)
+  assert.equal(report.studentName, '한X별')
+  assert.equal(report.terms.length, 8)
+  for (const term of report.terms) {
+    const exams = report.exams.filter(exam => exam.termId === term.termId)
+    assert.equal(exams.length, 5)
+    assert.deepEqual(exams.map(exam => scoreBandFor(exam.result.totalScore)), [
+      '59–0', '69–60', '79–70', '89–80', '100–90',
+    ])
+    for (const exam of exams) {
+      assert.equal(exam.result.objectiveScore + exam.result.writtenScore, exam.result.totalScore)
+    }
+  }
+  assert.deepEqual(report.exams.filter(exam => exam.termId === report.terms[0].termId).map(exam => exam.result.totalScore), [55, 65, 75, 85, 95])
+})

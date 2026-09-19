@@ -365,7 +365,8 @@ export default function StudentReportPage() {
         {IS_BATTERY_CAT_PREVIEW && <section className="m3-battery-cat-gallery mb-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-label="배터리 고양이 점수 구간별 디자인 미리보기">
           <h2 className="text-lg font-black text-slate-900">배터리 고양이 디자인 시안</h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">배터리는 실제 기기 잔량이 아닌 점수 구간별 학습 에너지입니다. 위에서 샘플 코드를 입력하면 성적 화면 적용 모습도 확인할 수 있습니다.</p>
-          <p className="mt-1 text-xs font-semibold text-slate-600">샘플 코드: 하위 HSE8-C329 · 중위 KMS6-B427 · 상위 LEE7-A526</p>
+          <p className="mt-1 text-xs font-semibold text-slate-600">전체 5구간을 한 번에 보기: CAT5-2026 (1~5차 55 · 65 · 75 · 85 · 95점)</p>
+          <p className="mt-1 text-xs text-slate-500">기존 샘플: 하위 HSE8-C329 · 중위 KMS6-B427 · 상위 LEE7-A526</p>
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
             {BATTERY_CAT_PREVIEW.map(item => <article key={item.band} className="flex min-w-0 flex-col items-center rounded-2xl border border-slate-200 bg-slate-50 px-2 py-4 text-center">
               <p className="text-xs font-black text-slate-800">{item.band}</p>

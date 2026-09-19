@@ -6,7 +6,7 @@ import type {
   TeacherReportTerm,
 } from '../types/studentReport'
 
-type SampleLevel = '상위권' | '중위권' | '하위권'
+type SampleLevel = '상위권' | '중위권' | '하위권' | '전체구간 체험'
 
 interface SampleStudentBlueprint {
   code: string
@@ -18,6 +18,8 @@ interface SampleStudentBlueprint {
   termGrowth: number[]
   actualScores: number[]
   typeOffsets: number[]
+  roundScores?: readonly [number, number, number, number, number]
+  roundTopPercents?: readonly [number, number, number, number, number]
 }
 
 const TERMS: TeacherReportTerm[] = [
@@ -64,6 +66,19 @@ const STUDENTS: SampleStudentBlueprint[] = [
     termGrowth: [0, 1, 2, 3, 4, 5, 6, 7],
     actualScores: [49, 50, 52, 53, 55, 56, 58, 60],
     typeOffsets: [3, -6, 5, -3, 1],
+  },
+  {
+    code: 'CAT52026',
+    studentId: 'sample-cat-all-bands',
+    studentName: '한X별',
+    level: '전체구간 체험',
+    baseScore: 75,
+    baseTopPercent: 46,
+    termGrowth: [0, 1, -1, 2, 0, 1, -2, 0],
+    actualScores: [75, 76, 74, 77, 75, 76, 73, 75],
+    typeOffsets: [3, 2, 1, 0, -1],
+    roundScores: [55, 65, 75, 85, 95],
+    roundTopPercents: [86, 68, 46, 20, 6],
   },
 ]
 
@@ -129,7 +144,9 @@ function makeExam(
   roundIndex: number,
 ): StudentCumulativeExam {
   const totalScore = clamp(
-    student.baseScore + student.termGrowth[termIndex] + ROUND_SCORE_OFFSETS[roundIndex] + ((termIndex + roundIndex) % 3) - 1,
+    student.roundScores
+      ? student.roundScores[roundIndex] + student.termGrowth[termIndex]
+      : student.baseScore + student.termGrowth[termIndex] + ROUND_SCORE_OFFSETS[roundIndex] + ((termIndex + roundIndex) % 3) - 1,
     28,
     100,
   )
@@ -153,7 +170,9 @@ function makeExam(
       objectiveScore,
       writtenScore,
       topPercent: clamp(
-        student.baseTopPercent + ROUND_PERCENT_OFFSETS[roundIndex] - Math.floor(student.termGrowth[termIndex] / 2),
+        student.roundTopPercents
+          ? student.roundTopPercents[roundIndex] - student.termGrowth[termIndex]
+          : student.baseTopPercent + ROUND_PERCENT_OFFSETS[roundIndex] - Math.floor(student.termGrowth[termIndex] / 2),
         1,
         97,
       ),
