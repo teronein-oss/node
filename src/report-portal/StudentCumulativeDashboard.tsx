@@ -20,8 +20,7 @@ import sproutFrames from './assets/score-sprout-frames.png'
 import bunnyFrames from './assets/score-bunny-frames.png'
 import catFrames from './assets/score-cat-frames-v2.png'
 import foxFrames from './assets/score-fox-frames.png'
-import starBearFrames from './assets/score-star-bear-frames.png'
-import { displayDistribution, scoreBandFor, type ScoreBand } from './scorePresentation'
+import { displayDistribution, scoreBandFor, SCORE_BANDS_DESC, type ScoreBand } from './scorePresentation'
 
 function score(value: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
@@ -32,12 +31,11 @@ function isAttendedExam(exam: StudentCumulativeExam): exam is StudentCumulativeE
 }
 
 const SCORE_MASCOTS: Record<ScoreBand, { name: string; message: string; frames: string; duration: number }> = {
-  '0–59': { name: '병아리', message: '한 걸음씩, 좋아!', frames: chickFrames, duration: 1.8 },
-  '60–69': { name: '새싹', message: '조금씩 자라고 있어!', frames: sproutFrames, duration: 2.2 },
-  '70–79': { name: '토끼', message: '좋은 흐름이야!', frames: bunnyFrames, duration: 1.8 },
-  '80–89': { name: '고양이', message: '꾸준함이 빛나!', frames: catFrames, duration: 2.2 },
-  '90–99': { name: '여우', message: '멋진 집중력이야!', frames: foxFrames, duration: 2 },
-  '100': { name: '별곰', message: '완벽한 한 회차!', frames: starBearFrames, duration: 2.4 },
+  '59–0': { name: '병아리', message: '한 걸음씩, 좋아!', frames: chickFrames, duration: 1.8 },
+  '69–60': { name: '새싹', message: '조금씩 자라고 있어!', frames: sproutFrames, duration: 2.2 },
+  '79–70': { name: '토끼', message: '좋은 흐름이야!', frames: bunnyFrames, duration: 1.8 },
+  '89–80': { name: '고양이', message: '꾸준함이 빛나!', frames: catFrames, duration: 2.2 },
+  '100–90': { name: '여우', message: '멋진 집중력이야!', frames: foxFrames, duration: 2 },
 }
 
 function ScoreMascot({ totalScore, compact = false }: { totalScore: number; compact?: boolean }) {
@@ -136,10 +134,6 @@ export default function StudentCumulativeDashboard({
     [data.exams, term?.termId],
   )
   const displayedDistributions = useMemo(() => exams.map(displayDistribution), [exams])
-  const distributionLabels = useMemo(
-    () => [...new Set(displayedDistributions.flatMap(distribution => distribution.bins.map(bin => bin.label)))].sort((first, second) => Number.parseInt(second, 10) - Number.parseInt(first, 10)),
-    [displayedDistributions],
-  )
   const cumulativeTypeAnalysis = useMemo(() => combineTypeAnalysis(exams), [exams])
   const maxRound = exams.reduce((highest, exam) => Math.max(highest, exam.round), 0)
   const attendedExams = exams.filter(isAttendedExam)
@@ -278,7 +272,7 @@ export default function StudentCumulativeDashboard({
                 </tr>
               </thead>
               <tbody>
-                {distributionLabels.map(label => (
+                {SCORE_BANDS_DESC.map(label => (
                   <tr key={label}>
                     <th className="px-5 py-4 text-left font-black text-slate-700">{label}점</th>
                     {exams.map((exam, index) => {
@@ -297,7 +291,7 @@ export default function StudentCumulativeDashboard({
             {exams.map((exam, index) => <article key={exam.examId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-3"><div><p className="font-black text-slate-900">{exam.round}차</p><p className="mt-1 text-[11px] font-bold"><span className="text-rose-600">최고 {score(exam.scoreDistribution.highest)}</span><span className="mx-1 text-slate-300">·</span><span className="text-emerald-700">최저 {score(exam.scoreDistribution.lowest)}</span></p></div><span className={`rounded-md px-2 py-1 text-[10px] font-black ${exam.attended ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'}`}>{exam.result ? `내 점수 ${score(exam.result.totalScore)}` : '미응시'}</span></div>
               <div className="divide-y divide-slate-100">
-                {[...displayedDistributions[index].bins].reverse().map(bin => {
+                {displayedDistributions[index].bins.map(bin => {
                   const isStudentBand = displayedDistributions[index].studentBand === bin.label && exam.result !== null
                   return <div key={bin.label} data-student={isStudentBand} className="m3-distribution-cell flex items-center justify-between gap-3 px-4 py-3"><p className="text-xs font-bold text-slate-600">{bin.label}점</p><div className="flex items-center gap-2">{isStudentBand && <ScoreMascot totalScore={exam.result!.totalScore} compact />}<p className="text-sm font-black text-slate-800">{bin.percent.toFixed(1)}%</p>{isStudentBand && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white">내 위치</span>}</div></div>
                 })}

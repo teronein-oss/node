@@ -94,8 +94,7 @@ function splitScore(totalScore: number) {
 }
 
 function studentBand(score: number) {
-  if (score >= 100) return '100'
-  if (score >= 90) return '90~99'
+  if (score >= 90) return '90~100'
   if (score >= 80) return '80~89'
   if (score >= 70) return '70~79'
   if (score >= 60) return '60~69'
@@ -169,8 +168,7 @@ function makeExam(
         { label: '60~69', percent: 21 },
         { label: '70~79', percent: 30 },
         { label: '80~89', percent: 24 },
-        { label: '90~99', percent: 10 },
-        { label: '100', percent: 2 },
+        { label: '90~100', percent: 12 },
       ],
     },
   }
