@@ -17,7 +17,7 @@
 .m3-battery-cat[data-energy='2'] { --m3-battery-cat-color: #6aa9ba; }
 .m3-battery-cat[data-energy='3'] { --m3-battery-cat-color: #5baa91; }
 .m3-battery-cat[data-energy='4'] { --m3-battery-cat-color: #479bb6; }
-.m3-battery-cat[data-energy='5'] { --m3-battery-cat-color: #dc9e38; }
+.m3-battery-cat[data-energy='5'] { --m3-battery-cat-color: #16a34a; }
 
 .m3-battery-cat-battery {
   position: relative;
