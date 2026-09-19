@@ -15,8 +15,13 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import type { StudentCumulativeExam, StudentCumulativeReportData, StudentReportData, StudentTypeAnalysis } from '../types/studentReport'
-import chickSprite from './assets/score-chick.png'
-import { displayDistribution } from './scorePresentation'
+import chickFrames from './assets/score-chick-frames.png'
+import sproutFrames from './assets/score-sprout-frames.png'
+import bunnyFrames from './assets/score-bunny-frames.png'
+import catFrames from './assets/score-cat-frames-v2.png'
+import foxFrames from './assets/score-fox-frames.png'
+import starBearFrames from './assets/score-star-bear-frames.png'
+import { displayDistribution, scoreBandFor, type ScoreBand } from './scorePresentation'
 
 function score(value: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
@@ -26,10 +31,22 @@ function isAttendedExam(exam: StudentCumulativeExam): exam is StudentCumulativeE
   return exam.attended && exam.result !== null
 }
 
-function ScoreChick({ compact = false }: { compact?: boolean }) {
-  return <span className={`m3-score-chick ${compact ? 'm3-score-chick-compact' : ''}`} role="img" aria-label="병아리 응원: 한 걸음씩, 좋아!">
-    <img src={chickSprite} alt="" aria-hidden="true" />
-    {!compact && <span>한 걸음씩, 좋아!</span>}
+const SCORE_MASCOTS: Record<ScoreBand, { name: string; message: string; frames: string; duration: number }> = {
+  '0–59': { name: '병아리', message: '한 걸음씩, 좋아!', frames: chickFrames, duration: 1.8 },
+  '60–69': { name: '새싹', message: '조금씩 자라고 있어!', frames: sproutFrames, duration: 2.2 },
+  '70–79': { name: '토끼', message: '좋은 흐름이야!', frames: bunnyFrames, duration: 1.8 },
+  '80–89': { name: '고양이', message: '꾸준함이 빛나!', frames: catFrames, duration: 2.2 },
+  '90–99': { name: '여우', message: '멋진 집중력이야!', frames: foxFrames, duration: 2 },
+  '100': { name: '별곰', message: '완벽한 한 회차!', frames: starBearFrames, duration: 2.4 },
+}
+
+function ScoreMascot({ totalScore, compact = false }: { totalScore: number; compact?: boolean }) {
+  const band = scoreBandFor(totalScore)
+  if (!band) return null
+  const mascot = SCORE_MASCOTS[band]
+  return <span className={`m3-score-mascot ${compact ? 'm3-score-mascot-compact' : ''}`} role="img" aria-label={`${band}점 ${mascot.name} 응원: ${mascot.message}`}>
+    <span className="m3-score-mascot-art" aria-hidden="true" style={{ backgroundImage: `url(${mascot.frames})`, animationDuration: `${mascot.duration}s` }} />
+    {!compact && <span>{mascot.message}</span>}
   </span>
 }
 
@@ -222,9 +239,9 @@ export default function StudentCumulativeDashboard({
               {exams.map(exam => (
                 <div key={exam.examId} className="flex min-w-0 flex-col items-center text-center">
                   <div className="flex h-52 w-full flex-col items-center justify-end gap-1 border-b border-slate-200">
-                    {exam.result && exam.result.totalScore < 60 && <ScoreChick compact />}
+                    {exam.result && <ScoreMascot totalScore={exam.result.totalScore} compact />}
                     <span className={`whitespace-nowrap text-xs font-black sm:text-sm ${exam.result ? 'text-blue-900' : 'text-slate-400'}`}>{exam.result ? score(exam.result.totalScore) : '미응시'}</span>
-                    {exam.result ? <div className="m3-chart-bar w-full max-w-16 rounded-t-xl bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-100 sm:rounded-t-2xl" style={{ height: `${Math.max(8, exam.result.totalScore * 1.6)}px` }} aria-label={`${exam.round}차 총점 ${score(exam.result.totalScore)}점`} /> : <div className="m3-chart-absent flex h-16 w-full max-w-16 items-center justify-center rounded-t-xl border-2 border-dashed border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-400" aria-label={`${exam.round}차 미응시`}>—</div>}
+                    {exam.result ? <div className="m3-chart-bar w-full max-w-16 rounded-t-xl bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-100 sm:rounded-t-2xl" style={{ height: `${Math.max(8, exam.result.totalScore * 1.4)}px` }} aria-label={`${exam.round}차 총점 ${score(exam.result.totalScore)}점`} /> : <div className="m3-chart-absent flex h-16 w-full max-w-16 items-center justify-center rounded-t-xl border-2 border-dashed border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-400" aria-label={`${exam.round}차 미응시`}>—</div>}
                   </div>
                   <span className="mt-2 text-xs font-bold text-slate-500">{exam.round}차</span>
                   {exam.result ? <div className="m3-score-formula mt-2 text-[11px] leading-5 text-slate-600">
@@ -268,7 +285,7 @@ export default function StudentCumulativeDashboard({
                       const distribution = displayedDistributions[index]
                       const bin = distribution.bins.find(item => item.label === label)
                       const isStudentBand = distribution.studentBand === label && exam.result !== null
-                      return <td key={exam.examId} data-student={isStudentBand} className="m3-distribution-cell px-3 py-4"><p className="text-base font-black text-slate-700">{(bin?.percent ?? 0).toFixed(1)}%</p>{isStudentBand && <div className="mt-1 flex flex-col items-center gap-1">{exam.result!.totalScore < 60 && <ScoreChick compact />}<span className="inline-flex rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">내 위치 · {score(exam.result!.totalScore)}점</span></div>}</td>
+                      return <td key={exam.examId} data-student={isStudentBand} className="m3-distribution-cell px-3 py-4"><p className="text-base font-black text-slate-700">{(bin?.percent ?? 0).toFixed(1)}%</p>{isStudentBand && <div className="mt-1 flex flex-col items-center gap-1"><ScoreMascot totalScore={exam.result!.totalScore} compact /><span className="inline-flex rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">내 위치 · {score(exam.result!.totalScore)}점</span></div>}</td>
                     })}
                   </tr>
                 ))}
@@ -282,7 +299,7 @@ export default function StudentCumulativeDashboard({
               <div className="divide-y divide-slate-100">
                 {[...displayedDistributions[index].bins].reverse().map(bin => {
                   const isStudentBand = displayedDistributions[index].studentBand === bin.label && exam.result !== null
-                  return <div key={bin.label} data-student={isStudentBand} className="m3-distribution-cell flex items-center justify-between gap-3 px-4 py-3"><p className="text-xs font-bold text-slate-600">{bin.label}점</p><div className="flex items-center gap-2">{isStudentBand && exam.result!.totalScore < 60 && <ScoreChick compact />}<p className="text-sm font-black text-slate-800">{bin.percent.toFixed(1)}%</p>{isStudentBand && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white">내 위치</span>}</div></div>
+                  return <div key={bin.label} data-student={isStudentBand} className="m3-distribution-cell flex items-center justify-between gap-3 px-4 py-3"><p className="text-xs font-bold text-slate-600">{bin.label}점</p><div className="flex items-center gap-2">{isStudentBand && <ScoreMascot totalScore={exam.result!.totalScore} compact />}<p className="text-sm font-black text-slate-800">{bin.percent.toFixed(1)}%</p>{isStudentBand && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white">내 위치</span>}</div></div>
                 })}
               </div>
             </article>)}
@@ -337,14 +354,14 @@ export default function StudentCumulativeDashboard({
           <div className="space-y-3 p-4 sm:hidden">
             {exams.map(exam => <article key={exam.examId} className={`rounded-2xl border p-4 ${exam.result ? 'border-slate-200 bg-white' : 'border-dashed border-slate-300 bg-slate-50'}`}>
               <div className="flex items-center justify-between gap-3"><p className="font-black text-slate-800">{exam.round}차</p>{exam.result ? <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">상위 {exam.result.topPercent}%</span> : <span className="rounded-full bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600">미응시</span>}</div>
-              {exam.result ? <div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-slate-400">전체</p><p className="mt-1 text-lg font-black text-blue-950">{score(exam.result.totalScore)}점</p>{exam.result.totalScore < 60 && <div className="mt-1"><ScoreChick /></div>}</div><div><p className="text-slate-400">전체 평균</p><p className="mt-1 text-lg font-black text-slate-700">{exam.averages.total.toFixed(1)}점</p></div><div><p className="text-slate-400">객관식</p><p className="mt-1 font-bold text-slate-700">{score(exam.result.objectiveScore)}점</p></div>{hasWritten && <div><p className="text-slate-400">서술형</p><p className="mt-1 font-bold text-slate-700">{score(exam.result.writtenScore)}점</p></div>}</div> : <p className="mt-3 text-xs leading-5 text-slate-500">채점 결과에 학생 이름이 없어 미응시로 표시했습니다.</p>}
+              {exam.result ? <div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-slate-400">전체</p><p className="mt-1 text-lg font-black text-blue-950">{score(exam.result.totalScore)}점</p><div className="mt-1"><ScoreMascot totalScore={exam.result.totalScore} /></div></div><div><p className="text-slate-400">전체 평균</p><p className="mt-1 text-lg font-black text-slate-700">{exam.averages.total.toFixed(1)}점</p></div><div><p className="text-slate-400">객관식</p><p className="mt-1 font-bold text-slate-700">{score(exam.result.objectiveScore)}점</p></div>{hasWritten && <div><p className="text-slate-400">서술형</p><p className="mt-1 font-bold text-slate-700">{score(exam.result.writtenScore)}점</p></div>}</div> : <p className="mt-3 text-xs leading-5 text-slate-500">채점 결과에 학생 이름이 없어 미응시로 표시했습니다.</p>}
             </article>)}
           </div>
           <div className="hidden overflow-x-auto sm:block">
             <table className={`w-full text-left text-sm ${hasWritten ? 'min-w-[720px]' : 'min-w-[620px]'}`}>
               <thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-6 py-3">회차</th><th className="px-4 py-3 text-right">전체</th><th className="px-4 py-3 text-right">객관식</th>{hasWritten && <th className="px-4 py-3 text-right">서술형</th>}<th className="px-4 py-3 text-right">전체 평균</th><th className="px-6 py-3 text-right">성취 구간</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {exams.map(exam => <tr key={exam.examId} className="hover:bg-slate-50/70"><td className="px-6 py-4 font-black text-slate-800">{exam.round}차</td>{exam.result ? <><td className="px-4 py-4 text-right font-black text-blue-950"><div className="inline-flex items-center gap-1">{exam.result.totalScore < 60 && <ScoreChick compact />}{score(exam.result.totalScore)}</div></td><td className="px-4 py-4 text-right text-slate-600">{score(exam.result.objectiveScore)}</td>{hasWritten && <td className="px-4 py-4 text-right text-slate-600">{score(exam.result.writtenScore)}</td>}<td className="px-4 py-4 text-right text-slate-500">{exam.averages.total.toFixed(1)}</td><td className="px-6 py-4 text-right"><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">상위 {exam.result.topPercent}%</span></td></> : <td colSpan={hasWritten ? 5 : 4} className="px-4 py-4 text-center"><span className="rounded-full bg-slate-100 px-4 py-2 text-xs font-bold text-slate-500">미응시</span></td>}</tr>)}
+                {exams.map(exam => <tr key={exam.examId} className="hover:bg-slate-50/70"><td className="px-6 py-4 font-black text-slate-800">{exam.round}차</td>{exam.result ? <><td className="px-4 py-4 text-right font-black text-blue-950"><div className="inline-flex items-center gap-1"><ScoreMascot totalScore={exam.result.totalScore} compact />{score(exam.result.totalScore)}</div></td><td className="px-4 py-4 text-right text-slate-600">{score(exam.result.objectiveScore)}</td>{hasWritten && <td className="px-4 py-4 text-right text-slate-600">{score(exam.result.writtenScore)}</td>}<td className="px-4 py-4 text-right text-slate-500">{exam.averages.total.toFixed(1)}</td><td className="px-6 py-4 text-right"><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">상위 {exam.result.topPercent}%</span></td></> : <td colSpan={hasWritten ? 5 : 4} className="px-4 py-4 text-center"><span className="rounded-full bg-slate-100 px-4 py-2 text-xs font-bold text-slate-500">미응시</span></td>}</tr>)}
               </tbody>
             </table>
           </div>
