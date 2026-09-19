@@ -15,11 +15,11 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import type { StudentCumulativeExam, StudentCumulativeReportData, StudentReportData, StudentTypeAnalysis } from '../types/studentReport'
-import chickFrames from './assets/score-chick-frames.png'
-import sproutFrames from './assets/score-sprout-frames.png'
-import bunnyFrames from './assets/score-bunny-frames.png'
-import catFrames from './assets/score-cat-frames-v2.png'
-import foxFrames from './assets/score-fox-frames.png'
+import pencilFrames from './assets/score-chick-pencil-frames.png'
+import notebookFrames from './assets/score-chick-notebook-frames.png'
+import flashcardFrames from './assets/score-chick-flashcards-frames.png'
+import wingFrames from './assets/score-chick-wings-frames.png'
+import medalFrames from './assets/score-chick-medal-frames.png'
 import { displayDistribution, scoreBandFor, SCORE_BANDS_DESC, type ScoreBand } from './scorePresentation'
 
 function score(value: number) {
@@ -31,11 +31,11 @@ function isAttendedExam(exam: StudentCumulativeExam): exam is StudentCumulativeE
 }
 
 const SCORE_MASCOTS: Record<ScoreBand, { name: string; message: string; frames: string; duration: number }> = {
-  '59–0': { name: '병아리', message: '한 걸음씩, 좋아!', frames: chickFrames, duration: 1.8 },
-  '69–60': { name: '새싹', message: '조금씩 자라고 있어!', frames: sproutFrames, duration: 2.2 },
-  '79–70': { name: '토끼', message: '좋은 흐름이야!', frames: bunnyFrames, duration: 1.8 },
-  '89–80': { name: '고양이', message: '꾸준함이 빛나!', frames: catFrames, duration: 2.2 },
-  '100–90': { name: '여우', message: '멋진 집중력이야!', frames: foxFrames, duration: 2 },
+  '59–0': { name: '연필 병아리', message: '한 걸음씩 시작해요!', frames: pencilFrames, duration: 2.4 },
+  '69–60': { name: '공책 병아리', message: '차근차근 쌓이고 있어요!', frames: notebookFrames, duration: 2.4 },
+  '79–70': { name: '단어 카드 병아리', message: '좋은 리듬을 찾았어요!', frames: flashcardFrames, duration: 2.2 },
+  '89–80': { name: '날개 병아리', message: '실력이 빛나고 있어요!', frames: wingFrames, duration: 2 },
+  '100–90': { name: '메달 병아리', message: '멋지게 해냈어요!', frames: medalFrames, duration: 2.2 },
 }
 
 function ScoreMascot({ totalScore, compact = false }: { totalScore: number; compact?: boolean }) {
