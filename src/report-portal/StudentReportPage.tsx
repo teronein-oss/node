@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { functions } from '../firebase'
 import StudentCumulativeDashboard from './StudentCumulativeDashboard'
+import { BatteryCatMascot } from './BatteryCatMascot'
 import TeacherReportDashboard from './TeacherReportDashboard'
 import { getSampleEnglishReport } from './sampleEnglishReports'
 import type { StudentCumulativeReportData, StudentReportData, StudentReportResponse, TeacherDashboardResponse, TeacherStudentReportResponse } from '../types/studentReport'
@@ -26,6 +27,14 @@ const fetchStudentReport = httpsCallable<{ code: string }, StudentReportResponse
 const fetchTeacherDashboard = httpsCallable<{ code: string }, TeacherDashboardResponse>(functions, 'getTeacherDashboard')
 const fetchTeacherStudentReport = httpsCallable<{ code: string; studentId: string }, TeacherStudentReportResponse>(functions, 'getTeacherStudentReport')
 const resolveReportPortalAccess = httpsCallable<{ code: string }, { role: 'student' | 'teacher' }>(functions, 'resolveReportPortalAccess')
+const IS_BATTERY_CAT_PREVIEW = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mascot') === 'cat'
+const BATTERY_CAT_PREVIEW = [
+  { score: 45, band: '59–0점', energy: '1/5', action: '잠자며 충전' },
+  { score: 65, band: '69–60점', energy: '2/5', action: '하품과 기지개' },
+  { score: 75, band: '79–70점', energy: '3/5', action: '귀 쫑긋·꼬리 흔들기' },
+  { score: 85, band: '89–80점', energy: '4/5', action: '작은 제자리 점프' },
+  { score: 95, band: '100–90점', energy: '5/5', action: '왕관 세리머니' },
+] as const
 
 function normalizeCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12)
@@ -353,6 +362,19 @@ export default function StudentReportPage() {
             </section>
           </div>
         </div>
+        {IS_BATTERY_CAT_PREVIEW && <section className="m3-battery-cat-gallery mb-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-label="배터리 고양이 점수 구간별 디자인 미리보기">
+          <h2 className="text-lg font-black text-slate-900">배터리 고양이 디자인 시안</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-500">배터리는 실제 기기 잔량이 아닌 점수 구간별 학습 에너지입니다. 위에서 샘플 코드를 입력하면 성적 화면 적용 모습도 확인할 수 있습니다.</p>
+          <p className="mt-1 text-xs font-semibold text-slate-600">샘플 코드: 하위 HSE8-C329 · 중위 KMS6-B427 · 상위 LEE7-A526</p>
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+            {BATTERY_CAT_PREVIEW.map(item => <article key={item.band} className="flex min-w-0 flex-col items-center rounded-2xl border border-slate-200 bg-slate-50 px-2 py-4 text-center">
+              <p className="text-xs font-black text-slate-800">{item.band}</p>
+              <p className="mt-0.5 text-[11px] font-bold text-slate-500">학습 에너지 {item.energy}</p>
+              <div className="mt-3"><BatteryCatMascot totalScore={item.score} compact /></div>
+              <p className="mt-2 text-[11px] font-semibold text-slate-600">{item.action}</p>
+            </article>)}
+          </div>
+        </section>}
       </main>
     </div>
   )

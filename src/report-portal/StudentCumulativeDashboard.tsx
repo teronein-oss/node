@@ -20,7 +20,10 @@ import notebookFrames from './assets/score-chick-notebook-frames.png'
 import flashcardFrames from './assets/score-chick-flashcards-frames.png'
 import wingFrames from './assets/score-chick-wings-frames.png'
 import medalFrames from './assets/score-chick-medal-frames.png'
+import { BatteryCatMascot } from './BatteryCatMascot'
 import { displayDistribution, scoreBandFor, SCORE_BANDS_DESC, type ScoreBand } from './scorePresentation'
+
+const IS_BATTERY_CAT_PREVIEW = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mascot') === 'cat'
 
 function score(value: number) {
   return Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)
@@ -39,6 +42,9 @@ const SCORE_MASCOTS: Record<ScoreBand, { name: string; message: string; frames: 
 }
 
 function ScoreMascot({ totalScore, compact = false }: { totalScore: number; compact?: boolean }) {
+  if (IS_BATTERY_CAT_PREVIEW) {
+    return <BatteryCatMascot totalScore={totalScore} compact={compact} />
+  }
   const band = scoreBandFor(totalScore)
   if (!band) return null
   const mascot = SCORE_MASCOTS[band]
@@ -197,6 +203,7 @@ export default function StudentCumulativeDashboard({
           <div className="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="m3-chip inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-blue-50"><ShieldCheck size={14} />본인 확인 완료</div>
+              {IS_BATTERY_CAT_PREVIEW && <span className="ml-2 inline-flex rounded-full border border-amber-200/60 bg-amber-100/15 px-3 py-1.5 text-xs font-bold text-amber-100 print:hidden">배터리 고양이 시안</span>}
               <p className="mt-5 text-sm text-blue-100/70">{data.school} {data.grade}학년</p>
               <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{data.studentName} 학생 누적 리포트</h1>
               <p className="mt-3 text-sm leading-6 text-blue-50/70">1~{maxRound}차 점수 변화와 누적 성취를 한 번에 확인할 수 있습니다.</p>
