@@ -89,6 +89,16 @@ body {
 
 .m3-chart-bar { border-radius: 6px 6px 0 0 !important; background: var(--m3-primary) !important; background-image: none !important; }
 .m3-chart-absent { border-color: var(--m3-outline) !important; background: var(--m3-surface-container) !important; }
+.m3-trend-grid { align-items: start; }
+.m3-score-formula { display: flex; flex-direction: column; align-items: center; white-space: nowrap; }
+.m3-score-formula strong { color: var(--m3-on-primary-container); font-weight: 800; }
+.m3-score-chick { display: inline-flex; max-width: 100%; align-items: center; gap: 3px; color: #805715; font-size: 10px; font-weight: 800; line-height: 1.25; white-space: nowrap; }
+.m3-score-chick img { display: block; width: 56px; height: 56px; margin: -10px; flex: none; object-fit: contain; image-rendering: pixelated; transform-origin: 50% 100%; animation: m3-chick-bounce 1.6s steps(2, end) infinite; }
+.m3-score-chick-compact img { width: 48px; height: 48px; margin: -9px; }
+@keyframes m3-chick-bounce {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-4px) rotate(2deg); }
+}
 .m3-distribution-position { min-height: 132px; border-radius: 14px !important; background: var(--m3-primary-container) !important; color: var(--m3-on-primary-container) !important; }
 .m3-distribution-row { background: transparent; transition: background-color 150ms ease; }
 .m3-distribution-row[data-student='true'] { background: var(--m3-primary-container); }
@@ -146,4 +156,9 @@ body {
 @media print {
   @page { size: A4; margin: 12mm; }
   body { background: #fff; print-color-adjust: exact; }
+  .m3-score-chick img { animation: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m3-score-chick img { animation: none; }
 }
