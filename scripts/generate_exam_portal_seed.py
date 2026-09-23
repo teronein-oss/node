@@ -279,14 +279,19 @@ def main() -> None:
     # A new term has its own code files. The previous term's codes are never reused.
     student_codes = read_map(output_dir / "student-access-code-map.json")
     teacher_codes = read_map(output_dir / "teacher-access-codes.json")
+    subject_teacher_codes = read_map(output_dir / "subject-teacher-access-codes.json")
+    if any(not isinstance(by_subject, dict) for by_subject in subject_teacher_codes.values()):
+        raise ValueError("과목별 교사 코드 파일 형식이 올바르지 않습니다.")
     existing_codes = [code for school in student_codes.values() for code in school.values()]
     existing_codes.extend(entry["code"] for entry in teacher_codes.values())
+    existing_codes.extend(entry["code"] for school in subject_teacher_codes.values() for entry in school.values())
     if len(existing_codes) != len(set(existing_codes)):
         raise ValueError("저장된 학생·교사 코드에 중복이 있습니다. 코드 맵을 확인해 주세요.")
     used = set(existing_codes)
     cohorts, warnings = [], []
     student_csv: list[list[object]] = [["학교", "학년", "학생", "학생 식별 코드"]]
     teacher_csv: list[list[object]] = [["학교", "학년", "담당", "교사용 마스터 코드"]]
+    subject_teacher_csv: list[list[object]] = [["학교", "학년", "과목", "담당", "과목 전용 마스터 코드"]]
     for school in manifest["cohorts"]:
         cohort = {**school, "termId": term_id}
         exams = []
@@ -320,9 +325,35 @@ def main() -> None:
             raise ValueError("교사용 마스터 코드 형식이 올바르지 않습니다.")
         code = teacher["code"]
         teacher_csv.append([school["school"], school["grade"], teacher["label"], f"{code[:4]}-{code[4:8]}-{code[8:]}"])
+        school_subject_codes = subject_teacher_codes.setdefault(school["cohortId"], {})
+        subject_teacher_access = []
+        seen_subjects: set[str] = set()
+        for subject_teacher in school.get("subjectTeachers", []):
+            subject = clean(subject_teacher.get("subject"))
+            label = clean(subject_teacher.get("label"))
+            if not label or subject not in {exam["subject"] for exam in exams} or subject in seen_subjects:
+                raise ValueError("과목별 교사 설정의 과목·담당 이름이 잘못되었거나 중복됩니다.")
+            seen_subjects.add(subject)
+            entry = school_subject_codes.get(subject)
+            if entry is None:
+                entry = {"label": label, "code": new_code(12, used)}
+                school_subject_codes[subject] = entry
+            if not valid_code(entry.get("code"), 12):
+                raise ValueError("과목별 교사 코드 형식이 올바르지 않습니다.")
+            entry["label"] = label
+            subject_code = entry["code"]
+            subject_teacher_access.append({
+                "subject": subject, "label": label,
+                "accessHash": code_hash("teacher", subject_code),
+            })
+            subject_teacher_csv.append([
+                school["school"], school["grade"], subject, label,
+                f"{subject_code[:4]}-{subject_code[4:8]}-{subject_code[8:]}",
+            ])
         cohorts.append({
             "cohortId": school["cohortId"], "school": school["school"], "grade": school["grade"],
             "teacherLabel": teacher["label"], "teacherAccessHash": code_hash("teacher", code),
+            "subjectTeacherAccess": subject_teacher_access,
             "studentAccess": access, "exams": exams,
         })
     if not cohorts:
@@ -346,8 +377,10 @@ def main() -> None:
                   + f"export const examPortalSeed = {json.dumps(payload, ensure_ascii=False, indent=2)} as const\n")
     write_private(output_dir / "student-access-code-map.json", json.dumps(student_codes, ensure_ascii=False, indent=2) + "\n")
     write_private(output_dir / "teacher-access-codes.json", json.dumps(teacher_codes, ensure_ascii=False, indent=2) + "\n")
+    write_private(output_dir / "subject-teacher-access-codes.json", json.dumps(subject_teacher_codes, ensure_ascii=False, indent=2) + "\n")
     write_private(output_dir / "student-access-codes.csv", csv_text(student_csv))
     write_private(output_dir / "teacher-master-codes.csv", csv_text(teacher_csv))
+    write_private(output_dir / "subject-teacher-master-codes.csv", csv_text(subject_teacher_csv))
     notion_lines = [f"# {manifest['year']}학년도 {manifest['semester']}학기 {manifest['examType']} 학생 확인 코드", ""]
     for cohort in cohorts:
         notion_lines.extend([
@@ -362,6 +395,7 @@ def main() -> None:
     print(f"생성 완료: {sum(len(cohort['studentAccess']) for cohort in cohorts)}명, {len(cohorts)}개 학교, 검토 항목 {len(warnings)}건")
     print(f"학생 코드: {output_dir / 'student-access-codes.csv'}")
     print(f"교사 코드: {output_dir / 'teacher-master-codes.csv'}")
+    print(f"과목별 교사 코드: {output_dir / 'subject-teacher-master-codes.csv'}")
 
 
 if __name__ == "__main__":

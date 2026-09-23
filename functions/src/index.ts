@@ -427,10 +427,16 @@ function viewerAddress(request: { rawRequest: { ip?: string; socket?: { remoteAd
   return request.rawRequest.ip || request.rawRequest.socket?.remoteAddress || 'unknown'
 }
 
-function teacherCohortsForHash(accessHash: string) {
-  return Date.now() < examPortalSeed.expiresAt
-    ? examPortalSeed.cohorts.filter(item => item.teacherAccessHash === accessHash)
-    : []
+function teacherGrantsForHash(accessHash: string) {
+  if (Date.now() >= examPortalSeed.expiresAt) return []
+  return examPortalSeed.cohorts.flatMap(cohort => [
+    ...(cohort.teacherAccessHash === accessHash
+      ? [{ cohort, subject: null as string | null, label: cohort.teacherLabel }]
+      : []),
+    ...cohort.subjectTeacherAccess
+      .filter(access => access.accessHash === accessHash)
+      .map(access => ({ cohort, subject: access.subject as string | null, label: access.label })),
+  ])
 }
 
 export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
@@ -442,7 +448,7 @@ export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
   const studentHash = hashAccessCode(code || 'invalid')
   const teacherHash = hashTeacherAccessCode(code || 'invalid')
   const embeddedStudent = embeddedStudentAccess(studentHash)
-  const teacherCohorts = teacherCohortsForHash(teacherHash)
+  const teacherGrants = teacherGrantsForHash(teacherHash)
   const ipHash = hashViewerAddress(`portal:${viewerAddress(request)}`)
   const rateRef = db.doc(`reportPortalRateLimits/${ipHash}`)
   const now = Timestamp.now()
@@ -454,7 +460,7 @@ export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
     const embeddedStudentValid = isValidAccessCode(code) && embeddedStudent !== null
-    const teacherValid = isValidMasterAccessCode(code) && teacherCohorts.length > 0
+    const teacherValid = isValidMasterAccessCode(code) && teacherGrants.length > 0
     const resolvedRole = teacherValid ? 'teacher' as const : embeddedStudentValid ? 'student' as const : null
 
     if (!resolvedRole) {
@@ -878,7 +884,7 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
 }, async request => {
   const code = normalizeAccessCode(request.data?.code)
   const accessHash = hashTeacherAccessCode(code || 'invalid')
-  const cohorts = teacherCohortsForHash(accessHash)
+  const grants = teacherGrantsForHash(accessHash)
   const ipHash = hashViewerAddress(`teacher:${viewerAddress(request)}`)
   const rateRef = db.doc(`teacherReportRateLimits/${ipHash}`)
   const now = Timestamp.now()
@@ -889,7 +895,7 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
     const lockedUntil = rateData?.lockedUntil instanceof Timestamp ? rateData.lockedUntil : null
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
-    if (!isValidMasterAccessCode(code) || cohorts.length === 0) {
+    if (!isValidMasterAccessCode(code) || grants.length === 0) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp
         ? rateData.windowStartedAt
         : now
@@ -921,13 +927,21 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
   if (status === 'locked') {
     throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.')
   }
-  if (status === 'invalid' || cohorts.length === 0) {
+  if (status === 'invalid' || grants.length === 0) {
     throw new HttpsError('permission-denied', '교사용 접근 코드를 확인해 주세요.')
   }
 
+  const cohortViews = grants.map(grant => ({
+    ...grant,
+    exams: grant.subject
+      ? grant.cohort.exams.filter(exam => exam.subject === grant.subject)
+      : grant.cohort.exams,
+  }))
+  const teacherLabel = grants.length > 1 ? '통합 교사' : grants[0].label
+
   await db.collection('teacherReportViewLogs').add({
-    cohortIds: cohorts.map(cohort => cohort.cohortId),
-    teacherLabel: cohorts.length > 1 ? '통합 교사' : cohorts[0].teacherLabel,
+    cohortIds: grants.map(grant => grant.cohort.cohortId),
+    teacherLabel,
     ipHash,
     userAgent: String(request.rawRequest.headers['user-agent'] ?? '').slice(0, 300),
     accessedAt: now,
@@ -935,20 +949,20 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
   })
 
   return {
-    terms: examPortalSeed.terms,
+    terms: examPortalSeed.terms.filter(term => cohortViews.some(view => view.exams.some(exam => exam.termId === term.termId))),
     teacher: {
-      label: cohorts.length > 1 ? '통합 교사' : cohorts[0].teacherLabel,
-      cohortId: cohorts[0].cohortId,
-      school: cohorts[0].school,
-      grade: cohorts[0].grade,
+      label: teacherLabel,
+      cohortId: grants[0].cohort.cohortId,
+      school: grants[0].cohort.school,
+      grade: grants[0].cohort.grade,
     },
-    exams: cohorts[0].exams,
-    cohorts: cohorts.map(cohort => ({
-      cohortId: cohort.cohortId,
-      school: cohort.school,
-      grade: cohort.grade,
-      teacherLabel: cohort.teacherLabel,
-      exams: cohort.exams,
+    exams: cohortViews[0].exams,
+    cohorts: cohortViews.map(view => ({
+      cohortId: view.cohort.cohortId,
+      school: view.cohort.school,
+      grade: view.cohort.grade,
+      teacherLabel: view.label,
+      exams: view.exams,
     })),
   }
 })
@@ -961,8 +975,12 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
   const code = normalizeAccessCode(request.data?.code)
   const studentId = typeof request.data?.studentId === 'string' ? request.data.studentId.slice(0, 80) : ''
   const accessHash = hashTeacherAccessCode(code || 'invalid')
-  const authorizedCohorts = teacherCohortsForHash(accessHash)
-  const cohort = authorizedCohorts.find(item => item.studentAccess.some(student => student.studentId === studentId))
+  const authorizedGrants = teacherGrantsForHash(accessHash)
+  const grant = authorizedGrants.find(item =>
+    item.cohort.studentAccess.some(student => student.studentId === studentId)
+    && (!item.subject || item.cohort.exams.some(exam => exam.subject === item.subject
+      && exam.students.some(student => student.studentId === studentId))))
+  const cohort = grant?.cohort
   const ipHash = hashViewerAddress(`teacher:${viewerAddress(request)}`)
   const rateRef = db.doc(`teacherReportRateLimits/${ipHash}`)
   const now = Timestamp.now()
@@ -973,7 +991,10 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     const lockedUntil = rateData?.lockedUntil instanceof Timestamp ? rateData.lockedUntil : null
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
-    const studentAllowed = cohort?.studentAccess.some(student => student.studentId === studentId) === true
+    const subjectAllowed = !grant?.subject || request.data?.subject === undefined
+      || request.data?.subject === null || request.data?.subject === ''
+      || (typeof request.data?.subject === 'string' && request.data.subject.trim() === grant.subject)
+    const studentAllowed = Boolean(cohort && grant && subjectAllowed)
     if (!isValidMasterAccessCode(code) || !cohort || !studentAllowed) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp ? rateData.windowStartedAt : now
       const withinWindow = now.toMillis() - windowStartedAt.toMillis() <= REPORT_RATE_WINDOW_MS
@@ -1004,19 +1025,22 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
   if (status === 'locked') {
     throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.')
   }
-  if (status === 'invalid' || !cohort) {
+  if (status === 'invalid' || !cohort || !grant) {
     throw new HttpsError('permission-denied', '학생 성적표 열람 권한을 확인해 주세요.')
   }
 
-  const subject = reportSubject(cohort, studentId, request.data?.subject)
+  const subject = reportSubject(cohort, studentId, grant.subject ?? request.data?.subject)
   const cumulativeBase = buildStudentCumulative(cohort, studentId, subject)
   if (!cumulativeBase) throw new HttpsError('not-found', '학생 성적표를 찾을 수 없습니다.')
-  const cumulative = await attachActualExamScores(cumulativeBase, 'node-default')
+  const cumulativeWithScores = await attachActualExamScores(cumulativeBase, 'node-default')
+  const cumulative = grant.subject
+    ? { ...cumulativeWithScores, availableSubjects: [grant.subject] }
+    : cumulativeWithScores
   const report = buildEmbeddedDetailReport(cohort, studentId, subject)
 
   await db.collection('teacherReportViewLogs').add({
     cohortId: cohort.cohortId,
-    teacherLabel: cohort.teacherLabel,
+    teacherLabel: grant.label,
     studentId,
     subject,
     viewType: 'student-detail',
