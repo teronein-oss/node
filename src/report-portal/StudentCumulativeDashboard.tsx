@@ -206,7 +206,7 @@ export default function StudentCumulativeDashboard({
               {IS_BATTERY_CAT_PREVIEW && <span className="ml-2 inline-flex rounded-full border border-amber-200/60 bg-amber-100/15 px-3 py-1.5 text-xs font-bold text-amber-100 print:hidden">배터리 고양이 시안</span>}
               <p className="mt-5 text-sm text-blue-100/70">{data.school} {data.grade}학년</p>
               <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{data.studentName} 학생 누적 리포트</h1>
-              <p className="mt-3 text-sm leading-6 text-blue-50/70">1~{maxRound}차 점수 변화와 누적 성취를 한 번에 확인할 수 있습니다.</p>
+              <p className="mt-3 text-sm leading-6 text-blue-50/70">{maxRound === 1 ? '1차 성적과 유형별 학습 결과를 확인할 수 있습니다.' : `1~${maxRound}차 점수 변화와 누적 성취를 한 번에 확인할 수 있습니다.`}</p>
             </div>
             <div className="m3-hero-meta grid w-full grid-cols-[1fr_auto_1fr] gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm sm:w-auto sm:gap-6 sm:px-5">
               <div><p className="text-[11px] text-blue-100/65">누적 성취</p><p className="mt-1 text-xl font-black">{attendedExams.length ? `상위 ${cumulativeTopPercent}%` : '미응시'}</p></div>
@@ -258,8 +258,8 @@ export default function StudentCumulativeDashboard({
 
           <article data-positive={changePositive} className={`m3-change-card rounded-3xl border p-6 ${changePositive ? 'border-emerald-100 bg-emerald-50/70' : 'border-orange-100 bg-orange-50/70'}`}>
             <div className={`flex items-center gap-2 ${changePositive ? 'text-emerald-800' : 'text-orange-800'}`}>{changePositive ? <TrendingUp size={20} /> : <TrendingDown size={20} />}<h2 className="font-black">학습 변화</h2></div>
-            <p className={`mt-6 text-4xl font-black ${changePositive ? 'text-emerald-900' : 'text-orange-900'}`}>{changePositive ? '+' : ''}{score(scoreChange)}점</p>
-            <p className={`mt-2 text-xs leading-5 ${changePositive ? 'text-emerald-800/70' : 'text-orange-800/70'}`}>첫 응시 대비 최근 응시의 전체 점수 변화입니다.</p>
+            <p className={`mt-6 text-4xl font-black ${changePositive ? 'text-emerald-900' : 'text-orange-900'}`}>{attendedExams.length > 1 ? `${changePositive ? '+' : ''}${score(scoreChange)}점` : '다음 회차부터'}</p>
+            <p className={`mt-2 text-xs leading-5 ${changePositive ? 'text-emerald-800/70' : 'text-orange-800/70'}`}>{attendedExams.length > 1 ? '첫 응시 대비 최근 응시의 전체 점수 변화입니다.' : '2차 성적이 등록되면 점수 변화를 표시합니다.'}</p>
             <div className="m3-inner-card mt-6 rounded-2xl bg-white p-4 shadow-sm"><div className="flex items-center gap-2 text-amber-700"><Award size={17} /><p className="text-xs font-bold">최고 성적</p></div><p className="mt-2 text-xl font-black text-slate-900">{bestExam ? `${bestExam.round}차 · ${score(bestExam.result.totalScore)}점` : '응시 데이터 없음'}</p></div>
           </article>
         </section>
@@ -370,7 +370,7 @@ export default function StudentCumulativeDashboard({
 
         {detailReport && (
           <section className="m3-callout mt-6 flex flex-col gap-4 rounded-3xl border border-indigo-100 bg-indigo-50/70 p-6 sm:flex-row sm:items-center sm:justify-between">
-            <div><div className="flex items-center gap-2 text-indigo-800"><Sparkles size={19} /><h2 className="font-black">최근 시험 문항별 분석</h2></div><p className="mt-2 text-sm text-indigo-700/70">기존에 제공하던 {detailReport.examTitle} 문항별 상세 분석도 계속 확인할 수 있습니다.</p></div>
+            <div><div className="flex items-center gap-2 text-indigo-800"><Sparkles size={19} /><h2 className="font-black">최근 시험 문항별 분석</h2></div><p className="mt-2 text-sm text-indigo-700/70">{detailReport.examTitle}의 문항별 정오와 유형 분석을 확인할 수 있습니다.</p></div>
             <button onClick={onOpenDetail} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-700 px-5 py-3 text-sm font-bold text-white hover:bg-indigo-800">상세 분석 보기 <ArrowRight size={16} /></button>
           </section>
         )}

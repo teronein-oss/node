@@ -20,7 +20,6 @@ import { functions } from '../firebase'
 import StudentCumulativeDashboard from './StudentCumulativeDashboard'
 import { BatteryCatMascot } from './BatteryCatMascot'
 import TeacherReportDashboard from './TeacherReportDashboard'
-import { getSampleEnglishReport } from './sampleEnglishReports'
 import type { StudentCumulativeReportData, StudentReportData, StudentReportResponse, TeacherDashboardResponse, TeacherStudentReportResponse } from '../types/studentReport'
 
 const fetchStudentReport = httpsCallable<{ code: string }, StudentReportResponse>(functions, 'getStudentReport')
@@ -228,7 +227,7 @@ function ReportView({ report, onReset, backLabel = '나가기' }: { report: Stud
 
         {hasWritten && <section className="m3-card mt-6 rounded-3xl border border-slate-200 bg-white p-6">
           <div className="flex items-center gap-2"><BookOpenCheck className="text-indigo-600" size={20} /><h2 className="font-black">서술형 안내</h2></div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">서술형은 21~24번 총 20점이며, 현재 채점표에는 문항별 점수가 아닌 합계 <strong>{report.writtenScore}점</strong>만 제공되어 있습니다.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">서술형은 4문항 총 20점이며, 현재 채점표에는 문항별 점수가 아닌 합계 <strong>{report.writtenScore}점</strong>만 제공되어 있습니다.</p>
         </section>}
       </main>
 
@@ -244,6 +243,7 @@ export default function StudentReportPage() {
   const [showDetail, setShowDetail] = useState(false)
   const [teacherDashboard, setTeacherDashboard] = useState<TeacherDashboardResponse | null>(null)
   const [teacherStudentCumulative, setTeacherStudentCumulative] = useState<StudentCumulativeReportData | null>(null)
+  const [teacherStudentDetail, setTeacherStudentDetail] = useState<StudentReportData | null>(null)
   const [teacherStudentLoadingId, setTeacherStudentLoadingId] = useState('')
   const [teacherStudentError, setTeacherStudentError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -255,23 +255,16 @@ export default function StudentReportPage() {
     setLoading(true)
     setError('')
     try {
-      const sampleReport = getSampleEnglishReport(code)
-      if (sampleReport) {
-        setReport(null)
-        setCumulative(sampleReport)
-        setShowDetail(false)
+      const access = await resolveReportPortalAccess({ code })
+      if (access.data.role === 'teacher') {
+        const result = await fetchTeacherDashboard({ code })
+        setTeacherDashboard(result.data)
       } else {
-        const access = await resolveReportPortalAccess({ code })
-        if (access.data.role === 'teacher') {
-          const result = await fetchTeacherDashboard({ code })
-          setTeacherDashboard(result.data)
-        } else {
-          const result = await fetchStudentReport({ code })
-          if (!result.data.report && !result.data.cumulative) throw new Error('성적 데이터가 없습니다.')
-          setReport(result.data.report)
-          setCumulative(result.data.cumulative)
-          setShowDetail(false)
-        }
+        const result = await fetchStudentReport({ code })
+        if (!result.data.report && !result.data.cumulative) throw new Error('성적 데이터가 없습니다.')
+        setReport(result.data.report)
+        setCumulative(result.data.cumulative)
+        setShowDetail(false)
       }
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (requestError) {
@@ -288,6 +281,8 @@ export default function StudentReportPage() {
     try {
       const result = await fetchTeacherStudentReport({ code, studentId })
       setTeacherStudentCumulative(result.data.cumulative)
+      setTeacherStudentDetail(result.data.report)
+      setShowDetail(false)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (requestError) {
       setTeacherStudentError(getErrorMessage(requestError))
@@ -296,10 +291,13 @@ export default function StudentReportPage() {
     }
   }
 
-  if (teacherStudentCumulative) return <StudentCumulativeDashboard data={teacherStudentCumulative} detailReport={null} onOpenDetail={() => undefined} backLabel="교사 화면" onReset={() => setTeacherStudentCumulative(null)} />
+  if (teacherStudentCumulative) {
+    if (showDetail && teacherStudentDetail) return <ReportView report={teacherStudentDetail} backLabel="누적 리포트" onReset={() => setShowDetail(false)} />
+    return <StudentCumulativeDashboard data={teacherStudentCumulative} detailReport={teacherStudentDetail} onOpenDetail={() => setShowDetail(true)} backLabel="교사 화면" onReset={() => { setTeacherStudentCumulative(null); setTeacherStudentDetail(null); setShowDetail(false) }} />
+  }
   if (cumulative && !showDetail) return <StudentCumulativeDashboard data={cumulative} detailReport={report} onOpenDetail={() => setShowDetail(true)} onReset={() => { setCumulative(null); setReport(null); setCode(''); setError('') }} />
   if (report) return <ReportView report={report} backLabel={cumulative ? '누적 리포트' : '나가기'} onReset={() => { if (cumulative) setShowDetail(false); else { setReport(null); setCode(''); setError('') } }} />
-  if (teacherDashboard) return <TeacherReportDashboard data={teacherDashboard} loadingStudentId={teacherStudentLoadingId} studentError={teacherStudentError} onSelectStudent={openTeacherStudentReport} onReset={() => { setTeacherDashboard(null); setTeacherStudentCumulative(null); setTeacherStudentError(''); setCode(''); setError('') }} />
+  if (teacherDashboard) return <TeacherReportDashboard data={teacherDashboard} loadingStudentId={teacherStudentLoadingId} studentError={teacherStudentError} onSelectStudent={openTeacherStudentReport} onReset={() => { setTeacherDashboard(null); setTeacherStudentCumulative(null); setTeacherStudentDetail(null); setShowDetail(false); setTeacherStudentError(''); setCode(''); setError('') }} />
 
   return (
     <div className="m3-report m3-login relative min-h-screen overflow-x-hidden bg-[#eef3f8] text-slate-900">
@@ -364,9 +362,7 @@ export default function StudentReportPage() {
         </div>
         {IS_BATTERY_CAT_PREVIEW && <section className="m3-battery-cat-gallery mb-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7" aria-label="배터리 고양이 점수 구간별 디자인 미리보기">
           <h2 className="text-lg font-black text-slate-900">배터리 고양이 디자인 시안</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">배터리는 실제 기기 잔량이 아닌 점수 구간별 학습 에너지입니다. 위에서 샘플 코드를 입력하면 성적 화면 적용 모습도 확인할 수 있습니다.</p>
-          <p className="mt-1 text-xs font-semibold text-slate-600">전체 5구간을 한 번에 보기: CAT5-2026 (1~5차 55 · 65 · 75 · 85 · 95점)</p>
-          <p className="mt-1 text-xs text-slate-500">기존 샘플: 하위 HSE8-C329 · 중위 KMS6-B427 · 상위 LEE7-A526</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">배터리는 실제 기기 잔량이 아닌 점수 구간별 학습 에너지입니다.</p>
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
             {BATTERY_CAT_PREVIEW.map(item => <article key={item.band} className="flex min-w-0 flex-col items-center rounded-2xl border border-slate-200 bg-slate-50 px-2 py-4 text-center">
               <p className="text-xs font-black text-slate-800">{item.band}</p>

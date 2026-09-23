@@ -1,0 +1,68 @@
+{
+  "termId": "2026-2-midterm",
+  "year": 2026,
+  "semester": 2,
+  "examType": "중간고사",
+  "cohorts": [
+    {
+      "cohortId": "baekhyeon-2",
+      "school": "백현고",
+      "grade": 2,
+      "teacherLabel": "백현고 2학년 담당 선생님",
+      "exams": [
+        {
+          "round": 1,
+          "title": "백현고2 2026학년도 2학기 중간고사 대비 1차",
+          "pdf": "private/exam-imports/2026-2-midterm/baekhyeon-2/round-1/exam.pdf",
+          "workbook": "private/exam-imports/2026-2-midterm/baekhyeon-2/round-1/scores.xlsx",
+          "sheet": "전화번호순",
+          "firstStudentRow": 3,
+          "objectivePointsEach": 4,
+          "columns": {
+            "phone": "A",
+            "name": "B",
+            "total": "F",
+            "written": "D",
+            "objective": "E",
+            "answersStart": "G",
+            "resultsStart": "BE"
+          },
+          "crossCheck": {
+            "sheet": "석차순1",
+            "columns": {
+              "phone": "B",
+              "name": "C",
+              "total": "E",
+              "written": "F",
+              "objective": "G",
+              "answersStart": "H",
+              "resultsStart": "BF"
+            }
+          },
+          "questionTypes": [
+            { "number": 1, "category": "대의 파악", "detailType": "주제", "topic": "급성질환 치료와 만성질환 관리", "correctAnswer": "5" },
+            { "number": 2, "category": "대의 파악", "detailType": "주제", "topic": "사회과학 실험과 이론의 설득력", "correctAnswer": "1" },
+            { "number": 3, "category": "대의 파악", "detailType": "주제", "topic": "피카소와 아리아스의 우정", "correctAnswer": "2" },
+            { "number": 4, "category": "대의 파악", "detailType": "제목", "topic": "조급함의 비용", "correctAnswer": "2" },
+            { "number": 5, "category": "대의 파악", "detailType": "제목", "topic": "SNS 기록의 지속성", "correctAnswer": "4" },
+            { "number": 6, "category": "어법·어휘", "detailType": "문맥 어휘", "topic": "성공의 대가와 자유", "correctAnswer": "2" },
+            { "number": 7, "category": "어법·어휘", "detailType": "어법", "topic": "걷기와 건강", "correctAnswer": "1" },
+            { "number": 8, "category": "어법·어휘", "detailType": "어법", "topic": "재정적 위험과 가격 보호", "correctAnswer": "4" },
+            { "number": 9, "category": "추론·의미", "detailType": "함의 추론", "topic": "자동차와 스포츠 관광 접근성", "correctAnswer": "2" },
+            { "number": 10, "category": "추론·의미", "detailType": "함의 추론", "topic": "걷기와 창의성", "correctAnswer": "3" },
+            { "number": 11, "category": "추론·의미", "detailType": "빈칸 추론", "topic": "세금 귀착과 가격 반응", "correctAnswer": "5" },
+            { "number": 12, "category": "추론·의미", "detailType": "빈칸 추론", "topic": "피카소의 작업을 돕는 아리아스", "correctAnswer": "2" },
+            { "number": 13, "category": "추론·의미", "detailType": "빈칸 추론", "topic": "음높이 유사성에 따른 소리 묶기", "correctAnswer": "3" },
+            { "number": 14, "category": "세부 내용", "detailType": "내용 불일치", "topic": "TV 폭력의 정서적 거리", "correctAnswer": "3" },
+            { "number": 15, "category": "글의 구조", "detailType": "무관한 문장", "topic": "야구 팬층 고령화", "correctAnswer": "4" },
+            { "number": 16, "category": "글의 구조", "detailType": "글의 순서", "topic": "스포츠의 즉흥성", "correctAnswer": "3" },
+            { "number": 17, "category": "글의 구조", "detailType": "글의 순서", "topic": "전통 식문화 지식의 보존", "correctAnswer": "4" },
+            { "number": 18, "category": "글의 구조", "detailType": "문장 삽입", "topic": "걷기 운동 방법", "correctAnswer": "4" },
+            { "number": 19, "category": "요약·통합", "detailType": "요약문 완성", "topic": "산업화와 노동시간·생산성", "correctAnswer": "5" },
+            { "number": 20, "category": "요약·통합", "detailType": "요약문 완성", "topic": "피카소와 아리아스의 첫 만남", "correctAnswer": "2" }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -167,4 +167,5 @@ export interface TeacherDashboardResponse {
 
 export interface TeacherStudentReportResponse {
   cumulative: StudentCumulativeReportData
+  report: StudentReportData | null
 }

@@ -1,427 +1,330 @@
+"""Generate a private SEUM report seed and access codes from a reviewed manifest.
+
+Source PDF/XLSX, generated student data, and plain access codes stay under
+private/ or in the Git-ignored Functions seed. Run from the repository root.
+"""
+
 from __future__ import annotations
 
-import hashlib
+import argparse
 import csv
+import hashlib
+import io
 import json
+import os
 import re
 import secrets
 import unicodedata
-import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import mean
-from xml.etree import ElementTree as ET
 
+from openpyxl import load_workbook
+from openpyxl.utils.cell import column_index_from_string
 from pypdf import PdfReader
 
-
-SOURCE_ROOT = Path("private")
-OUTPUT_PATH = Path("functions/src/generatedExamPortalSeed.ts")
-CODE_NOTE_PATH = Path("private/teacher-test-codes.md")
-STUDENT_CODE_MAP_PATH = Path("private/student-access-code-map.json")
-STUDENT_CODE_CSV_PATH = Path("private/student-access-codes.csv")
-TEACHER_CONFIG_PATH = Path("private/teacher-access-codes.json")
-
-TERM_ID = "2026-1-final"
-YEAR = 2026
-SEMESTER = 1
-EXAM_TYPE = "기말고사"
-
-ACCESS_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-ACCESS_CODE_LENGTH = 8
-
-MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+ROOT = Path(__file__).resolve().parents[1]
+SEED = ROOT / "functions/src/generatedExamPortalSeed.ts"
+ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
-def normalize_text(value: str) -> str:
-    return unicodedata.normalize("NFC", value)
+def clean(value: object) -> str:
+    return unicodedata.normalize("NFC", str(value if value is not None else "")).strip()
 
 
-def teacher_code_hash(code: str) -> str:
-    return hashlib.sha256(f"teacher-report:{code}".encode()).hexdigest()
+def private_path(value: str) -> Path:
+    path = (ROOT / value).resolve()
+    if not path.is_relative_to(ROOT / "private") or not path.is_file():
+        raise ValueError(f"원본 파일이 private/에 없습니다: {value}")
+    return path
 
 
-def student_code_hash(code: str) -> str:
-    return hashlib.sha256(f"student-report:{code}".encode()).hexdigest()
+def write_private(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    descriptor = os.open(temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:
+        stream.write(content)
+    os.replace(temporary, path)
+    os.chmod(path, 0o600)
 
 
-def load_teacher_config() -> dict[str, dict[str, str]]:
-    if not TEACHER_CONFIG_PATH.exists():
-        raise FileNotFoundError(
-            f"{TEACHER_CONFIG_PATH} 파일이 필요합니다. "
-            '{"백현고2": {"label": "A 선생님", "code": "8자리코드"}} 형식으로 작성하세요.'
-        )
-    data = json.loads(TEACHER_CONFIG_PATH.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or not data:
-        raise ValueError("교사 코드 설정 파일 형식이 올바르지 않습니다.")
-    for school, teacher in data.items():
-        if not isinstance(teacher, dict) or not teacher.get("label") or not teacher.get("code"):
-            raise ValueError(f"{school} 교사 설정에 label과 code가 필요합니다.")
-    return data
+def code_hash(kind: str, code: str) -> str:
+    return hashlib.sha256(f"{kind}-report:{code}".encode()).hexdigest()
 
 
-TEACHERS = load_teacher_config()
-
-
-def create_access_code(used: set[str]) -> str:
+def new_code(length: int, used: set[str]) -> str:
     while True:
-        code = "".join(secrets.choice(ACCESS_CODE_ALPHABET) for _ in range(ACCESS_CODE_LENGTH))
-        if code not in used:
-            used.add(code)
-            return code
+        candidate = "".join(secrets.choice(ALPHABET) for _ in range(length))
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
 
 
-def load_student_codes() -> dict[str, dict[str, str]]:
-    if not STUDENT_CODE_MAP_PATH.exists():
-        return {}
-    data = json.loads(STUDENT_CODE_MAP_PATH.read_text(encoding="utf-8"))
+def valid_code(value: object, length: int) -> bool:
+    return isinstance(value, str) and len(value) == length and all(char in ALPHABET for char in value)
+
+
+def read_map(path: Path) -> dict:
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if not isinstance(data, dict):
-        raise ValueError("학생 코드 매핑 파일 형식이 올바르지 않습니다.")
+        raise ValueError(f"코드 파일 형식이 올바르지 않습니다: {path}")
     return data
 
 
-def student_key(phone: str) -> str:
-    digits = re.sub(r"\D", "", phone)
-    return hashlib.sha256(f"exam-student:{digits}".encode()).hexdigest()[:20]
+def number(value: object, where: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{where}: 숫자 점수가 없습니다.")
+    result = float(value)
+    if result < 0 or result > 100:
+        raise ValueError(f"{where}: 점수가 0~100 범위를 벗어났습니다.")
+    return result
 
 
-def read_shared_strings(archive: zipfile.ZipFile) -> list[str]:
+def validate_questions(exam: dict) -> list[dict]:
+    pdf = private_path(exam["pdf"])
+    if not PdfReader(pdf).pages:
+        raise ValueError(f"시험지 PDF를 읽을 수 없습니다: {pdf}")
+    questions = exam["questionTypes"]
+    if [item["number"] for item in questions] != list(range(1, len(questions) + 1)):
+        raise ValueError("객관식 문항 번호가 연속되지 않습니다.")
+    for item in questions:
+        if not all(clean(item.get(key)) for key in ("category", "detailType", "topic")):
+            raise ValueError(f"{item['number']}번 문항 유형 또는 소재가 비어 있습니다.")
+        if clean(item.get("correctAnswer")) not in {"1", "2", "3", "4", "5"}:
+            raise ValueError(f"{item['number']}번 정답 번호를 확인해 주세요.")
+    return questions
+
+
+def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple[list[dict], list[dict]]:
+    workbook = load_workbook(private_path(exam["workbook"]), read_only=True, data_only=True)
     try:
-        root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
-    except KeyError:
-        return []
-    return ["".join(node.text or "" for node in item.iter(f"{{{MAIN_NS}}}t")) for item in root]
+        sheet = workbook[exam["sheet"]]
+        columns = {key: column_index_from_string(letter) for key, letter in exam["columns"].items()}
+        students: list[dict] = []
+        warnings: list[dict] = []
+        seen: set[str] = set()
+        for row_number in range(exam["firstStudentRow"], sheet.max_row + 1):
+            values = [cell.value for cell in sheet[row_number]]
 
+            def at(column: int) -> object:
+                return values[column - 1] if column <= len(values) else None
 
-def sheet_paths(archive: zipfile.ZipFile) -> list[str]:
-    workbook = ET.fromstring(archive.read("xl/workbook.xml"))
-    sheets = workbook.find(f"{{{MAIN_NS}}}sheets")
-    if sheets is None or len(sheets) == 0:
-        raise ValueError("시트를 찾을 수 없습니다.")
-    relationships = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
-    targets = {
-        rel.attrib.get("Id"): rel.attrib["Target"]
-        for rel in relationships.findall(f"{{{PKG_REL_NS}}}Relationship")
-    }
-    paths: list[str] = []
-    for sheet in sheets:
-        target = targets[sheet.attrib[f"{{{REL_NS}}}id"]]
-        paths.append(target.lstrip("/") if target.startswith("/") else f"xl/{target}".replace("xl/xl/", "xl/"))
-    return paths
-
-
-def cell_value(cell: ET.Element, shared_strings: list[str]) -> object:
-    cell_type = cell.attrib.get("t")
-    if cell_type == "inlineStr":
-        return "".join(node.text or "" for node in cell.iter(f"{{{MAIN_NS}}}t"))
-    value_node = cell.find(f"{{{MAIN_NS}}}v")
-    if value_node is None or value_node.text is None:
-        return ""
-    raw = value_node.text
-    if cell_type == "s":
-        return shared_strings[int(raw)]
-    if cell_type in {"str", "e"}:
-        return raw
-    try:
-        number = float(raw)
-        return int(number) if number.is_integer() else number
-    except ValueError:
-        return raw
-
-
-def column_number(reference: str) -> int:
-    letters = re.match(r"([A-Z]+)", reference)
-    if not letters:
-        return 0
-    number = 0
-    for character in letters.group(1):
-        number = number * 26 + ord(character) - ord("A") + 1
-    return number
-
-
-def read_score_rows(path: Path, objective_count: int) -> list[dict[str, object]]:
-    with zipfile.ZipFile(path) as archive:
-        shared_strings = read_shared_strings(archive)
-        sheets = [ET.fromstring(archive.read(sheet_path)) for sheet_path in sheet_paths(archive)]
-
-    def parse_sheet(sheet: ET.Element) -> list[dict[str, object]]:
-        rows: list[dict[str, object]] = []
-        for row in sheet.iter(f"{{{MAIN_NS}}}row"):
-            row_number = int(row.attrib.get("r", "0"))
-            if row_number < 3:
+            name, phone = clean(at(columns["name"])), clean(at(columns["phone"]))
+            if not name and not phone:
                 continue
-            values: dict[int, object] = {}
-            for cell in row.findall(f"{{{MAIN_NS}}}c"):
-                reference = cell.attrib.get("r", "")
-                column = column_number(reference)
-                if 2 <= column <= 57 + objective_count:
-                    values[column] = cell_value(cell, shared_strings)
-
-            name = normalize_text(str(values.get(3, "")).strip())
-            phone = str(values.get(2, "")).strip()
+            where = f"{sheet.title}!{row_number}"
             if not name or not phone:
-                continue
-            try:
-                rows.append({
-                    "studentId": student_key(phone),
-                    "studentName": name,
-                    "sourceRank": int(float(values.get(4, 0))),
-                    "totalScore": float(values.get(5, 0)),
-                    "writtenScore": float(values.get(6, 0)),
-                    "objectiveScore": float(values.get(7, 0)),
-                    "questionResults": [
-                        str(values.get(57 + question, "")).strip().upper() == "O"
-                        for question in range(1, objective_count + 1)
-                    ],
-                })
-            except (TypeError, ValueError) as error:
-                raise ValueError(f"{path}: {row_number}행 점수 형식을 읽을 수 없습니다.") from error
-        return rows
-
-    rows = parse_sheet(sheets[0])
-    if objective_count == 20:
-        mismatches = sum(
-            float(row["objectiveScore"]) != sum(row["questionResults"]) * 4
-            for row in rows
-        )
-        if mismatches > len(rows) / 2 and len(sheets) > 1:
-            alternate = {row["studentId"]: row["questionResults"] for row in parse_sheet(sheets[1])}
-            for row in rows:
-                if row["studentId"] in alternate:
-                    row["questionResults"] = alternate[row["studentId"]]
-
-    if not rows:
-        raise ValueError(f"{path}: 학생 점수 행이 없습니다.")
-    return rows
-
-
-def school_metadata(folder_name: str) -> tuple[str, int]:
-    normalized = normalize_text(folder_name)
-    match = re.fullmatch(r"(.+고)(\d)", normalized)
-    if not match:
-        raise ValueError(f"학교 폴더명에서 학년을 확인할 수 없습니다: {normalized}")
-    return match.group(1), int(match.group(2))
-
-
-def round_number(folder_name: str) -> int:
-    match = re.search(r"(\d+)", normalize_text(folder_name))
-    if not match:
-        raise ValueError(f"회차 폴더명을 확인할 수 없습니다: {folder_name}")
-    return int(match.group(1))
-
-
-def classify_question(prompt: str) -> tuple[str, str] | None:
-    compact = re.sub(r"\s+", " ", prompt)
-    if "전체 흐름과 관계 없는" in compact:
-        return "글의 구조", "무관한 문장"
-    if "주어진 문장이 들어가기에" in compact:
-        return "글의 구조", "문장 삽입"
-    if "이어질 글의 순서" in compact or "순서에 맞게 배열" in compact:
-        return "글의 구조", "글의 순서"
-    if "한 문장으로 요약" in compact:
-        return "요약·통합", "요약문 완성"
-    if "가리키는 대상" in compact:
-        return "세부 내용", "지칭 추론"
-    if "의미하는 바로" in compact:
-        return "추론·의미", "함의 추론"
-    if "문맥상 낱말" in compact:
-        return "어법·어휘", "문맥 어휘"
-    if "밑줄 친 부분 중 적절한 것을 고른" in compact:
-        return "어법·어휘", "어법·어휘 선택"
-    if "어법" in compact or "각 네모 안" in compact or "각 괄호 안" in compact:
-        return "어법·어휘", "어법"
-    if "내용과 일치하지" in compact or "내용으로 적절하지" in compact or "내용에 관한 내용으로 적절하지" in compact or "관한 내용으로 적절하지" in compact:
-        return "세부 내용", "내용 불일치"
-    if "내용과 일치하는" in compact or "내용으로 적절한" in compact or "내용으로 가장 적절한" in compact or "내용에 관한 내용으로 가장 적절한" in compact:
-        return "세부 내용", "내용 일치"
-    if "빈칸" in compact:
-        return "추론·의미", "빈칸 추론"
-    if "제목" in compact:
-        return "대의 파악", "제목"
-    if "주제" in compact:
-        return "대의 파악", "주제"
-    return None
-
-
-def extract_question_types(path: Path, objective_count: int) -> list[dict[str, object]]:
-    reader = PdfReader(path)
-    text = " ".join((page.extract_text() or "").replace("\n", " ") for page in reader.pages)
-    question_types: list[dict[str, object]] = []
-    missing: list[int] = []
-    for question in range(1, objective_count + 1):
-        candidates: list[str] = []
-        for match in re.finditer(rf"(?<!\d){question}[.)]\s*", text):
-            candidate = re.sub(r"\s+", " ", text[match.end():match.end() + 260])
-            if candidate:
-                candidates.append(candidate)
-        classified = next(
-            ((category, detail_type) for candidate in candidates if (result := classify_question(candidate)) for category, detail_type in [result]),
-            None,
-        )
-        if not classified:
-            missing.append(question)
-            continue
-        category, detail_type = classified
-        question_types.append({"number": question, "category": category, "detailType": detail_type})
-    if missing:
-        raise ValueError(f"{path}: 유형을 분류하지 못한 객관식 문항 {missing}")
-    return question_types
-
-
-def build_exam(school_id: str, school: str, grade: int, round_dir: Path, workbook: Path, exam_pdf: Path, objective_count: int) -> dict[str, object]:
-    question_types = extract_question_types(exam_pdf, objective_count)
-    rows = read_score_rows(workbook, objective_count)
-    totals = [float(row["totalScore"]) for row in rows]
-    round_value = round_number(round_dir.name)
-
-    students: list[dict[str, object]] = []
-    for row in rows:
-        total_score = float(row["totalScore"])
-        rank = 1 + sum(other > total_score for other in totals)
-        type_results: dict[str, dict[str, object]] = {}
-        for question in question_types:
-            detail_type = str(question["detailType"])
-            stat = type_results.setdefault(detail_type, {
-                "category": question["category"],
-                "detailType": detail_type,
-                "correct": 0,
-                "total": 0,
-                "missedQuestions": [],
+                raise ValueError(f"{where}: 이름 또는 학생 식별용 번호가 없습니다.")
+            digits = re.sub(r"\D", "", phone)
+            if len(digits) < 4:
+                raise ValueError(f"{where}: 학생 식별용 번호 끝 4자리가 없습니다.")
+            student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
+            if student_id in seen:
+                raise ValueError(f"{where}: 학생 식별용 번호가 중복됩니다.")
+            seen.add(student_id)
+            total = number(at(columns["total"]), f"{where} 총점")
+            objective = number(at(columns["objective"]), f"{where} 객관식")
+            written = number(at(columns["written"]), f"{where} 서술형")
+            answers: list[str] = []
+            correct: list[bool] = []
+            for offset, question in enumerate(questions):
+                answer = clean(at(columns["answersStart"] + offset))
+                marker = clean(at(columns["resultsStart"] + offset)).upper()
+                if marker not in ("O", "X"):
+                    raise ValueError(f"{where} {offset + 1}번: 정오표에 O/X가 없습니다.")
+                if (marker == "O") != (answer == question["correctAnswer"]):
+                    if answer in {"1", "2", "3", "4", "5"}:
+                        raise ValueError(f"{where} {offset + 1}번: 학생 답안·정답·정오표가 모순됩니다.")
+                if answer not in {"1", "2", "3", "4", "5"}:
+                    if marker == "O":
+                        raise ValueError(f"{where} {offset + 1}번: 유효하지 않은 답안에 정답 표시가 있습니다.")
+                    warnings.append({"cell": where, "question": offset + 1, "issue": "답안 공란" if not answer else "선택지 범위 밖"})
+                answers.append(answer)
+                correct.append(marker == "O")
+            expected_objective = sum(correct) * exam["objectivePointsEach"]
+            if abs(objective - expected_objective) > 0.001:
+                raise ValueError(f"{where}: 객관식 점수가 정오표와 다릅니다.")
+            if abs(total - objective - written) > 0.001:
+                warnings.append({"cell": where, "issue": "총점 불일치", "sourceTotal": total, "componentSum": objective + written})
+            students.append({
+                "studentId": student_id, "studentName": name,
+                "totalScore": total, "objectiveScore": objective, "writtenScore": written,
+                "answers": answers, "questionResults": correct,
             })
-            stat["total"] = int(stat["total"]) + 1
-            question_number = int(question["number"])
-            if row["questionResults"][question_number - 1]:
-                stat["correct"] = int(stat["correct"]) + 1
-            else:
-                stat["missedQuestions"].append(question_number)
-        students.append({
-            "studentId": row["studentId"],
-            "studentName": row["studentName"],
-            "totalScore": total_score,
-            "objectiveScore": float(row["objectiveScore"]),
-            "writtenScore": float(row["writtenScore"]),
-            "rank": rank,
-            "topPercent": max(1, min(100, -(-rank * 100 // len(rows)))),
-            "typeResults": list(type_results.values()),
-        })
+        if not students:
+            raise ValueError(f"{sheet.title}: 학생 채점 행이 없습니다.")
+        if exam.get("crossCheck"):
+            comparison = exam["crossCheck"]
+            alternate = workbook[comparison["sheet"]]
+            alt_columns = {key: column_index_from_string(letter) for key, letter in comparison["columns"].items()}
+            primary_by_id = {student["studentId"]: student for student in students}
+            compared: set[str] = set()
+            for row_number in range(exam["firstStudentRow"], alternate.max_row + 1):
+                values = [cell.value for cell in alternate[row_number]]
 
-    students.sort(key=lambda student: (int(student["rank"]), str(student["studentName"])))
+                def other(key: str, offset: int = 0) -> object:
+                    column = alt_columns[key] + offset
+                    return values[column - 1] if column <= len(values) else None
+
+                name, phone = clean(other("name")), clean(other("phone"))
+                if not name and not phone:
+                    continue
+                digits = re.sub(r"\D", "", phone)
+                student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
+                primary = primary_by_id.get(student_id)
+                where = f"{alternate.title}!{row_number}"
+                if primary is None or student_id in compared or primary["studentName"] != name:
+                    raise ValueError(f"{where}: 보조 시트의 학생이 원본 시트와 다릅니다.")
+                compared.add(student_id)
+                if number(other("objective"), f"{where} 객관식") != primary["objectiveScore"] or number(other("written"), f"{where} 서술형") != primary["writtenScore"]:
+                    raise ValueError(f"{where}: 보조 시트의 세부 점수가 원본 시트와 다릅니다.")
+                if [clean(other("answersStart", offset)) for offset in range(len(questions))] != primary["answers"]:
+                    raise ValueError(f"{where}: 보조 시트의 객관식 답안이 원본 시트와 다릅니다.")
+                if [clean(other("resultsStart", offset)).upper() == "O" for offset in range(len(questions))] != primary["questionResults"]:
+                    raise ValueError(f"{where}: 보조 시트의 정오표가 원본 시트와 다릅니다.")
+                alt_total = number(other("total"), f"{where} 총점")
+                if alt_total != primary["totalScore"]:
+                    warnings.append({"cell": where, "issue": "보조 시트 총점 불일치", "sourceTotal": primary["totalScore"], "alternateTotal": alt_total})
+            if compared != set(primary_by_id):
+                raise ValueError(f"{alternate.title}: 보조 시트 학생 수가 원본 시트와 다릅니다.")
+        return students, warnings
+    finally:
+        workbook.close()
+
+
+def build_exam(cohort: dict, exam: dict) -> tuple[dict, list[dict]]:
+    questions = validate_questions(exam)
+    rows, warnings = read_score_sheet(cohort["cohortId"], exam, questions)
+    totals = [row["totalScore"] for row in rows]
+    students = []
+    for row in rows:
+        types: dict[tuple[str, str], dict] = {}
+        for question in questions:
+            index = question["number"] - 1
+            key = (question["category"], question["detailType"])
+            group = types.setdefault(key, {
+                "category": key[0], "detailType": key[1],
+                "correct": 0, "total": 0, "missedQuestions": [],
+            })
+            group["total"] += 1
+            if row["questionResults"][index]:
+                group["correct"] += 1
+            else:
+                group["missedQuestions"].append(index + 1)
+        rank = 1 + sum(other > row["totalScore"] for other in totals)
+        students.append({
+            "studentId": row["studentId"], "studentName": row["studentName"],
+            "totalScore": row["totalScore"], "objectiveScore": row["objectiveScore"],
+            "writtenScore": row["writtenScore"], "rank": rank,
+            "topPercent": max(1, min(100, -(-rank * 100 // len(rows)))),
+            "answers": row["answers"], "questionResults": row["questionResults"],
+            "typeResults": list(types.values()),
+        })
+    students.sort(key=lambda student: (student["rank"], student["studentName"]))
     return {
-        "examId": f"{TERM_ID}-{school_id}-r{round_value}",
-        "termId": TERM_ID,
-        "round": round_value,
-        "title": f"{school}{grade} {YEAR}학년도 {SEMESTER}학기 {EXAM_TYPE} 대비 {round_value}차",
-        "averages": {
-            "total": round(mean(float(row["totalScore"]) for row in rows), 1),
-            "objective": round(mean(float(row["objectiveScore"]) for row in rows), 1),
-            "written": round(mean(float(row["writtenScore"]) for row in rows), 1),
-        },
-        "questionTypes": question_types,
-        "students": students,
-    }
+        "examId": f"{cohort['termId']}-{cohort['cohortId']}-r{exam['round']}",
+        "termId": cohort["termId"], "round": exam["round"], "title": exam["title"],
+        "averages": {key: round(mean(row[f"{key}Score"] for row in rows), 1) for key in ("total", "objective", "written")},
+        "questionTypes": questions, "students": students,
+    }, warnings
+
+
+def csv_text(rows: list[list[object]]) -> str:
+    buffer = io.StringIO()
+    csv.writer(buffer).writerows(rows)
+    return "\ufeff" + buffer.getvalue()
 
 
 def main() -> None:
-    cohorts: list[dict[str, object]] = []
-    matched_folders: set[str] = set()
-    student_codes = load_student_codes()
-    used_codes = {code for cohort_codes in student_codes.values() for code in cohort_codes.values()}
-    code_csv_rows: list[list[object]] = []
-
-    for school_dir in sorted(path for path in SOURCE_ROOT.iterdir() if path.is_dir()):
-        normalized_folder = normalize_text(school_dir.name)
-        teacher = TEACHERS.get(normalized_folder)
-        if not teacher:
-            continue
-        matched_folders.add(normalized_folder)
-        school, grade = school_metadata(school_dir.name)
-        school_id = "baekhyeon-2" if normalized_folder == "백현고2" else "cheongdeok-2"
-        exams: list[dict[str, object]] = []
-
-        for round_dir in sorted(path for path in school_dir.iterdir() if path.is_dir()):
-            workbooks = sorted(round_dir.glob("*.xlsx"))
-            exam_pdfs = sorted(round_dir.glob("*.pdf"))
-            if len(workbooks) != 1:
-                raise ValueError(f"{round_dir}: 채점 결과 Excel이 정확히 1개여야 합니다.")
-            if len(exam_pdfs) != 1:
-                raise ValueError(f"{round_dir}: 시험지 PDF가 정확히 1개여야 합니다.")
-            objective_count = 20 if normalized_folder == "백현고2" else 28
-            exams.append(build_exam(school_id, school, grade, round_dir, workbooks[0], exam_pdfs[0], objective_count))
-
-        exams.sort(key=lambda exam: int(exam["round"]))
-        students: dict[str, str] = {}
-        for exam in exams:
-            for student in exam["students"]:
-                students[str(student["studentId"])] = str(student["studentName"])
-        cohort_codes = student_codes.setdefault(school_id, {})
-        student_access: list[dict[str, str]] = []
-        for student_id, student_name in sorted(students.items(), key=lambda item: item[1]):
-            code = cohort_codes.get(student_id)
-            if not code:
-                code = create_access_code(used_codes)
-                cohort_codes[student_id] = code
-            if len(code) != ACCESS_CODE_LENGTH or any(character not in ACCESS_CODE_ALPHABET for character in code):
-                raise ValueError(f"{student_name} 학생 코드 형식이 올바르지 않습니다.")
-            student_access.append({
-                "studentId": student_id,
-                "studentName": student_name,
-                "accessHash": student_code_hash(code),
-            })
-            code_csv_rows.append([school, grade, student_name, f"{code[:4]}-{code[4:]}"])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--manifest", default="scripts/exam_portal_2026_2_midterm.json")
+    parser.add_argument("--allow-warnings", action="store_true", help="Use only after the source grading issues have been reviewed")
+    args = parser.parse_args()
+    manifest = json.loads((ROOT / args.manifest).read_text(encoding="utf-8"))
+    term_id = clean(manifest["termId"])
+    output_dir = ROOT / "private/exam-imports" / term_id
+    # A new term has its own code files. The previous term's codes are never reused.
+    student_codes = read_map(output_dir / "student-access-code-map.json")
+    teacher_codes = read_map(output_dir / "teacher-access-codes.json")
+    existing_codes = [code for school in student_codes.values() for code in school.values()]
+    existing_codes.extend(entry["code"] for entry in teacher_codes.values())
+    if len(existing_codes) != len(set(existing_codes)):
+        raise ValueError("저장된 학생·교사 코드에 중복이 있습니다. 코드 맵을 확인해 주세요.")
+    used = set(existing_codes)
+    cohorts, warnings = [], []
+    student_csv: list[list[object]] = [["학교", "학년", "학생", "학생 식별 코드"]]
+    teacher_csv: list[list[object]] = [["학교", "학년", "담당", "교사용 마스터 코드"]]
+    for school in manifest["cohorts"]:
+        cohort = {**school, "termId": term_id}
+        exams = []
+        for exam_manifest in school["exams"]:
+            exam, issues = build_exam(cohort, exam_manifest)
+            exams.append(exam)
+            warnings.extend({"school": school["school"], "round": exam_manifest["round"], **item} for item in issues)
+        if len({exam["round"] for exam in exams}) != len(exams):
+            raise ValueError("회차 번호가 중복됩니다.")
+        exams.sort(key=lambda exam: exam["round"])
+        students = {student["studentId"]: student["studentName"] for exam in exams for student in exam["students"]}
+        school_codes = student_codes.setdefault(school["cohortId"], {})
+        access = []
+        for student_id, name in sorted(students.items(), key=lambda item: item[1]):
+            code = school_codes.get(student_id) or new_code(8, used)
+            if not valid_code(code, 8):
+                raise ValueError("학생 코드 형식이 올바르지 않습니다.")
+            school_codes[student_id] = code
+            access.append({"studentId": student_id, "studentName": name, "accessHash": code_hash("student", code)})
+            student_csv.append([school["school"], school["grade"], name, f"{code[:4]}-{code[4:]}"])
+        teacher = teacher_codes.get(school["cohortId"])
+        if teacher is None:
+            teacher = {"label": school["teacherLabel"], "code": new_code(12, used)}
+            teacher_codes[school["cohortId"]] = teacher
+        if not valid_code(teacher.get("code"), 12):
+            raise ValueError("교사용 마스터 코드 형식이 올바르지 않습니다.")
+        code = teacher["code"]
+        teacher_csv.append([school["school"], school["grade"], teacher["label"], f"{code[:4]}-{code[4:8]}-{code[8:]}"])
         cohorts.append({
-            "cohortId": school_id,
-            "school": school,
-            "grade": grade,
-            "teacherLabel": teacher["label"],
-            "teacherAccessHash": teacher_code_hash(str(teacher["code"])),
-            "studentAccess": student_access,
-            "exams": exams,
+            "cohortId": school["cohortId"], "school": school["school"], "grade": school["grade"],
+            "teacherLabel": teacher["label"], "teacherAccessHash": code_hash("teacher", code),
+            "studentAccess": access, "exams": exams,
         })
-
-    missing = set(TEACHERS) - matched_folders
-    if missing:
-        raise ValueError(f"학교 폴더를 찾을 수 없습니다: {', '.join(sorted(missing))}")
-
-    generated_at = datetime.now(timezone.utc)
+    if not cohorts:
+        raise ValueError("학교가 없습니다.")
+    write_private(output_dir / "import-audit.json", json.dumps({"termId": term_id, "warnings": warnings}, ensure_ascii=False, indent=2) + "\n")
+    blocking = [item for item in warnings if item["issue"] == "총점 불일치"]
+    if blocking and not args.allow_warnings:
+        raise ValueError(f"원본 채점표에 총점 불일치 {len(blocking)}건이 있습니다. import-audit.json을 확인해 주세요.")
+    now = datetime.now(timezone.utc)
     payload = {
-        "generatedAt": int(generated_at.timestamp() * 1000),
-        "expiresAt": int((generated_at + timedelta(days=730)).timestamp() * 1000),
+        "generatedAt": int(now.timestamp() * 1000),
+        "expiresAt": int((now + timedelta(days=730)).timestamp() * 1000),
         "terms": [{
-            "termId": TERM_ID,
-            "year": YEAR,
-            "semester": SEMESTER,
-            "examType": EXAM_TYPE,
-            "label": f"{YEAR}학년도 {SEMESTER}학기 {EXAM_TYPE}",
+            "termId": term_id, "year": manifest["year"], "semester": manifest["semester"],
+            "examType": manifest["examType"],
+            "label": f"{manifest['year']}학년도 {manifest['semester']}학기 {manifest['examType']}",
         }],
         "cohorts": cohorts,
     }
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text(
-        "// private 시험 채점표에서 자동 생성됩니다. 원본 파일과 이 파일은 Git에 포함하지 않습니다.\n"
-        f"export const examPortalSeed = {json.dumps(payload, ensure_ascii=False, indent=2)} as const\n",
-        encoding="utf-8",
-    )
-    CODE_NOTE_PATH.write_text(
-        "# 교사용 테스트 접근 코드\n\n"
-        f"- A 선생님 · 백현고2: `{TEACHERS['백현고2']['code'][:4]}-{TEACHERS['백현고2']['code'][4:]}`\n"
-        f"- B 선생님 · 청덕고2: `{TEACHERS['청덕고2']['code'][:4]}-{TEACHERS['청덕고2']['code'][4:]}`\n\n"
-        "테스트가 끝나면 코드를 교체하거나 비활성화하세요.\n",
-        encoding="utf-8",
-    )
-    STUDENT_CODE_MAP_PATH.write_text(
-        json.dumps(student_codes, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    with STUDENT_CODE_CSV_PATH.open("w", encoding="utf-8-sig", newline="") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(["학교", "학년", "학생", "학생 식별 코드"])
-        writer.writerows(code_csv_rows)
-
+    write_private(SEED, "// private 채점표에서 생성되었습니다. Git에 포함하지 않습니다.\n"
+                  + f"export const examPortalSeed = {json.dumps(payload, ensure_ascii=False, indent=2)} as const\n")
+    write_private(output_dir / "student-access-code-map.json", json.dumps(student_codes, ensure_ascii=False, indent=2) + "\n")
+    write_private(output_dir / "teacher-access-codes.json", json.dumps(teacher_codes, ensure_ascii=False, indent=2) + "\n")
+    write_private(output_dir / "student-access-codes.csv", csv_text(student_csv))
+    write_private(output_dir / "teacher-master-codes.csv", csv_text(teacher_csv))
+    notion_lines = [f"# {manifest['year']}학년도 {manifest['semester']}학기 {manifest['examType']} 학생 확인 코드", ""]
     for cohort in cohorts:
-        exam_counts = ", ".join(f"{exam['round']}차 {len(exam['students'])}명" for exam in cohort["exams"])
-        print(f"{cohort['school']}{cohort['grade']}: {exam_counts}")
+        notion_lines.extend([
+            f"## {cohort['school']} {cohort['grade']}학년", "",
+            "| 학생 | 개인 확인 코드 |", "| --- | --- |",
+        ])
+        for row in student_csv[1:]:
+            if row[0] == cohort["school"] and row[1] == cohort["grade"]:
+                notion_lines.append(f"| {row[2]} | {row[3]} |")
+        notion_lines.append("")
+    write_private(output_dir / "notion-student-codes.md", "\n".join(notion_lines))
+    print(f"생성 완료: {sum(len(cohort['studentAccess']) for cohort in cohorts)}명, {len(cohorts)}개 학교, 검토 항목 {len(warnings)}건")
+    print(f"학생 코드: {output_dir / 'student-access-codes.csv'}")
+    print(f"교사 코드: {output_dir / 'teacher-master-codes.csv'}")
 
 
 if __name__ == "__main__":

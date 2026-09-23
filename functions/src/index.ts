@@ -22,7 +22,6 @@ import {
   type MessageType,
 } from './messageDomain'
 import {
-  createAccessCode,
   hashAccessCode,
   hashTeacherAccessCode,
   hashViewerAddress,
@@ -31,7 +30,6 @@ import {
   normalizeAccessCode,
   rankToTopPercent,
 } from './reportAccessDomain'
-import { baekhyeonReportSeed } from './reportSeedData'
 import { examPortalSeed } from './generatedExamPortalSeed'
 
 initializeApp()
@@ -49,8 +47,6 @@ const REPORT_RETENTION_MS = REPORT_ACCESS_DAYS * 24 * 60 * 60 * 1000
 const REPORT_RATE_WINDOW_MS = 10 * 60 * 1000
 const REPORT_LOCK_MS = 15 * 60 * 1000
 const REPORT_MAX_FAILURES = 5
-// 원문은 저장하지 않습니다. 12자리 마스터 코드를 teacher-report 네임스페이스로 해시한 값입니다.
-const MASTER_TEACHER_ACCESS_HASH = '3d7f53d9252b4ad4216d34db72e97b7f05d8a146a387c710f936c5f3a4586fbb'
 
 interface SendMessageInput {
   academyId?: unknown
@@ -82,11 +78,6 @@ interface StudentReportAccessInput {
 }
 
 interface ReportPortalAccessInput extends StudentReportAccessInput {}
-
-interface PublishStudentReportsInput {
-  academyId?: unknown
-  rotateCodes?: unknown
-}
 
 interface TeacherDashboardInput {
   code?: unknown
@@ -435,14 +426,9 @@ function viewerAddress(request: { rawRequest: { ip?: string; socket?: { remoteAd
 }
 
 function teacherCohortsForHash(accessHash: string) {
-  if (accessHash === MASTER_TEACHER_ACCESS_HASH) return examPortalSeed.cohorts
   return Date.now() < examPortalSeed.expiresAt
     ? examPortalSeed.cohorts.filter(item => item.teacherAccessHash === accessHash)
     : []
-}
-
-function isMasterTeacherCode(code: string, accessHash: string): boolean {
-  return isValidMasterAccessCode(code) && accessHash === MASTER_TEACHER_ACCESS_HASH
 }
 
 export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
@@ -457,30 +443,17 @@ export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
   const teacherCohorts = teacherCohortsForHash(teacherHash)
   const ipHash = hashViewerAddress(`portal:${viewerAddress(request)}`)
   const rateRef = db.doc(`reportPortalRateLimits/${ipHash}`)
-  const accessRef = db.doc(`studentReportAccess/${studentHash}`)
   const now = Timestamp.now()
 
   const role = await db.runTransaction(async transaction => {
-    const [rateSnapshot, accessSnapshot] = await Promise.all([
-      transaction.get(rateRef),
-      transaction.get(accessRef),
-    ])
+    const rateSnapshot = await transaction.get(rateRef)
     const rateData = rateSnapshot.data()
     const lockedUntil = rateData?.lockedUntil instanceof Timestamp ? rateData.lockedUntil : null
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
-    const accessData = accessSnapshot.data()
-    const expiresAt = accessData?.expiresAt instanceof Timestamp ? accessData.expiresAt : null
-    const firestoreStudentValid = isValidAccessCode(code)
-      && accessSnapshot.exists
-      && accessData?.active === true
-      && expiresAt !== null
-      && expiresAt.toMillis() > now.toMillis()
-      && typeof accessData?.academyId === 'string'
-      && typeof accessData?.reportId === 'string'
     const embeddedStudentValid = isValidAccessCode(code) && embeddedStudent !== null
-    const teacherValid = (isValidAccessCode(code) || isMasterTeacherCode(code, teacherHash)) && teacherCohorts.length > 0
-    const resolvedRole = teacherValid ? 'teacher' as const : firestoreStudentValid || embeddedStudentValid ? 'student' as const : null
+    const teacherValid = isValidMasterAccessCode(code) && teacherCohorts.length > 0
+    const resolvedRole = teacherValid ? 'teacher' as const : embeddedStudentValid ? 'student' as const : null
 
     if (!resolvedRole) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp ? rateData.windowStartedAt : now
@@ -498,9 +471,8 @@ export const resolveReportPortalAccess = onCall<ReportPortalAccessInput>({
       return 'invalid' as const
     }
 
+    // A valid code must not clear failures from this IP's active window.
     transaction.set(rateRef, {
-      failedAttempts: 0,
-      windowStartedAt: now,
       lastAttemptAt: now,
       lockedUntil: null,
       expiresAt: retentionExpiresAt(now),
@@ -572,8 +544,8 @@ function embeddedStudentAccess(accessHash: string): { cohort: ExamPortalCohort; 
   return null
 }
 
-function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string, allowExpired = false) {
-  if (!allowExpired && Date.now() >= examPortalSeed.expiresAt) return null
+function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
+  if (Date.now() >= examPortalSeed.expiresAt) return null
   const access = cohort.studentAccess.find(item => item.studentId === studentId)
   if (!access) return null
 
@@ -732,13 +704,65 @@ async function attachActualExamScores<T extends { cohortId: string; studentId: s
   return { ...cumulative, actualScores }
 }
 
-async function cumulativeForPublishedReport(report: FirebaseFirestore.DocumentData, academyId: string) {
-  const title = String(report.examTitle ?? '')
-  const studentName = String(report.studentName ?? '')
-  const cohort = examPortalSeed.cohorts.find(item => title.includes(item.school))
-  const access = cohort?.studentAccess.find(item => item.studentName === studentName)
-  const cumulative = cohort && access ? buildStudentCumulative(cohort, access.studentId) : null
-  return cumulative ? attachActualExamScores(cumulative, academyId) : null
+function buildEmbeddedDetailReport(cohort: ExamPortalCohort, studentId: string) {
+  const match = [...cohort.exams].reverse().flatMap(exam => {
+    const student = exam.students.find(item => item.studentId === studentId)
+    return student ? [{ exam, student }] : []
+  })[0]
+  if (!match) return null
+  const { exam, student } = match
+  const questions = exam.questionTypes.map(question => {
+    const index = question.number - 1
+    const rawAnswer = student.answers[index] ?? ''
+    return {
+      number: question.number,
+      category: question.category,
+      detailType: question.detailType,
+      topic: question.topic,
+      correctAnswer: question.correctAnswer,
+      studentAnswer: /^[1-5]$/.test(rawAnswer) ? rawAnswer : rawAnswer ? '무효 답안' : '미기재',
+      correct: student.questionResults[index],
+      cohortRate: Math.round(exam.students.filter(item => item.questionResults[index]).length / exam.students.length * 1000) / 10,
+    }
+  })
+  const groups = new Map<string, {
+    category: string
+    correct: number
+    total: number
+    cohortRate: number
+    missedQuestions: number[]
+  }>()
+  for (const question of questions) {
+    const group = groups.get(question.category) ?? {
+      category: question.category, correct: 0, total: 0, cohortRate: 0, missedQuestions: [],
+    }
+    group.total += 1
+    group.correct += Number(question.correct)
+    group.cohortRate += question.cohortRate
+    if (!question.correct) group.missedQuestions.push(question.number)
+    groups.set(question.category, group)
+  }
+  const categories = [...groups.values()].map(group => ({
+    ...group, cohortRate: Math.round(group.cohortRate / group.total * 10) / 10,
+  }))
+  const objectiveRank = 1 + exam.students.filter(item => item.objectiveScore > student.objectiveScore).length
+  const totalRank = 1 + exam.students.filter(item => item.totalScore > student.totalScore).length
+  return {
+    examId: exam.examId,
+    examTitle: exam.title,
+    studentName: student.studentName,
+    totalScore: student.totalScore,
+    objectiveScore: student.objectiveScore,
+    writtenScore: student.writtenScore,
+    objectiveTopPercent: rankToTopPercent(objectiveRank, exam.students.length),
+    totalTopPercent: rankToTopPercent(totalRank, exam.students.length),
+    cohortAverages: exam.averages,
+    categories,
+    questions,
+    strengths: [...categories].sort((a, b) => b.correct / b.total - a.correct / a.total || b.total - a.total).slice(0, 3).map(item => item.category),
+    priorities: questions.filter(item => !item.correct).sort((a, b) => a.cohortRate - b.cohortRate || a.number - b.number).slice(0, 3).map(item => item.number),
+    dataWarning: null,
+  }
 }
 
 export const getStudentReport = onCall<StudentReportAccessInput>({
@@ -747,135 +771,59 @@ export const getStudentReport = onCall<StudentReportAccessInput>({
   maxInstances: 20,
 }, async request => {
   const code = normalizeAccessCode(request.data?.code)
-  const codeHash = hashAccessCode(code || 'invalid')
-  const embeddedAccess = embeddedStudentAccess(codeHash)
+  const access = embeddedStudentAccess(hashAccessCode(code || 'invalid'))
   const ipHash = hashViewerAddress(viewerAddress(request))
-  const rateRef = db.doc(`studentReportRateLimits/${ipHash}`)
-  const accessRef = db.doc(`studentReportAccess/${codeHash}`)
+  const rateRef = db.doc('studentReportRateLimits/' + ipHash)
   const now = Timestamp.now()
 
-  const access = await db.runTransaction(async transaction => {
-    const [rateSnapshot, accessSnapshot] = await Promise.all([
-      transaction.get(rateRef),
-      transaction.get(accessRef),
-    ])
+  const status = await db.runTransaction(async transaction => {
+    const rateSnapshot = await transaction.get(rateRef)
     const rateData = rateSnapshot.data()
     const lockedUntil = rateData?.lockedUntil instanceof Timestamp ? rateData.lockedUntil : null
-    if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return { status: 'locked' as const }
+    if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
-    const accessData = accessSnapshot.data()
-    const expiresAt = accessData?.expiresAt instanceof Timestamp ? accessData.expiresAt : null
-    const firestoreValid = isValidAccessCode(code)
-      && accessSnapshot.exists
-      && accessData?.active === true
-      && expiresAt !== null
-      && expiresAt.toMillis() > now.toMillis()
-      && typeof accessData?.academyId === 'string'
-      && typeof accessData?.reportId === 'string'
-    const embeddedValid = isValidAccessCode(code) && embeddedAccess !== null
-
-    if (!firestoreValid && !embeddedValid) {
-      const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp
-        ? rateData.windowStartedAt
-        : now
+    if (!isValidAccessCode(code) || !access) {
+      const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp ? rateData.windowStartedAt : now
       const withinWindow = now.toMillis() - windowStartedAt.toMillis() <= REPORT_RATE_WINDOW_MS
       const failedAttempts = withinWindow && typeof rateData?.failedAttempts === 'number'
-        ? rateData.failedAttempts + 1
-        : 1
+        ? rateData.failedAttempts + 1 : 1
       transaction.set(rateRef, {
         failedAttempts,
         windowStartedAt: withinWindow ? windowStartedAt : now,
         lastAttemptAt: now,
         expiresAt: retentionExpiresAt(now),
-        ...(failedAttempts >= REPORT_MAX_FAILURES
-          ? { lockedUntil: Timestamp.fromMillis(now.toMillis() + REPORT_LOCK_MS) }
-          : { lockedUntil: null }),
+        lockedUntil: failedAttempts >= REPORT_MAX_FAILURES
+          ? Timestamp.fromMillis(now.toMillis() + REPORT_LOCK_MS) : null,
       }, { merge: true })
-      return { status: 'invalid' as const }
+      return 'invalid' as const
     }
 
+    // A valid code must not clear failures from this IP's active window.
     transaction.set(rateRef, {
-      failedAttempts: 0,
-      windowStartedAt: now,
       lastAttemptAt: now,
       lockedUntil: null,
       expiresAt: retentionExpiresAt(now),
     }, { merge: true })
-    if (firestoreValid) {
-      transaction.set(accessRef, {
-        lastAccessedAt: now,
-        accessCount: FieldValue.increment(1),
-      }, { merge: true })
-    }
-
-    return firestoreValid ? {
-      status: 'valid' as const,
-      source: 'firestore' as const,
-      academyId: String(accessData.academyId),
-      reportId: String(accessData.reportId),
-      expiresAt: expiresAt.toMillis(),
-    } : {
-      status: 'valid' as const,
-      source: 'embedded' as const,
-      cohortId: embeddedAccess!.cohort.cohortId,
-      studentId: embeddedAccess!.studentId,
-    }
+    return 'valid' as const
   })
 
-  if (access.status === 'locked') {
-    throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.')
-  }
-  if (access.status === 'invalid') throw reportCodeError()
+  if (status === 'locked') throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.')
+  if (status === 'invalid' || !access) throw reportCodeError()
 
-  if (access.source === 'embedded') {
-    const cohort = examPortalSeed.cohorts.find(item => item.cohortId === access.cohortId)
-    const cumulativeBase = cohort ? buildStudentCumulative(cohort, access.studentId) : null
-    const cumulative = cumulativeBase ? await attachActualExamScores(cumulativeBase, 'node-default') : null
-    if (!cumulative) throw reportCodeError()
-    await db.collection('studentReportViewLogs').add({
-      academyId: null,
-      reportId: `cumulative:${access.cohortId}:${access.studentId}`,
-      ipHash,
-      userAgent: String(request.rawRequest.headers['user-agent'] ?? '').slice(0, 300),
-      accessedAt: now,
-      expiresAt: retentionExpiresAt(now),
-    })
-    return { expiresAt: null, report: null, cumulative }
-  }
-
-  const reportSnapshot = await db.doc(`academies/${access.academyId}/studentReports/${access.reportId}`).get()
-  if (!reportSnapshot.exists || reportSnapshot.data()?.published !== true) throw reportCodeError()
-  const report = reportSnapshot.data()!
+  const cumulativeBase = buildStudentCumulative(access.cohort, access.studentId)
+  const cumulative = cumulativeBase ? await attachActualExamScores(cumulativeBase, 'node-default') : null
+  const report = buildEmbeddedDetailReport(access.cohort, access.studentId)
+  if (!cumulative || !report) throw reportCodeError()
 
   await db.collection('studentReportViewLogs').add({
-    academyId: access.academyId,
-    reportId: access.reportId,
+    academyId: null,
+    reportId: 'cumulative:' + access.cohort.cohortId + ':' + access.studentId,
     ipHash,
     userAgent: String(request.rawRequest.headers['user-agent'] ?? '').slice(0, 300),
     accessedAt: now,
     expiresAt: retentionExpiresAt(now),
   })
-
-  return {
-    expiresAt: access.expiresAt,
-    cumulative: await cumulativeForPublishedReport(report, access.academyId),
-    report: {
-      examId: report.examId,
-      examTitle: report.examTitle,
-      studentName: report.studentName,
-      totalScore: report.totalScore,
-      objectiveScore: report.objectiveScore,
-      writtenScore: report.writtenScore,
-      objectiveTopPercent: rankToTopPercent(report.sourceRank, report.cohortSize),
-      totalTopPercent: rankToTopPercent(report.totalScoreRank, report.cohortSize),
-      cohortAverages: report.cohortAverages,
-      categories: report.categories,
-      questions: report.questions,
-      strengths: report.strengths,
-      priorities: report.priorities,
-      dataWarning: report.dataWarning ?? null,
-    },
-  }
+  return { expiresAt: examPortalSeed.expiresAt, report, cumulative }
 })
 
 export const getTeacherDashboard = onCall<TeacherDashboardInput>({
@@ -885,7 +833,6 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
 }, async request => {
   const code = normalizeAccessCode(request.data?.code)
   const accessHash = hashTeacherAccessCode(code || 'invalid')
-  const masterAccess = isMasterTeacherCode(code, accessHash)
   const cohorts = teacherCohortsForHash(accessHash)
   const ipHash = hashViewerAddress(`teacher:${viewerAddress(request)}`)
   const rateRef = db.doc(`teacherReportRateLimits/${ipHash}`)
@@ -897,7 +844,7 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
     const lockedUntil = rateData?.lockedUntil instanceof Timestamp ? rateData.lockedUntil : null
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
-    if ((!isValidAccessCode(code) && !masterAccess) || cohorts.length === 0) {
+    if (!isValidMasterAccessCode(code) || cohorts.length === 0) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp
         ? rateData.windowStartedAt
         : now
@@ -917,9 +864,8 @@ export const getTeacherDashboard = onCall<TeacherDashboardInput>({
       return 'invalid' as const
     }
 
+    // A valid code must not clear failures from this IP's active window.
     transaction.set(rateRef, {
-      failedAttempts: 0,
-      windowStartedAt: now,
       lastAttemptAt: now,
       lockedUntil: null,
       expiresAt: retentionExpiresAt(now),
@@ -970,7 +916,6 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
   const code = normalizeAccessCode(request.data?.code)
   const studentId = typeof request.data?.studentId === 'string' ? request.data.studentId.slice(0, 80) : ''
   const accessHash = hashTeacherAccessCode(code || 'invalid')
-  const masterAccess = isMasterTeacherCode(code, accessHash)
   const authorizedCohorts = teacherCohortsForHash(accessHash)
   const cohort = authorizedCohorts.find(item => item.studentAccess.some(student => student.studentId === studentId))
   const ipHash = hashViewerAddress(`teacher:${viewerAddress(request)}`)
@@ -984,7 +929,7 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     if (lockedUntil && lockedUntil.toMillis() > now.toMillis()) return 'locked' as const
 
     const studentAllowed = cohort?.studentAccess.some(student => student.studentId === studentId) === true
-    if ((!isValidAccessCode(code) && !masterAccess) || !cohort || !studentAllowed) {
+    if (!isValidMasterAccessCode(code) || !cohort || !studentAllowed) {
       const windowStartedAt = rateData?.windowStartedAt instanceof Timestamp ? rateData.windowStartedAt : now
       const withinWindow = now.toMillis() - windowStartedAt.toMillis() <= REPORT_RATE_WINDOW_MS
       const failedAttempts = withinWindow && typeof rateData?.failedAttempts === 'number'
@@ -1002,9 +947,8 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
       return 'invalid' as const
     }
 
+    // A valid code must not clear failures from this IP's active window.
     transaction.set(rateRef, {
-      failedAttempts: 0,
-      windowStartedAt: now,
       lastAttemptAt: now,
       lockedUntil: null,
       expiresAt: retentionExpiresAt(now),
@@ -1019,9 +963,10 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     throw new HttpsError('permission-denied', '학생 성적표 열람 권한을 확인해 주세요.')
   }
 
-  const cumulativeBase = buildStudentCumulative(cohort, studentId, masterAccess)
+  const cumulativeBase = buildStudentCumulative(cohort, studentId)
   if (!cumulativeBase) throw new HttpsError('not-found', '학생 성적표를 찾을 수 없습니다.')
   const cumulative = await attachActualExamScores(cumulativeBase, 'node-default')
+  const report = buildEmbeddedDetailReport(cohort, studentId)
 
   await db.collection('teacherReportViewLogs').add({
     cohortId: cohort.cohortId,
@@ -1034,7 +979,7 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     expiresAt: retentionExpiresAt(now),
   })
 
-  return { cumulative }
+  return { cumulative, report }
 })
 
 export const getActualExamScoreAdminData = onCall<ActualExamScoreAdminInput>({
@@ -1178,82 +1123,6 @@ export const purgeExpiredReportData = onSchedule({
   const deleted: Record<string, number> = {}
   for (const [name, query] of targets) deleted[name] = await purgeExpiredQuery(query)
   logger.info('Expired report data purged', { cutoff: cutoff.toDate().toISOString(), deleted })
-})
-
-export const publishBaekhyeonStudentReports = onCall<PublishStudentReportsInput>({
-  timeoutSeconds: 60,
-  memory: '512MiB',
-}, async request => {
-  const admin = await authorizeAdmin(request.auth, request.data?.academyId)
-  const rotateCodes = request.data?.rotateCodes === true
-  const reportRefs = baekhyeonReportSeed.reports.map(report =>
-    db.doc(`academies/${admin.academyId}/studentReports/${baekhyeonReportSeed.exam.examId}-${report.sourceReportId}`)
-  )
-  const existingSnapshots = await db.getAll(...reportRefs)
-  const existingById = new Map(existingSnapshots.map(snapshot => [snapshot.id, snapshot.data()]))
-  const batch = db.batch()
-  const issuedCodes: Array<{ reportId: string; studentName: string; accessCode: string }> = []
-  let existingCount = 0
-  const expiresAt = Timestamp.fromMillis(Date.now() + REPORT_ACCESS_DAYS * 24 * 60 * 60 * 1000)
-  const publishedAt = Timestamp.now()
-
-  baekhyeonReportSeed.reports.forEach((report, index) => {
-    const reportRef = reportRefs[index]
-    const existing = existingById.get(reportRef.id)
-    const previousHash = typeof existing?.accessHash === 'string' ? existing.accessHash : ''
-    let accessHash = previousHash
-
-    if (!previousHash || rotateCodes) {
-      if (previousHash) batch.delete(db.doc(`studentReportAccess/${previousHash}`))
-      const accessCode = createAccessCode()
-      accessHash = hashAccessCode(accessCode)
-      batch.create(db.doc(`studentReportAccess/${accessHash}`), {
-        academyId: admin.academyId,
-        reportId: reportRef.id,
-        active: true,
-        expiresAt,
-        createdAt: publishedAt,
-        lastAccessedAt: null,
-        accessCount: 0,
-      })
-      issuedCodes.push({ reportId: reportRef.id, studentName: report.studentName, accessCode })
-    } else {
-      existingCount += 1
-      batch.set(db.doc(`studentReportAccess/${previousHash}`), {
-        active: true,
-        expiresAt,
-      }, { merge: true })
-    }
-
-    batch.set(reportRef, {
-      ...report,
-      academyId: admin.academyId,
-      examId: baekhyeonReportSeed.exam.examId,
-      examTitle: baekhyeonReportSeed.exam.title,
-      accessHash,
-      published: true,
-      expiresAt,
-      publishedAt: existing?.publishedAt ?? publishedAt,
-      updatedAt: publishedAt,
-      publishedBy: { uid: admin.uid, email: admin.email, displayName: admin.displayName },
-    }, { merge: true })
-  })
-
-  await batch.commit()
-  logger.info('Student reports published', {
-    academyId: admin.academyId,
-    reportCount: baekhyeonReportSeed.reports.length,
-    issuedCodeCount: issuedCodes.length,
-    rotateCodes,
-  })
-  return {
-    examId: baekhyeonReportSeed.exam.examId,
-    examTitle: baekhyeonReportSeed.exam.title,
-    publishedCount: baekhyeonReportSeed.reports.length,
-    existingCount,
-    issuedCodes,
-    expiresAt: expiresAt.toMillis(),
-  }
 })
 
 export { registerNodeAccount, activateNodeAccount } from './signup'
