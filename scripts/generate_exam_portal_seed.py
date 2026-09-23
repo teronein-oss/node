@@ -156,9 +156,15 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
             if not name or (not phone and manual is None):
                 raise ValueError(f"{where}: 이름 또는 학생 식별용 번호가 없습니다.")
             if manual is not None:
-                if phone or not isinstance(manual, dict) or manual.get("studentNameHash") != hashlib.sha256(name.encode()).hexdigest()[:20]:
+                if not isinstance(manual, dict) or manual.get("studentNameHash") != hashlib.sha256(name.encode()).hexdigest()[:20]:
                     raise ValueError(f"{where}: 별도 제공 정오표의 학생 정보가 원본과 다릅니다.")
-                student_id = name_only_student_id(cohort_id, name)
+                if phone:
+                    digits = re.sub(r"\D", "", phone)
+                    if len(digits) < 4:
+                        raise ValueError(f"{where}: 학생 식별용 번호 끝 4자리가 없습니다.")
+                    student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
+                else:
+                    student_id = name_only_student_id(cohort_id, name)
             else:
                 digits = re.sub(r"\D", "", phone)
                 if len(digits) < 4:
@@ -169,7 +175,7 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
             seen.add(student_id)
             total = number(at(columns["total"]), f"{where} 총점")
             objective = number(at(columns["objective"]), f"{where} 객관식")
-            written = number(at(columns["written"]), f"{where} 서술형")
+            written = number(at(columns["written"]), f"{where} 서술형") if "written" in columns else 0.0
             answers: list[str] = []
             correct: list[bool] = []
             if manual is not None:
@@ -252,11 +258,19 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
                 if primary is None or student_id in compared or primary["studentName"] != name:
                     raise ValueError(f"{where}: 보조 시트의 학생이 원본 시트와 다릅니다.")
                 compared.add(student_id)
-                if number(other("objective"), f"{where} 객관식") != primary["sourceObjectiveScore"] or number(other("written"), f"{where} 서술형") != primary["writtenScore"]:
+                alternate_written = number(other("written"), f"{where} 서술형") if "written" in alt_columns else 0.0
+                if number(other("objective"), f"{where} 객관식") != primary["sourceObjectiveScore"] or alternate_written != primary["writtenScore"]:
                     raise ValueError(f"{where}: 보조 시트의 세부 점수가 원본 시트와 다릅니다.")
                 if student_id in manual_student_ids:
-                    if any(clean(other("answersStart", offset)) or clean(other("resultsStart", offset)) for offset in range(len(questions))):
+                    alternate_answers = [clean(other("answersStart", offset)) for offset in range(len(questions))]
+                    alternate_markers = [clean(other("resultsStart", offset)).upper() for offset in range(len(questions))]
+                    if any(alternate_answers):
                         raise ValueError(f"{where}: 보조 시트에 별도 정오표 학생의 문항 답안이 있습니다.")
+                    if any(alternate_markers) and (
+                        any(marker not in {"O", "X"} for marker in alternate_markers)
+                        or [marker == "O" for marker in alternate_markers] != primary["questionResults"]
+                    ):
+                        raise ValueError(f"{where}: 보조 시트의 별도 정오표가 원본과 다릅니다.")
                 else:
                     if [clean(other("answersStart", offset)) for offset in range(len(questions))] != primary["answers"]:
                         raise ValueError(f"{where}: 보조 시트의 객관식 답안이 원본 시트와 다릅니다.")

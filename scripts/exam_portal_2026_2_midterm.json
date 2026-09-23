@@ -583,6 +583,275 @@
           ]
         }
       ]
+    },
+    {
+      "cohortId": "cheongdeok-1",
+      "school": "청덕고",
+      "grade": 1,
+      "teacherLabel": "청덕고 1학년 담당 선생님",
+      "exams": [
+        {
+          "subject": "영어",
+          "round": 1,
+          "title": "청덕고1 2026학년도 2학기 중간고사 대비 1차",
+          "pdf": "private/exam-imports/2026-2-midterm/cheongdeok-1/round-1/exam.pdf",
+          "workbook": "private/exam-imports/2026-2-midterm/cheongdeok-1/round-1/scores.xlsx",
+          "sheet": "전화번호순",
+          "firstStudentRow": 3,
+          "writtenMaxScore": 0,
+          "columns": {
+            "phone": "B",
+            "name": "C",
+            "total": "E",
+            "objective": "F",
+            "answersStart": "G",
+            "resultsStart": "BE"
+          },
+          "crossCheck": {
+            "sheet": "석차순",
+            "columns": {
+              "phone": "B",
+              "name": "C",
+              "total": "G",
+              "objective": "F",
+              "answersStart": "H",
+              "resultsStart": "BF"
+            }
+          },
+          "manualQuestionResultsByRow": {
+            "37": {
+              "studentNameHash": "5896028830f05e7dd83e",
+              "results": "OOOOXXXOOXOOXXOXXOXOOOXOOOOO"
+            }
+          },
+          "questionTypes": [
+            {
+              "number": 1,
+              "category": "대의 파악",
+              "detailType": "주제",
+              "topic": "대상을 바라보는 관점과 선택적 인식",
+              "correctAnswer": "3",
+              "points": 4
+            },
+            {
+              "number": 2,
+              "category": "대의 파악",
+              "detailType": "주제",
+              "topic": "긍정 문장 쓰기와 자신감",
+              "correctAnswer": "3",
+              "points": 4
+            },
+            {
+              "number": 3,
+              "category": "어법·어휘",
+              "detailType": "문맥 어휘",
+              "topic": "학교 교육 이후의 지속적 자기 계발",
+              "correctAnswer": "3",
+              "points": 3
+            },
+            {
+              "number": 4,
+              "category": "어법·어휘",
+              "detailType": "문맥 어휘",
+              "topic": "전문가의 지식의 저주와 초보자 교육",
+              "correctAnswer": "4",
+              "points": 3
+            },
+            {
+              "number": 5,
+              "category": "어법·어휘",
+              "detailType": "문맥 어휘",
+              "topic": "일의 의미와 삶의 만족",
+              "correctAnswer": "5",
+              "points": 4
+            },
+            {
+              "number": 6,
+              "category": "추론·의미",
+              "detailType": "빈칸 추론",
+              "topic": "기후 변화에 따른 생물의 이동",
+              "correctAnswer": "3",
+              "points": 3
+            },
+            {
+              "number": 7,
+              "category": "추론·의미",
+              "detailType": "빈칸 추론",
+              "topic": "상동 기관과 상사 기관의 구별",
+              "correctAnswer": "5",
+              "points": 4
+            },
+            {
+              "number": 8,
+              "category": "추론·의미",
+              "detailType": "빈칸 추론",
+              "topic": "이사하는 아동의 정체성과 과거 경험",
+              "correctAnswer": "3",
+              "points": 4
+            },
+            {
+              "number": 9,
+              "category": "추론·의미",
+              "detailType": "빈칸 추론",
+              "topic": "색채의 객관성과 주관성",
+              "correctAnswer": "2",
+              "points": 3
+            },
+            {
+              "number": 10,
+              "category": "추론·의미",
+              "detailType": "빈칸 추론",
+              "topic": "작품 완성과 거리 두기",
+              "correctAnswer": "4",
+              "points": 4
+            },
+            {
+              "number": 11,
+              "category": "대의 파악",
+              "detailType": "제목",
+              "topic": "정착 생활과 출산 간격 및 인구 증가",
+              "correctAnswer": "5",
+              "points": 4
+            },
+            {
+              "number": 12,
+              "category": "대의 파악",
+              "detailType": "제목",
+              "topic": "성과로 자기 가치를 판단하는 문제",
+              "correctAnswer": "2",
+              "points": 3
+            },
+            {
+              "number": 13,
+              "category": "어법·어휘",
+              "detailType": "어법",
+              "topic": "성인 뇌의 가소성과 경험",
+              "correctAnswer": "2",
+              "points": 4
+            },
+            {
+              "number": 14,
+              "category": "어법·어휘",
+              "detailType": "어법",
+              "topic": "일상 속 리더십의 가능성",
+              "correctAnswer": "4",
+              "points": 4
+            },
+            {
+              "number": 15,
+              "category": "어법·어휘",
+              "detailType": "문맥 어휘",
+              "topic": "안나 앙케르의 여성 인물화",
+              "correctAnswer": "4",
+              "points": 4
+            },
+            {
+              "number": 16,
+              "category": "글의 구조",
+              "detailType": "글의 순서",
+              "topic": "정체성에 부합하는 행동과 습관",
+              "correctAnswer": "3",
+              "points": 4
+            },
+            {
+              "number": 17,
+              "category": "글의 구조",
+              "detailType": "글의 순서",
+              "topic": "디지털 활동의 탄소 배출",
+              "correctAnswer": "4",
+              "points": 3
+            },
+            {
+              "number": 18,
+              "category": "요약·통합",
+              "detailType": "요약문 완성",
+              "topic": "자기 목소리 인식과 골전도",
+              "correctAnswer": "2",
+              "points": 3
+            },
+            {
+              "number": 19,
+              "category": "요약·통합",
+              "detailType": "요약문 완성",
+              "topic": "작은 관심과 사회적 유대감",
+              "correctAnswer": "4",
+              "points": 3
+            },
+            {
+              "number": 20,
+              "category": "요약·통합",
+              "detailType": "요약문 완성",
+              "topic": "의식과 잠재의식의 역할",
+              "correctAnswer": "1",
+              "points": 4
+            },
+            {
+              "number": 21,
+              "category": "대의 파악",
+              "detailType": "요지",
+              "topic": "디지털 자료 설계와 접근성",
+              "correctAnswer": "3",
+              "points": 4
+            },
+            {
+              "number": 22,
+              "category": "대의 파악",
+              "detailType": "요지",
+              "topic": "브레인라이팅의 개인 우선 절차",
+              "correctAnswer": "4",
+              "points": 4
+            },
+            {
+              "number": 23,
+              "category": "추론·의미",
+              "detailType": "함의 추론",
+              "topic": "미니멀리즘과 소유물에 대한 애착",
+              "correctAnswer": "2",
+              "points": 3
+            },
+            {
+              "number": 24,
+              "category": "추론·의미",
+              "detailType": "빈칸 추론",
+              "topic": "문화 다양성과 지역사회 생산성",
+              "correctAnswer": "1",
+              "points": 4
+            },
+            {
+              "number": 25,
+              "category": "글의 구조",
+              "detailType": "무관한 문장",
+              "topic": "아리스토텔레스의 오감 분류",
+              "correctAnswer": "3",
+              "points": 3
+            },
+            {
+              "number": 26,
+              "category": "세부 내용",
+              "detailType": "내용 불일치",
+              "topic": "구강 건강과 전신 건강",
+              "correctAnswer": "4",
+              "points": 3
+            },
+            {
+              "number": 27,
+              "category": "세부 내용",
+              "detailType": "내용 불일치",
+              "topic": "농경 정착과 인구·건강 변화",
+              "correctAnswer": "2",
+              "points": 4
+            },
+            {
+              "number": 28,
+              "category": "세부 내용",
+              "detailType": "내용 불일치",
+              "topic": "근로자 자율성과 생산성",
+              "correctAnswer": "3",
+              "points": 3
+            }
+          ]
+        }
+      ]
     }
   ]
 }
