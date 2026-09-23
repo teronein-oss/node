@@ -768,7 +768,7 @@ function buildEmbeddedDetailReport(cohort: ExamPortalCohort, studentId: string, 
       detailType: question.detailType,
       topic: question.topic,
       correctAnswer: question.correctAnswer,
-      studentAnswer: /^[1-5]$/.test(rawAnswer) ? rawAnswer : rawAnswer ? '무효 답안' : '미기재',
+      studentAnswer: /^[1-5]$/.test(rawAnswer) ? rawAnswer : rawAnswer === '?' ? '선택지 미확인' : rawAnswer ? '무효 답안' : '미기재',
       correct: student.questionResults[index],
       cohortRate: Math.round(exam.students.filter(item => item.questionResults[index]).length / exam.students.length * 1000) / 10,
     }

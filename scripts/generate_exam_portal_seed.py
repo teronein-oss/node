@@ -15,6 +15,7 @@ import os
 import re
 import secrets
 import unicodedata
+from zipfile import ZipFile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import mean
@@ -53,6 +54,10 @@ def code_hash(kind: str, code: str) -> str:
     return hashlib.sha256(f"{kind}-report:{code}".encode()).hexdigest()
 
 
+def name_only_student_id(cohort_id: str, name: str) -> str:
+    return hashlib.sha256(f"seum-student-nameonly:{cohort_id}:{name}".encode()).hexdigest()[:20]
+
+
 def new_code(length: int, used: set[str]) -> str:
     while True:
         candidate = "".join(secrets.choice(ALPHABET) for _ in range(length))
@@ -79,6 +84,24 @@ def number(value: object, where: str) -> float:
     if result < 0 or result > 100:
         raise ValueError(f"{where}: 점수가 0~100 범위를 벗어났습니다.")
     return result
+
+
+def open_score_workbook(path: Path):
+    """Read source files whose default Excel style omits its required name."""
+    with ZipFile(path) as source:
+        style = source.read("xl/styles.xml")
+        malformed = b'<x:cellStyle xfId="0" builtinId="0"'
+        if malformed not in style:
+            return load_workbook(path, read_only=True, data_only=True)
+        repaired = io.BytesIO()
+        with ZipFile(repaired, "w") as output:
+            for entry in source.infolist():
+                data = source.read(entry.filename)
+                if entry.filename == "xl/styles.xml":
+                    data = data.replace(malformed, b'<x:cellStyle name="Normal" xfId="0" builtinId="0"')
+                output.writestr(entry, data)
+    repaired.seek(0)
+    return load_workbook(repaired, read_only=True, data_only=True)
 
 
 def validate_questions(exam: dict) -> list[dict]:
@@ -109,13 +132,16 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
     score_policy = exam.get("scorePolicy", "workbook")
     if score_policy not in ("workbook", "examPoints"):
         raise ValueError("채점 기준은 workbook 또는 examPoints여야 합니다.")
-    workbook = load_workbook(private_path(exam["workbook"]), read_only=True, data_only=True)
+    workbook = open_score_workbook(private_path(exam["workbook"]))
     try:
         sheet = workbook[exam["sheet"]]
         columns = {key: column_index_from_string(letter) for key, letter in exam["columns"].items()}
         students: list[dict] = []
         warnings: list[dict] = []
         seen: set[str] = set()
+        manual_rows = exam.get("manualQuestionResultsByRow", {})
+        manual_seen: set[str] = set()
+        manual_student_ids: set[str] = set()
         for row_number in range(exam["firstStudentRow"], sheet.max_row + 1):
             values = [cell.value for cell in sheet[row_number]]
 
@@ -126,12 +152,18 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
             if not name and not phone:
                 continue
             where = f"{sheet.title}!{row_number}"
-            if not name or not phone:
+            manual = manual_rows.get(str(row_number))
+            if not name or (not phone and manual is None):
                 raise ValueError(f"{where}: 이름 또는 학생 식별용 번호가 없습니다.")
-            digits = re.sub(r"\D", "", phone)
-            if len(digits) < 4:
-                raise ValueError(f"{where}: 학생 식별용 번호 끝 4자리가 없습니다.")
-            student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
+            if manual is not None:
+                if phone or not isinstance(manual, dict) or manual.get("studentNameHash") != hashlib.sha256(name.encode()).hexdigest()[:20]:
+                    raise ValueError(f"{where}: 별도 제공 정오표의 학생 정보가 원본과 다릅니다.")
+                student_id = name_only_student_id(cohort_id, name)
+            else:
+                digits = re.sub(r"\D", "", phone)
+                if len(digits) < 4:
+                    raise ValueError(f"{where}: 학생 식별용 번호 끝 4자리가 없습니다.")
+                student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
             if student_id in seen:
                 raise ValueError(f"{where}: 학생 식별용 번호가 중복됩니다.")
             seen.add(student_id)
@@ -140,20 +172,32 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
             written = number(at(columns["written"]), f"{where} 서술형")
             answers: list[str] = []
             correct: list[bool] = []
-            for offset, question in enumerate(questions):
-                answer = clean(at(columns["answersStart"] + offset))
-                marker = clean(at(columns["resultsStart"] + offset)).upper()
-                if marker not in ("O", "X"):
-                    raise ValueError(f"{where} {offset + 1}번: 정오표에 O/X가 없습니다.")
-                if (marker == "O") != (answer == question["correctAnswer"]):
-                    if answer in {"1", "2", "3", "4", "5"}:
-                        raise ValueError(f"{where} {offset + 1}번: 학생 답안·정답·정오표가 모순됩니다.")
-                if answer not in {"1", "2", "3", "4", "5"}:
-                    if marker == "O":
-                        raise ValueError(f"{where} {offset + 1}번: 유효하지 않은 답안에 정답 표시가 있습니다.")
-                    warnings.append({"cell": where, "question": offset + 1, "issue": "답안 공란" if not answer else "선택지 범위 밖"})
-                answers.append(answer)
-                correct.append(marker == "O")
+            if manual is not None:
+                marks = manual.get("results")
+                if not isinstance(marks, str) or len(marks) != len(questions) or set(marks) - {"O", "X"}:
+                    raise ValueError(f"{where}: 별도 제공 정오표 형식이 올바르지 않습니다.")
+                if any(clean(at(columns["answersStart"] + offset)) or clean(at(columns["resultsStart"] + offset)) for offset in range(len(questions))):
+                    raise ValueError(f"{where}: 원본 채점표에 문항 답안이 있어 별도 정오표 적용 여부를 재검토해야 합니다.")
+                answers = [question["correctAnswer"] if marker == "O" else "?" for question, marker in zip(questions, marks)]
+                correct = [marker == "O" for marker in marks]
+                manual_seen.add(str(row_number))
+                manual_student_ids.add(student_id)
+                warnings.append({"cell": where, "issue": "별도 제공 정오표 반영·오답 선택지 미상"})
+            else:
+                for offset, question in enumerate(questions):
+                    answer = clean(at(columns["answersStart"] + offset))
+                    marker = clean(at(columns["resultsStart"] + offset)).upper()
+                    if marker not in ("O", "X"):
+                        raise ValueError(f"{where} {offset + 1}번: 정오표에 O/X가 없습니다.")
+                    if (marker == "O") != (answer == question["correctAnswer"]):
+                        if answer in {"1", "2", "3", "4", "5"}:
+                            raise ValueError(f"{where} {offset + 1}번: 학생 답안·정답·정오표가 모순됩니다.")
+                    if answer not in {"1", "2", "3", "4", "5"}:
+                        if marker == "O":
+                            raise ValueError(f"{where} {offset + 1}번: 유효하지 않은 답안에 정답 표시가 있습니다.")
+                        warnings.append({"cell": where, "question": offset + 1, "issue": "답안 공란" if not answer else "선택지 범위 밖"})
+                    answers.append(answer)
+                    correct.append(marker == "O")
             expected_objective = sum(
                 question.get("points", exam.get("objectivePointsEach"))
                 for question, is_correct in zip(questions, correct) if is_correct
@@ -178,6 +222,8 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
             })
         if not students:
             raise ValueError(f"{sheet.title}: 학생 채점 행이 없습니다.")
+        if manual_seen != set(manual_rows):
+            raise ValueError(f"{sheet.title}: 별도 정오표 학생이 원본 시트에 없습니다.")
         if exam.get("crossCheck"):
             comparison = exam["crossCheck"]
             alternate = workbook[comparison["sheet"]]
@@ -194,19 +240,28 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
                 name, phone = clean(other("name")), clean(other("phone"))
                 if not name and not phone:
                     continue
-                digits = re.sub(r"\D", "", phone)
-                student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
-                primary = primary_by_id.get(student_id)
                 where = f"{alternate.title}!{row_number}"
+                if not phone:
+                    student_id = name_only_student_id(cohort_id, name)
+                    if student_id not in manual_student_ids:
+                        raise ValueError(f"{where}: 보조 시트 학생의 식별 번호가 없습니다.")
+                else:
+                    digits = re.sub(r"\D", "", phone)
+                    student_id = hashlib.sha256(f"seum-student:{cohort_id}:{digits}".encode()).hexdigest()[:20]
+                primary = primary_by_id.get(student_id)
                 if primary is None or student_id in compared or primary["studentName"] != name:
                     raise ValueError(f"{where}: 보조 시트의 학생이 원본 시트와 다릅니다.")
                 compared.add(student_id)
                 if number(other("objective"), f"{where} 객관식") != primary["sourceObjectiveScore"] or number(other("written"), f"{where} 서술형") != primary["writtenScore"]:
                     raise ValueError(f"{where}: 보조 시트의 세부 점수가 원본 시트와 다릅니다.")
-                if [clean(other("answersStart", offset)) for offset in range(len(questions))] != primary["answers"]:
-                    raise ValueError(f"{where}: 보조 시트의 객관식 답안이 원본 시트와 다릅니다.")
-                if [clean(other("resultsStart", offset)).upper() == "O" for offset in range(len(questions))] != primary["questionResults"]:
-                    raise ValueError(f"{where}: 보조 시트의 정오표가 원본 시트와 다릅니다.")
+                if student_id in manual_student_ids:
+                    if any(clean(other("answersStart", offset)) or clean(other("resultsStart", offset)) for offset in range(len(questions))):
+                        raise ValueError(f"{where}: 보조 시트에 별도 정오표 학생의 문항 답안이 있습니다.")
+                else:
+                    if [clean(other("answersStart", offset)) for offset in range(len(questions))] != primary["answers"]:
+                        raise ValueError(f"{where}: 보조 시트의 객관식 답안이 원본 시트와 다릅니다.")
+                    if [clean(other("resultsStart", offset)).upper() == "O" for offset in range(len(questions))] != primary["questionResults"]:
+                        raise ValueError(f"{where}: 보조 시트의 정오표가 원본 시트와 다릅니다.")
                 alt_total = number(other("total"), f"{where} 총점")
                 if alt_total != primary["sourceTotalScore"]:
                     warnings.append({"cell": where, "issue": "보조 시트 총점 불일치", "sourceTotal": primary["totalScore"], "alternateTotal": alt_total})
@@ -295,6 +350,8 @@ def main() -> None:
     for school in manifest["cohorts"]:
         cohort = {**school, "termId": term_id}
         exams = []
+        if school.get("sourceTermNote"):
+            warnings.append({"school": school["school"], "issue": "시험지 학기 표기 확인", "note": school["sourceTermNote"]})
         for exam_manifest in school["exams"]:
             exam, issues = build_exam(cohort, exam_manifest)
             exams.append(exam)
