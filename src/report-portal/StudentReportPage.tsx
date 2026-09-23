@@ -22,9 +22,9 @@ import { BatteryCatMascot } from './BatteryCatMascot'
 import TeacherReportDashboard from './TeacherReportDashboard'
 import type { StudentCumulativeReportData, StudentReportData, StudentReportResponse, TeacherDashboardResponse, TeacherStudentReportResponse } from '../types/studentReport'
 
-const fetchStudentReport = httpsCallable<{ code: string }, StudentReportResponse>(functions, 'getStudentReport')
+const fetchStudentReport = httpsCallable<{ code: string; subject?: string }, StudentReportResponse>(functions, 'getStudentReport')
 const fetchTeacherDashboard = httpsCallable<{ code: string }, TeacherDashboardResponse>(functions, 'getTeacherDashboard')
-const fetchTeacherStudentReport = httpsCallable<{ code: string; studentId: string }, TeacherStudentReportResponse>(functions, 'getTeacherStudentReport')
+const fetchTeacherStudentReport = httpsCallable<{ code: string; studentId: string; subject?: string }, TeacherStudentReportResponse>(functions, 'getTeacherStudentReport')
 const resolveReportPortalAccess = httpsCallable<{ code: string }, { role: 'student' | 'teacher' }>(functions, 'resolveReportPortalAccess')
 const IS_BATTERY_CAT_PREVIEW = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mascot') === 'cat'
 const BATTERY_CAT_PREVIEW = [
@@ -72,7 +72,7 @@ function ScoreCard({ label, score, total, average, tone }: {
       <p className={`text-xs font-semibold tracking-[0.12em] ${muted}`}>{label}</p>
       <div className="mt-3 flex items-end gap-1.5">
         <span className="text-4xl font-black tracking-tight">{score}</span>
-        <span className={`pb-1 text-sm font-semibold ${muted}`}>/ {total}</span>
+        <span className={`pb-1 text-sm font-semibold ${muted}`}>/ {Number.isInteger(total) ? total : total.toFixed(1)}</span>
       </div>
       <p className={`mt-3 text-xs ${muted}`}>전체 평균 {average.toFixed(1)}점</p>
     </div>
@@ -80,7 +80,7 @@ function ScoreCard({ label, score, total, average, tone }: {
 }
 
 function ReportView({ report, onReset, backLabel = '나가기' }: { report: StudentReportData; onReset: () => void; backLabel?: string }) {
-  const hasWritten = report.cohortAverages.written > 0 || report.writtenScore > 0
+  const hasWritten = report.writtenMaxScore > 0
   const priorityQuestions = useMemo(
     () => report.priorities.map(number => report.questions.find(question => question.number === number)).filter(Boolean),
     [report],
@@ -117,6 +117,7 @@ function ReportView({ report, onReset, backLabel = '나가기' }: { report: Stud
               <div className="m3-chip mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-blue-50">
                 <ShieldCheck size={14} /> 본인 확인 완료
               </div>
+              <span className="ml-2 inline-flex rounded-full border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-black text-white">{report.subject}</span>
               <p className="text-sm text-blue-100/75">{report.examTitle}</p>
               <h1 className="mt-2 break-keep text-2xl font-black tracking-tight sm:text-4xl">{report.studentName} 학생</h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-blue-50/75">문항별 결과와 학급 정답률을 바탕으로 강점과 우선 복습 영역을 정리했습니다.</p>
@@ -143,9 +144,9 @@ function ReportView({ report, onReset, backLabel = '나가기' }: { report: Stud
         )}
 
         <section className={`mt-6 grid gap-4 ${hasWritten ? 'sm:grid-cols-3' : 'sm:grid-cols-1'}`}>
-          <ScoreCard label="전체 점수" score={report.totalScore} total={100} average={report.cohortAverages.total} tone="navy" />
-          {hasWritten && <ScoreCard label="객관식" score={report.objectiveScore} total={80} average={report.cohortAverages.objective} tone="blue" />}
-          {hasWritten && <ScoreCard label="서술형" score={report.writtenScore} total={20} average={report.cohortAverages.written} tone="mint" />}
+          <ScoreCard label="전체 점수" score={report.totalScore} total={report.totalMaxScore} average={report.cohortAverages.total} tone="navy" />
+          {hasWritten && <ScoreCard label="객관식" score={report.objectiveScore} total={report.objectiveMaxScore} average={report.cohortAverages.objective} tone="blue" />}
+          {hasWritten && <ScoreCard label="서술형" score={report.writtenScore} total={report.writtenMaxScore} average={report.cohortAverages.written} tone="mint" />}
         </section>
 
         <section className="mt-10">
@@ -227,7 +228,7 @@ function ReportView({ report, onReset, backLabel = '나가기' }: { report: Stud
 
         {hasWritten && <section className="m3-card mt-6 rounded-3xl border border-slate-200 bg-white p-6">
           <div className="flex items-center gap-2"><BookOpenCheck className="text-indigo-600" size={20} /><h2 className="font-black">서술형 안내</h2></div>
-          <p className="mt-3 text-sm leading-6 text-slate-600">서술형은 4문항 총 20점이며, 현재 채점표에는 문항별 점수가 아닌 합계 <strong>{report.writtenScore}점</strong>만 제공되어 있습니다.</p>
+          <p className="mt-3 text-sm leading-6 text-slate-600">서술형은 총 {report.writtenMaxScore}점이며, 현재 채점표에는 문항별 점수가 아닌 합계 <strong>{report.writtenScore}점</strong>만 제공되어 있습니다.</p>
         </section>}
       </main>
 
@@ -244,8 +245,12 @@ export default function StudentReportPage() {
   const [teacherDashboard, setTeacherDashboard] = useState<TeacherDashboardResponse | null>(null)
   const [teacherStudentCumulative, setTeacherStudentCumulative] = useState<StudentCumulativeReportData | null>(null)
   const [teacherStudentDetail, setTeacherStudentDetail] = useState<StudentReportData | null>(null)
+  const [teacherStudentId, setTeacherStudentId] = useState('')
+  const [teacherSubject, setTeacherSubject] = useState('')
   const [teacherStudentLoadingId, setTeacherStudentLoadingId] = useState('')
   const [teacherStudentError, setTeacherStudentError] = useState('')
+  const [subjectLoading, setSubjectLoading] = useState(false)
+  const [subjectError, setSubjectError] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -259,6 +264,8 @@ export default function StudentReportPage() {
       if (access.data.role === 'teacher') {
         const result = await fetchTeacherDashboard({ code })
         setTeacherDashboard(result.data)
+        const subjects = [...new Set(result.data.exams.map(exam => exam.subject))]
+        setTeacherSubject(subjects.includes('영어') ? '영어' : subjects[0] ?? '')
       } else {
         const result = await fetchStudentReport({ code })
         if (!result.data.report && !result.data.cumulative) throw new Error('성적 데이터가 없습니다.')
@@ -266,6 +273,7 @@ export default function StudentReportPage() {
         setCumulative(result.data.cumulative)
         setShowDetail(false)
       }
+      setSubjectError('')
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (requestError) {
       setError(getErrorMessage(requestError))
@@ -274,15 +282,35 @@ export default function StudentReportPage() {
     }
   }
 
-  const openTeacherStudentReport = async (studentId: string) => {
+  const changeStudentSubject = async (subject: string) => {
+    if (!cumulative || cumulative.subject === subject || subjectLoading) return
+    setSubjectLoading(true)
+    setSubjectError('')
+    try {
+      const result = await fetchStudentReport({ code, subject })
+      if (!result.data.cumulative) throw new Error('성적 데이터가 없습니다.')
+      setReport(result.data.report)
+      setCumulative(result.data.cumulative)
+      setShowDetail(false)
+    } catch {
+      setSubjectError('과목 성적을 불러오지 못했습니다. 다시 시도해 주세요.')
+    } finally {
+      setSubjectLoading(false)
+    }
+  }
+
+  const openTeacherStudentReport = async (studentId: string, subject: string) => {
     if (teacherStudentLoadingId) return
     setTeacherStudentLoadingId(studentId)
     setTeacherStudentError('')
     try {
-      const result = await fetchTeacherStudentReport({ code, studentId })
+      const result = await fetchTeacherStudentReport({ code, studentId, subject })
+      setTeacherStudentId(studentId)
+      setTeacherSubject(subject)
       setTeacherStudentCumulative(result.data.cumulative)
       setTeacherStudentDetail(result.data.report)
       setShowDetail(false)
+      setSubjectError('')
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (requestError) {
       setTeacherStudentError(getErrorMessage(requestError))
@@ -291,13 +319,30 @@ export default function StudentReportPage() {
     }
   }
 
+  const changeTeacherStudentSubject = async (subject: string) => {
+    if (!teacherStudentId || !teacherStudentCumulative || teacherStudentCumulative.subject === subject || subjectLoading) return
+    setSubjectLoading(true)
+    setSubjectError('')
+    try {
+      const result = await fetchTeacherStudentReport({ code, studentId: teacherStudentId, subject })
+      setTeacherStudentCumulative(result.data.cumulative)
+      setTeacherStudentDetail(result.data.report)
+      setTeacherSubject(subject)
+      setShowDetail(false)
+    } catch {
+      setSubjectError('과목 성적을 불러오지 못했습니다. 다시 시도해 주세요.')
+    } finally {
+      setSubjectLoading(false)
+    }
+  }
+
   if (teacherStudentCumulative) {
     if (showDetail && teacherStudentDetail) return <ReportView report={teacherStudentDetail} backLabel="누적 리포트" onReset={() => setShowDetail(false)} />
-    return <StudentCumulativeDashboard data={teacherStudentCumulative} detailReport={teacherStudentDetail} onOpenDetail={() => setShowDetail(true)} backLabel="교사 화면" onReset={() => { setTeacherStudentCumulative(null); setTeacherStudentDetail(null); setShowDetail(false) }} />
+    return <StudentCumulativeDashboard key={teacherStudentCumulative.subject} data={teacherStudentCumulative} detailReport={teacherStudentDetail} onOpenDetail={() => setShowDetail(true)} onSubjectChange={changeTeacherStudentSubject} subjectLoading={subjectLoading} subjectError={subjectError} backLabel="교사 화면" onReset={() => { setTeacherStudentCumulative(null); setTeacherStudentDetail(null); setTeacherStudentId(''); setShowDetail(false); setSubjectError('') }} />
   }
-  if (cumulative && !showDetail) return <StudentCumulativeDashboard data={cumulative} detailReport={report} onOpenDetail={() => setShowDetail(true)} onReset={() => { setCumulative(null); setReport(null); setCode(''); setError('') }} />
+  if (cumulative && !showDetail) return <StudentCumulativeDashboard key={cumulative.subject} data={cumulative} detailReport={report} onOpenDetail={() => setShowDetail(true)} onSubjectChange={changeStudentSubject} subjectLoading={subjectLoading} subjectError={subjectError} onReset={() => { setCumulative(null); setReport(null); setCode(''); setError(''); setSubjectError('') }} />
   if (report) return <ReportView report={report} backLabel={cumulative ? '누적 리포트' : '나가기'} onReset={() => { if (cumulative) setShowDetail(false); else { setReport(null); setCode(''); setError('') } }} />
-  if (teacherDashboard) return <TeacherReportDashboard data={teacherDashboard} loadingStudentId={teacherStudentLoadingId} studentError={teacherStudentError} onSelectStudent={openTeacherStudentReport} onReset={() => { setTeacherDashboard(null); setTeacherStudentCumulative(null); setTeacherStudentDetail(null); setShowDetail(false); setTeacherStudentError(''); setCode(''); setError('') }} />
+  if (teacherDashboard) return <TeacherReportDashboard data={teacherDashboard} selectedSubject={teacherSubject} onSubjectChange={setTeacherSubject} loadingStudentId={teacherStudentLoadingId} studentError={teacherStudentError} onSelectStudent={openTeacherStudentReport} onReset={() => { setTeacherDashboard(null); setTeacherStudentCumulative(null); setTeacherStudentDetail(null); setTeacherStudentId(''); setTeacherSubject(''); setShowDetail(false); setTeacherStudentError(''); setSubjectError(''); setCode(''); setError('') }} />
 
   return (
     <div className="m3-report m3-login relative min-h-screen overflow-x-hidden bg-[#eef3f8] text-slate-900">

@@ -75,6 +75,7 @@ interface AuthorizedSender {
 
 interface StudentReportAccessInput {
   code?: unknown
+  subject?: unknown
 }
 
 interface ReportPortalAccessInput extends StudentReportAccessInput {}
@@ -85,6 +86,7 @@ interface TeacherDashboardInput {
 
 interface TeacherStudentReportInput extends TeacherDashboardInput {
   studentId?: unknown
+  subject?: unknown
 }
 
 interface ActualExamScoreAdminInput {
@@ -500,6 +502,40 @@ function actualExamScoreDocumentId(cohortId: string, studentId: string, termId: 
 }
 
 type ExamPortalCohort = (typeof examPortalSeed.cohorts)[number]
+type ExamPortalExam = ExamPortalCohort['exams'][number]
+
+function examMetadata(exam: ExamPortalExam) {
+  const value = exam as ExamPortalExam & {
+    subject?: string
+    objectiveMaxScore?: number
+    writtenMaxScore?: number
+    totalMaxScore?: number
+  }
+  return {
+    subject: typeof value.subject === 'string' && value.subject.trim() ? value.subject : '영어',
+    objectiveMaxScore: typeof value.objectiveMaxScore === 'number' ? value.objectiveMaxScore : 80,
+    writtenMaxScore: typeof value.writtenMaxScore === 'number' ? value.writtenMaxScore : 20,
+    totalMaxScore: typeof value.totalMaxScore === 'number' ? value.totalMaxScore : 100,
+  }
+}
+
+function attendedSubjects(cohort: ExamPortalCohort, studentId: string): string[] {
+  return [...new Set(cohort.exams.flatMap(exam =>
+    exam.students.some(student => student.studentId === studentId) ? [examMetadata(exam).subject] : [],
+  ))]
+}
+
+function reportSubject(cohort: ExamPortalCohort, studentId: string, requested: unknown): string {
+  const available = attendedSubjects(cohort, studentId)
+  if (available.length === 0) throw new HttpsError('not-found', '학생 성적표를 찾을 수 없습니다.')
+  if (requested === undefined || requested === null || requested === '') {
+    return available.includes('영어') ? '영어' : available[0]
+  }
+  if (typeof requested !== 'string' || requested.length > 40 || !available.includes(requested.trim())) {
+    throw new HttpsError('invalid-argument', '해당 과목의 성적표가 없습니다.')
+  }
+  return requested.trim()
+}
 
 const SCORE_DISTRIBUTION_BANDS = [
   { label: '0–49', min: 0, maxExclusive: 50 },
@@ -544,12 +580,13 @@ function embeddedStudentAccess(accessHash: string): { cohort: ExamPortalCohort; 
   return null
 }
 
-function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
+function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string, subject: string) {
   if (Date.now() >= examPortalSeed.expiresAt) return null
   const access = cohort.studentAccess.find(item => item.studentId === studentId)
   if (!access) return null
 
-  const attendedExams = cohort.exams.flatMap(exam => {
+  const subjectExams = cohort.exams.filter(exam => examMetadata(exam).subject === subject)
+  const attendedExams = subjectExams.flatMap(exam => {
     const result = exam.students.find(student => student.studentId === studentId)
     if (!result) return []
     const typeAnalysis = result.typeResults.map(typeResult => {
@@ -576,6 +613,7 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
       termId: exam.termId,
       round: exam.round,
       title: exam.title,
+      ...examMetadata(exam),
       averages: exam.averages,
       attended: true as const,
       result: {
@@ -591,11 +629,12 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
   if (!attendedExams.length) return null
 
   const attendedByExamId = new Map(attendedExams.map(exam => [exam.examId, exam]))
-  const exams = cohort.exams.map(exam => attendedByExamId.get(exam.examId) ?? {
+  const exams = subjectExams.map(exam => attendedByExamId.get(exam.examId) ?? {
     examId: exam.examId,
     termId: exam.termId,
     round: exam.round,
     title: exam.title,
+    ...examMetadata(exam),
     averages: exam.averages,
     attended: false as const,
     result: null,
@@ -608,7 +647,7 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
   const objectiveAverage = average(attendedExams.map(exam => exam.result.objectiveScore))
   const writtenAverage = average(attendedExams.map(exam => exam.result.writtenScore))
   const cohortAverages = cohort.studentAccess.flatMap(item => {
-    const scores = cohort.exams.flatMap(exam => {
+    const scores = subjectExams.flatMap(exam => {
       const student = exam.students.find(candidate => candidate.studentId === item.studentId)
       return student ? [student.totalScore] : []
     })
@@ -661,7 +700,9 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
     studentName: access.studentName,
     school: cohort.school,
     grade: cohort.grade,
-    terms: examPortalSeed.terms,
+    subject,
+    availableSubjects: attendedSubjects(cohort, studentId),
+    terms: examPortalSeed.terms.filter(term => subjectExams.some(exam => exam.termId === term.termId)),
     exams,
     typeAnalysis,
     summary: {
@@ -677,7 +718,8 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string) {
   }
 }
 
-async function attachActualExamScores<T extends { cohortId: string; studentId: string }>(cumulative: T, academyId: string) {
+async function attachActualExamScores<T extends { cohortId: string; studentId: string; subject: string }>(cumulative: T, academyId: string) {
+  if (cumulative.subject !== '영어') return { ...cumulative, actualScores: [] }
   const snapshot = await actualExamScoreCollection(academyId)
     .where('studentKey', '==', `${cumulative.cohortId}:${cumulative.studentId}`)
     .get()
@@ -704,8 +746,8 @@ async function attachActualExamScores<T extends { cohortId: string; studentId: s
   return { ...cumulative, actualScores }
 }
 
-function buildEmbeddedDetailReport(cohort: ExamPortalCohort, studentId: string) {
-  const match = [...cohort.exams].reverse().flatMap(exam => {
+function buildEmbeddedDetailReport(cohort: ExamPortalCohort, studentId: string, subject: string) {
+  const match = [...cohort.exams].reverse().filter(exam => examMetadata(exam).subject === subject).flatMap(exam => {
     const student = exam.students.find(item => item.studentId === studentId)
     return student ? [{ exam, student }] : []
   })[0]
@@ -750,6 +792,7 @@ function buildEmbeddedDetailReport(cohort: ExamPortalCohort, studentId: string) 
   return {
     examId: exam.examId,
     examTitle: exam.title,
+    ...examMetadata(exam),
     studentName: student.studentName,
     totalScore: student.totalScore,
     objectiveScore: student.objectiveScore,
@@ -810,14 +853,16 @@ export const getStudentReport = onCall<StudentReportAccessInput>({
   if (status === 'locked') throw new HttpsError('resource-exhausted', '입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요.')
   if (status === 'invalid' || !access) throw reportCodeError()
 
-  const cumulativeBase = buildStudentCumulative(access.cohort, access.studentId)
+  const subject = reportSubject(access.cohort, access.studentId, request.data?.subject)
+  const cumulativeBase = buildStudentCumulative(access.cohort, access.studentId, subject)
   const cumulative = cumulativeBase ? await attachActualExamScores(cumulativeBase, 'node-default') : null
-  const report = buildEmbeddedDetailReport(access.cohort, access.studentId)
+  const report = buildEmbeddedDetailReport(access.cohort, access.studentId, subject)
   if (!cumulative || !report) throw reportCodeError()
 
   await db.collection('studentReportViewLogs').add({
     academyId: null,
     reportId: 'cumulative:' + access.cohort.cohortId + ':' + access.studentId,
+    subject,
     ipHash,
     userAgent: String(request.rawRequest.headers['user-agent'] ?? '').slice(0, 300),
     accessedAt: now,
@@ -963,15 +1008,17 @@ export const getTeacherStudentReport = onCall<TeacherStudentReportInput>({
     throw new HttpsError('permission-denied', '학생 성적표 열람 권한을 확인해 주세요.')
   }
 
-  const cumulativeBase = buildStudentCumulative(cohort, studentId)
+  const subject = reportSubject(cohort, studentId, request.data?.subject)
+  const cumulativeBase = buildStudentCumulative(cohort, studentId, subject)
   if (!cumulativeBase) throw new HttpsError('not-found', '학생 성적표를 찾을 수 없습니다.')
   const cumulative = await attachActualExamScores(cumulativeBase, 'node-default')
-  const report = buildEmbeddedDetailReport(cohort, studentId)
+  const report = buildEmbeddedDetailReport(cohort, studentId, subject)
 
   await db.collection('teacherReportViewLogs').add({
     cohortId: cohort.cohortId,
     teacherLabel: cohort.teacherLabel,
     studentId,
+    subject,
     viewType: 'student-detail',
     ipHash,
     userAgent: String(request.rawRequest.headers['user-agent'] ?? '').slice(0, 300),

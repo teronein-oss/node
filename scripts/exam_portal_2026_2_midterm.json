@@ -11,6 +11,7 @@
       "teacherLabel": "백현고 2학년 담당 선생님",
       "exams": [
         {
+          "subject": "영어",
           "round": 1,
           "title": "백현고2 2026학년도 2학기 중간고사 대비 1차",
           "pdf": "private/exam-imports/2026-2-midterm/baekhyeon-2/round-1/exam.pdf",
@@ -60,6 +61,61 @@
             { "number": 18, "category": "글의 구조", "detailType": "문장 삽입", "topic": "걷기 운동 방법", "correctAnswer": "4" },
             { "number": 19, "category": "요약·통합", "detailType": "요약문 완성", "topic": "산업화와 노동시간·생산성", "correctAnswer": "5" },
             { "number": 20, "category": "요약·통합", "detailType": "요약문 완성", "topic": "피카소와 아리아스의 첫 만남", "correctAnswer": "2" }
+          ]
+        },
+        {
+          "subject": "국어",
+          "round": 1,
+          "title": "백현고2 2026학년도 2학기 중간고사 대비 국어 1차",
+          "pdf": "private/exam-imports/2026-2-midterm/baekhyeon-2/korean-round-1/exam.pdf",
+          "solutionPdf": "private/exam-imports/2026-2-midterm/baekhyeon-2/korean-round-1/solution.pdf",
+          "workbook": "private/exam-imports/2026-2-midterm/baekhyeon-2/korean-round-1/scores.xlsx",
+          "sheet": "전화번호순",
+          "firstStudentRow": 3,
+          "scorePolicy": "examPoints",
+          "columns": {
+            "phone": "B",
+            "name": "C",
+            "total": "E",
+            "written": "F",
+            "objective": "G",
+            "answersStart": "H",
+            "resultsStart": "BF"
+          },
+          "crossCheck": {
+            "sheet": "석차순",
+            "columns": {
+              "phone": "B",
+              "name": "C",
+              "total": "E",
+              "written": "F",
+              "objective": "G",
+              "answersStart": "H",
+              "resultsStart": "BF"
+            }
+          },
+          "questionTypes": [
+            { "number": 1, "category": "내용 이해", "detailType": "복합 자료 종합", "topic": "도전형 놀이터의 설계 원칙", "correctAnswer": "4", "points": 5 },
+            { "number": 2, "category": "추론·적용", "detailType": "비교·적용", "topic": "기존 놀이터와 개선 놀이터", "correctAnswer": "5", "points": 5 },
+            { "number": 3, "category": "내용 이해", "detailType": "세부 정보 확인", "topic": "놀이터 안전 규정과 대안", "correctAnswer": "1", "points": 4 },
+            { "number": 4, "category": "추론·적용", "detailType": "관점 적용", "topic": "자유로운 놀이 공간", "correctAnswer": "3", "points": 5 },
+            { "number": 5, "category": "구성·표현", "detailType": "글의 전개", "topic": "놀이터 문제의 원인과 주장", "correctAnswer": "1", "points": 5 },
+            { "number": 6, "category": "추론·적용", "detailType": "사례 적용", "topic": "사진의 사회적 역할과 윤리", "correctAnswer": "1", "points": 5 },
+            { "number": 7, "category": "내용 이해", "detailType": "개념 이해", "topic": "인물 사진을 찍는 이유", "correctAnswer": "3", "points": 4 },
+            { "number": 8, "category": "내용 이해", "detailType": "세부 정보 확인", "topic": "인물 사진의 의미", "correctAnswer": "2", "points": 5 },
+            { "number": 9, "category": "자료 해석", "detailType": "자료 비교", "topic": "풍경 사진의 해석", "correctAnswer": "3", "points": 5 },
+            { "number": 10, "category": "구성·표현", "detailType": "글의 전개", "topic": "인물 사진과 풍경 사진", "correctAnswer": "3", "points": 5 },
+            { "number": 11, "category": "내용 이해", "detailType": "세부 정보 확인", "topic": "양궁 비행의 변수", "correctAnswer": "3", "points": 5 },
+            { "number": 12, "category": "자료 해석", "detailType": "도표 해석", "topic": "합력의 크기와 방향", "correctAnswer": "4", "points": 5 },
+            { "number": 13, "category": "추론·적용", "detailType": "원리 추론", "topic": "발사 속도와 낙하 거리", "correctAnswer": "2", "points": 5 },
+            { "number": 14, "category": "구성·표현", "detailType": "글의 전개", "topic": "양궁 과학 원리 설명", "correctAnswer": "2", "points": 5 },
+            { "number": 15, "category": "추론·적용", "detailType": "원리 적용", "topic": "힘의 합성과 타이어", "correctAnswer": "3", "points": 5 },
+            { "number": 16, "category": "구성·표현", "detailType": "설명 방식", "topic": "양궁 과학 원리의 설명 방식", "correctAnswer": "5", "points": 4 },
+            { "number": 17, "category": "구성·표현", "detailType": "글의 전개", "topic": "편의점의 성장과 기능", "correctAnswer": "3", "points": 5 },
+            { "number": 18, "category": "내용 이해", "detailType": "세부 정보 확인", "topic": "편의점 서비스와 물류", "correctAnswer": "5", "points": 4 },
+            { "number": 19, "category": "구성·표현", "detailType": "글의 전개", "topic": "구멍가게와 편의점의 소통 방식", "correctAnswer": "1", "points": 5 },
+            { "number": 20, "category": "내용 이해", "detailType": "세부 정보 확인", "topic": "고객 응대와 운영", "correctAnswer": "4", "points": 4 },
+            { "number": 21, "category": "내용 이해", "detailType": "전체 내용 이해", "topic": "편의점의 운영 구조", "correctAnswer": "5", "points": 5 }
           ]
         }
       ]

@@ -53,10 +53,12 @@ function cumulativeStudents(exams: TeacherDashboardResponse['exams']): Cumulativ
   return rows
 }
 
-export default function TeacherReportDashboard({ data, onReset, onSelectStudent, loadingStudentId, studentError }: {
+export default function TeacherReportDashboard({ data, selectedSubject, onSubjectChange, onReset, onSelectStudent, loadingStudentId, studentError }: {
   data: TeacherDashboardResponse
+  selectedSubject: string
+  onSubjectChange: (subject: string) => void
   onReset: () => void
-  onSelectStudent: (studentId: string) => void
+  onSelectStudent: (studentId: string, subject: string) => void
   loadingStudentId: string
   studentError: string
 }) {
@@ -74,9 +76,13 @@ export default function TeacherReportDashboard({ data, onReset, onSelectStudent,
 
   const cohort = cohorts.find(item => item.cohortId === selectedCohortId) ?? cohorts[0]
   const term = data.terms.find(item => item.termId === selectedTermId) ?? data.terms[0]
+  const availableSubjects = [...new Set((cohort?.exams ?? []).filter(exam => exam.termId === term?.termId).map(exam => exam.subject))]
+  const activeSubject = availableSubjects.includes(selectedSubject)
+    ? selectedSubject
+    : availableSubjects.includes('영어') ? '영어' : availableSubjects[0] ?? ''
   const termExams = useMemo(
-    () => (cohort?.exams ?? []).filter(exam => exam.termId === term?.termId).sort((first, second) => first.round - second.round),
-    [cohort?.exams, term?.termId],
+    () => (cohort?.exams ?? []).filter(exam => exam.termId === term?.termId && exam.subject === activeSubject).sort((first, second) => first.round - second.round),
+    [cohort?.exams, term?.termId, activeSubject],
   )
   const selectedExam = selectedRound === 'all' ? null : termExams.find(exam => exam.round === selectedRound) ?? null
   const hasWritten = termExams.some(exam => exam.averages.written > 0 || exam.students.some(student => student.writtenScore > 0))
@@ -112,8 +118,9 @@ export default function TeacherReportDashboard({ data, onReset, onSelectStudent,
           <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="m3-chip inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-blue-50"><ShieldCheck size={14} />담당 반 접근 확인</div>
+              {activeSubject && <span className="ml-2 inline-flex rounded-full border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-black text-white">{activeSubject}</span>}
               <p className="mt-5 text-sm text-blue-100/70">{data.teacher.label}</p>
-              <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{cohort?.school} {cohort?.grade}학년 성적 현황</h1>
+              <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{cohort?.school} {cohort?.grade}학년 {activeSubject} 성적 현황</h1>
               <p className="mt-3 text-sm leading-6 text-blue-50/70">담당 학교·학년의 회차별 성적과 누적 평균 석차를 확인할 수 있습니다.</p>
             </div>
             <div className="m3-hero-meta grid grid-cols-3 gap-1 rounded-2xl border border-white/10 bg-white/10 p-2 backdrop-blur-sm sm:gap-2">
@@ -125,7 +132,7 @@ export default function TeacherReportDashboard({ data, onReset, onSelectStudent,
         </section>
 
         <section className="m3-card mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="grid gap-4 md:grid-cols-2 md:items-end">
+          <div className="grid gap-4 md:grid-cols-3 md:items-end">
             <div>
               <label htmlFor="teacher-cohort" className="text-xs font-bold text-slate-500">학교·학년</label>
               <select id="teacher-cohort" value={selectedCohortId} onChange={event => { setSelectedCohortId(event.target.value); setSelectedRound('all'); setQuery('') }} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50">
@@ -138,7 +145,13 @@ export default function TeacherReportDashboard({ data, onReset, onSelectStudent,
                 {data.terms.map(item => <option key={item.termId} value={item.termId}>{item.label}</option>)}
               </select>
             </div>
-            <div className="flex flex-wrap gap-2 md:col-span-2">
+            <div>
+              <label htmlFor="teacher-subject" className="text-xs font-bold text-slate-500">과목</label>
+              <select id="teacher-subject" value={activeSubject} onChange={event => { onSubjectChange(event.target.value); setSelectedRound('all'); setQuery('') }} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50">
+                {availableSubjects.map(subject => <option key={subject} value={subject}>{subject}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-2 md:col-span-3">
               <button onClick={() => setSelectedRound('all')} className={`rounded-xl px-4 py-3 text-sm font-bold transition ${selectedRound === 'all' ? 'bg-[#10243d] text-white shadow-lg shadow-slate-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>누적</button>
               {termExams.map(exam => <button key={exam.examId} onClick={() => setSelectedRound(exam.round)} className={`rounded-xl px-4 py-3 text-sm font-bold transition ${selectedRound === exam.round ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{exam.round}차</button>)}
             </div>
@@ -162,7 +175,7 @@ export default function TeacherReportDashboard({ data, onReset, onSelectStudent,
             {filteredRows.map(row => <article key={row.studentId} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><span className={`inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-xl px-2 font-black ${row.rank <= 3 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{row.rank}</span><p className="truncate font-bold text-slate-800">{row.studentName}</p></div><span className="shrink-0 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">상위 {row.topPercent}%</span></div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><p className="text-slate-400">전체</p><p className="mt-1 text-lg font-black text-blue-950">{score(row.totalScore)}점</p></div><div><p className="text-slate-400">응시</p><p className="mt-1 text-lg font-black text-slate-700">{selectedExam ? '1회' : `${row.attempts}회`}</p></div><div><p className="text-slate-400">객관식</p><p className="mt-1 font-bold text-slate-700">{score(row.objectiveScore)}점</p></div>{hasWritten && <div><p className="text-slate-400">서술형</p><p className="mt-1 font-bold text-slate-700">{score(row.writtenScore)}점</p></div>}</div>
-              <button onClick={() => onSelectStudent(row.studentId)} disabled={Boolean(loadingStudentId)} className="m3-tonal-button mt-4 flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs font-black disabled:opacity-50">{loadingStudentId === row.studentId ? '불러오는 중...' : '학생 성적표 보기'} <ChevronRight size={15} /></button>
+              <button onClick={() => onSelectStudent(row.studentId, activeSubject)} disabled={Boolean(loadingStudentId)} className="m3-tonal-button mt-4 flex w-full items-center justify-center gap-2 px-4 py-2.5 text-xs font-black disabled:opacity-50">{loadingStudentId === row.studentId ? '불러오는 중...' : '학생 성적표 보기'} <ChevronRight size={15} /></button>
             </article>)}
             {filteredRows.length === 0 && <p className="py-10 text-center text-sm text-slate-400">검색 결과가 없습니다.</p>}
           </div>
@@ -170,7 +183,7 @@ export default function TeacherReportDashboard({ data, onReset, onSelectStudent,
             <table className={`w-full text-left text-sm ${hasWritten ? 'min-w-[760px]' : 'min-w-[680px]'}`}>
               <thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-6 py-3">석차</th><th className="px-4 py-3">학생</th><th className="px-4 py-3 text-right">전체</th><th className="px-4 py-3 text-right">객관식</th>{hasWritten && <th className="px-4 py-3 text-right">서술형</th>}<th className="px-4 py-3 text-right">성취 구간</th><th className="px-4 py-3 text-right">응시</th><th className="px-6 py-3 text-right">상세</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRows.map(row => <tr key={row.studentId} className="hover:bg-slate-50/70"><td className="px-6 py-3.5"><span className={`inline-flex h-8 min-w-8 items-center justify-center rounded-xl px-2 font-black ${row.rank <= 3 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{row.rank}</span></td><td className="px-4 py-3.5 font-bold text-slate-800">{row.studentName}</td><td className="px-4 py-3.5 text-right font-black text-blue-950">{score(row.totalScore)}</td><td className="px-4 py-3.5 text-right text-slate-600">{score(row.objectiveScore)}</td>{hasWritten && <td className="px-4 py-3.5 text-right text-slate-600">{score(row.writtenScore)}</td>}<td className="px-4 py-3.5 text-right"><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">상위 {row.topPercent}%</span></td><td className="px-4 py-3.5 text-right text-xs text-slate-400">{selectedExam ? '1회' : `${row.attempts}회`}</td><td className="px-6 py-3.5 text-right"><button onClick={() => onSelectStudent(row.studentId)} disabled={Boolean(loadingStudentId)} className="m3-tonal-button inline-flex items-center gap-1 px-3 py-2 text-xs font-black disabled:opacity-50">{loadingStudentId === row.studentId ? '불러오는 중' : '성적표'} <ChevronRight size={14} /></button></td></tr>)}
+                {filteredRows.map(row => <tr key={row.studentId} className="hover:bg-slate-50/70"><td className="px-6 py-3.5"><span className={`inline-flex h-8 min-w-8 items-center justify-center rounded-xl px-2 font-black ${row.rank <= 3 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{row.rank}</span></td><td className="px-4 py-3.5 font-bold text-slate-800">{row.studentName}</td><td className="px-4 py-3.5 text-right font-black text-blue-950">{score(row.totalScore)}</td><td className="px-4 py-3.5 text-right text-slate-600">{score(row.objectiveScore)}</td>{hasWritten && <td className="px-4 py-3.5 text-right text-slate-600">{score(row.writtenScore)}</td>}<td className="px-4 py-3.5 text-right"><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">상위 {row.topPercent}%</span></td><td className="px-4 py-3.5 text-right text-xs text-slate-400">{selectedExam ? '1회' : `${row.attempts}회`}</td><td className="px-6 py-3.5 text-right"><button onClick={() => onSelectStudent(row.studentId, activeSubject)} disabled={Boolean(loadingStudentId)} className="m3-tonal-button inline-flex items-center gap-1 px-3 py-2 text-xs font-black disabled:opacity-50">{loadingStudentId === row.studentId ? '불러오는 중' : '성적표'} <ChevronRight size={14} /></button></td></tr>)}
               </tbody>
             </table>
             {filteredRows.length === 0 && <p className="py-14 text-center text-sm text-slate-400">검색 결과가 없습니다.</p>}

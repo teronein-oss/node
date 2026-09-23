@@ -20,10 +20,14 @@ export interface StudentReportQuestion {
 export interface StudentReportData {
   examId: string
   examTitle: string
+  subject: string
   studentName: string
   totalScore: number
   objectiveScore: number
   writtenScore: number
+  totalMaxScore: number
+  objectiveMaxScore: number
+  writtenMaxScore: number
   objectiveTopPercent: number
   totalTopPercent: number
   cohortAverages: {
@@ -49,6 +53,10 @@ export interface StudentCumulativeExam {
   termId: string
   round: number
   title: string
+  subject: string
+  totalMaxScore: number
+  objectiveMaxScore: number
+  writtenMaxScore: number
   averages: {
     total: number
     objective: number
@@ -90,6 +98,8 @@ export interface StudentCumulativeReportData {
   studentName: string
   school: string
   grade: number
+  subject: string
+  availableSubjects: string[]
   terms: TeacherReportTerm[]
   exams: StudentCumulativeExam[]
   typeAnalysis: StudentTypeAnalysis[]
@@ -139,6 +149,7 @@ export interface TeacherReportExam {
   termId: string
   round: number
   title: string
+  subject: string
   averages: {
     total: number
     objective: number

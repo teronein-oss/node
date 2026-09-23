@@ -85,6 +85,8 @@ def validate_questions(exam: dict) -> list[dict]:
     pdf = private_path(exam["pdf"])
     if not PdfReader(pdf).pages:
         raise ValueError(f"시험지 PDF를 읽을 수 없습니다: {pdf}")
+    if exam.get("solutionPdf") and not PdfReader(private_path(exam["solutionPdf"])).pages:
+        raise ValueError("해설지 PDF를 읽을 수 없습니다.")
     questions = exam["questionTypes"]
     if [item["number"] for item in questions] != list(range(1, len(questions) + 1)):
         raise ValueError("객관식 문항 번호가 연속되지 않습니다.")
@@ -93,10 +95,20 @@ def validate_questions(exam: dict) -> list[dict]:
             raise ValueError(f"{item['number']}번 문항 유형 또는 소재가 비어 있습니다.")
         if clean(item.get("correctAnswer")) not in {"1", "2", "3", "4", "5"}:
             raise ValueError(f"{item['number']}번 정답 번호를 확인해 주세요.")
+        points = item.get("points", exam.get("objectivePointsEach"))
+        if isinstance(points, bool) or not isinstance(points, (int, float)) or points <= 0:
+            raise ValueError(f"{item['number']}번 배점을 확인해 주세요.")
+    objective_max = sum(item.get("points", exam.get("objectivePointsEach")) for item in questions)
+    written_max = exam.get("writtenMaxScore", 100 - objective_max)
+    if not isinstance(written_max, (int, float)) or written_max < 0 or objective_max + written_max != 100:
+        raise ValueError("시험지 객관식·서술형 배점 합계가 100점이 아닙니다.")
     return questions
 
 
 def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple[list[dict], list[dict]]:
+    score_policy = exam.get("scorePolicy", "workbook")
+    if score_policy not in ("workbook", "examPoints"):
+        raise ValueError("채점 기준은 workbook 또는 examPoints여야 합니다.")
     workbook = load_workbook(private_path(exam["workbook"]), read_only=True, data_only=True)
     try:
         sheet = workbook[exam["sheet"]]
@@ -142,14 +154,26 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
                     warnings.append({"cell": where, "question": offset + 1, "issue": "답안 공란" if not answer else "선택지 범위 밖"})
                 answers.append(answer)
                 correct.append(marker == "O")
-            expected_objective = sum(correct) * exam["objectivePointsEach"]
-            if abs(objective - expected_objective) > 0.001:
-                raise ValueError(f"{where}: 객관식 점수가 정오표와 다릅니다.")
+            expected_objective = sum(
+                question.get("points", exam.get("objectivePointsEach"))
+                for question, is_correct in zip(questions, correct) if is_correct
+            )
             if abs(total - objective - written) > 0.001:
-                warnings.append({"cell": where, "issue": "총점 불일치", "sourceTotal": total, "componentSum": objective + written})
+                raise ValueError(f"{where}: 엑셀 총점과 객관식·서술형 합계가 다릅니다.")
+            if score_policy == "workbook" and abs(objective - expected_objective) > 0.001:
+                raise ValueError(f"{where}: 객관식 점수가 시험지 배점·정오표와 다릅니다.")
+            if score_policy == "examPoints" and abs(objective - expected_objective) > 0.001:
+                warnings.append({
+                    "cell": where, "issue": "시험지 배점으로 재산정",
+                    "sourceTotal": total, "recalculatedTotal": expected_objective + written,
+                    "sourceObjective": objective, "recalculatedObjective": expected_objective,
+                })
             students.append({
                 "studentId": student_id, "studentName": name,
-                "totalScore": total, "objectiveScore": objective, "writtenScore": written,
+                "totalScore": expected_objective + written if score_policy == "examPoints" else total,
+                "objectiveScore": expected_objective if score_policy == "examPoints" else objective,
+                "writtenScore": written,
+                "sourceTotalScore": total, "sourceObjectiveScore": objective,
                 "answers": answers, "questionResults": correct,
             })
         if not students:
@@ -177,14 +201,14 @@ def read_score_sheet(cohort_id: str, exam: dict, questions: list[dict]) -> tuple
                 if primary is None or student_id in compared or primary["studentName"] != name:
                     raise ValueError(f"{where}: 보조 시트의 학생이 원본 시트와 다릅니다.")
                 compared.add(student_id)
-                if number(other("objective"), f"{where} 객관식") != primary["objectiveScore"] or number(other("written"), f"{where} 서술형") != primary["writtenScore"]:
+                if number(other("objective"), f"{where} 객관식") != primary["sourceObjectiveScore"] or number(other("written"), f"{where} 서술형") != primary["writtenScore"]:
                     raise ValueError(f"{where}: 보조 시트의 세부 점수가 원본 시트와 다릅니다.")
                 if [clean(other("answersStart", offset)) for offset in range(len(questions))] != primary["answers"]:
                     raise ValueError(f"{where}: 보조 시트의 객관식 답안이 원본 시트와 다릅니다.")
                 if [clean(other("resultsStart", offset)).upper() == "O" for offset in range(len(questions))] != primary["questionResults"]:
                     raise ValueError(f"{where}: 보조 시트의 정오표가 원본 시트와 다릅니다.")
                 alt_total = number(other("total"), f"{where} 총점")
-                if alt_total != primary["totalScore"]:
+                if alt_total != primary["sourceTotalScore"]:
                     warnings.append({"cell": where, "issue": "보조 시트 총점 불일치", "sourceTotal": primary["totalScore"], "alternateTotal": alt_total})
             if compared != set(primary_by_id):
                 raise ValueError(f"{alternate.title}: 보조 시트 학생 수가 원본 시트와 다릅니다.")
@@ -222,9 +246,17 @@ def build_exam(cohort: dict, exam: dict) -> tuple[dict, list[dict]]:
             "typeResults": list(types.values()),
         })
     students.sort(key=lambda student: (student["rank"], student["studentName"]))
+    subject = clean(exam.get("subject"))
+    subject_slug = {"영어": "english", "국어": "korean"}.get(subject)
+    if not subject_slug:
+        raise ValueError(f"지원하지 않는 과목입니다: {subject}")
+    objective_max = sum(item.get("points", exam.get("objectivePointsEach")) for item in questions)
+    written_max = exam.get("writtenMaxScore", 100 - objective_max)
     return {
-        "examId": f"{cohort['termId']}-{cohort['cohortId']}-r{exam['round']}",
-        "termId": cohort["termId"], "round": exam["round"], "title": exam["title"],
+        "examId": f"{cohort['termId']}-{cohort['cohortId']}-{subject_slug}-r{exam['round']}",
+        "termId": cohort["termId"], "subject": subject,
+        "round": exam["round"], "title": exam["title"],
+        "objectiveMaxScore": objective_max, "writtenMaxScore": written_max, "totalMaxScore": objective_max + written_max,
         "averages": {key: round(mean(row[f"{key}Score"] for row in rows), 1) for key in ("total", "objective", "written")},
         "questionTypes": questions, "students": students,
     }, warnings
@@ -262,10 +294,15 @@ def main() -> None:
             exam, issues = build_exam(cohort, exam_manifest)
             exams.append(exam)
             warnings.extend({"school": school["school"], "round": exam_manifest["round"], **item} for item in issues)
-        if len({exam["round"] for exam in exams}) != len(exams):
-            raise ValueError("회차 번호가 중복됩니다.")
-        exams.sort(key=lambda exam: exam["round"])
-        students = {student["studentId"]: student["studentName"] for exam in exams for student in exam["students"]}
+        if len({(exam["subject"], exam["round"]) for exam in exams}) != len(exams):
+            raise ValueError("같은 과목의 회차 번호가 중복됩니다.")
+        exams.sort(key=lambda exam: (exam["subject"], exam["round"]))
+        students: dict[str, str] = {}
+        for exam in exams:
+            for student in exam["students"]:
+                previous = students.setdefault(student["studentId"], student["studentName"])
+                if previous != student["studentName"]:
+                    raise ValueError("같은 학생 식별 번호의 이름이 과목별 채점표에서 다릅니다.")
         school_codes = student_codes.setdefault(school["cohortId"], {})
         access = []
         for student_id, name in sorted(students.items(), key=lambda item: item[1]):

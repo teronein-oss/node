@@ -113,7 +113,7 @@ function SummaryCard({ label, value, total, average, caption, tone }: {
   return (
     <article data-tone={tone} className={`m3-score-card rounded-3xl border p-5 sm:p-6 ${styles[tone]}`}>
       <p className={`text-xs font-bold ${muted}`}>{label}</p>
-      <div className="mt-3 flex items-end gap-1.5"><span className="text-4xl font-black tracking-tight">{score(value)}</span><span className={`pb-1 text-sm font-semibold ${muted}`}>/ {total}</span></div>
+      <div className="mt-3 flex items-end gap-1.5"><span className="text-4xl font-black tracking-tight">{score(value)}</span><span className={`pb-1 text-sm font-semibold ${muted}`}>/ {score(total)}</span></div>
       <p className={`mt-3 text-xs ${muted}`}>{caption ?? `전체 회차 평균 ${(average ?? 0).toFixed(1)}점`}</p>
     </article>
   )
@@ -123,13 +123,19 @@ export default function StudentCumulativeDashboard({
   data,
   detailReport,
   onOpenDetail,
+  onSubjectChange,
   onReset,
+  subjectLoading = false,
+  subjectError = '',
   backLabel = '나가기',
 }: {
   data: StudentCumulativeReportData
   detailReport: StudentReportData | null
   onOpenDetail: () => void
+  onSubjectChange: (subject: string) => void
   onReset: () => void
+  subjectLoading?: boolean
+  subjectError?: string
   backLabel?: string
 }) {
   const [selectedTermId, setSelectedTermId] = useState(data.terms[0]?.termId ?? '')
@@ -143,7 +149,13 @@ export default function StudentCumulativeDashboard({
   const cumulativeTypeAnalysis = useMemo(() => combineTypeAnalysis(exams), [exams])
   const maxRound = exams.reduce((highest, exam) => Math.max(highest, exam.round), 0)
   const attendedExams = exams.filter(isAttendedExam)
-  const hasWritten = exams.some(exam => exam.averages.written > 0 || (exam.result?.writtenScore ?? 0) > 0)
+  const hasWritten = exams.some(exam => exam.writtenMaxScore > 0)
+  const scoredExams = attendedExams.length ? attendedExams : exams
+  const maxScores = {
+    total: scoredExams.reduce((sum, exam) => sum + exam.totalMaxScore, 0) / Math.max(scoredExams.length, 1),
+    objective: scoredExams.reduce((sum, exam) => sum + exam.objectiveMaxScore, 0) / Math.max(scoredExams.length, 1),
+    written: scoredExams.reduce((sum, exam) => sum + exam.writtenMaxScore, 0) / Math.max(scoredExams.length, 1),
+  }
   const actualScore = (data.actualScores ?? []).find(item => item.termId === term?.termId)
   const studentAverages = {
     total: attendedExams.reduce((sum, exam) => sum + exam.result.totalScore, 0) / Math.max(attendedExams.length, 1),
@@ -203,9 +215,10 @@ export default function StudentCumulativeDashboard({
           <div className="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="m3-chip inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-blue-50"><ShieldCheck size={14} />본인 확인 완료</div>
+              <span className="ml-2 inline-flex rounded-full border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-black text-white">{data.subject}</span>
               {IS_BATTERY_CAT_PREVIEW && <span className="ml-2 inline-flex rounded-full border border-amber-200/60 bg-amber-100/15 px-3 py-1.5 text-xs font-bold text-amber-100 print:hidden">배터리 고양이 시안</span>}
               <p className="mt-5 text-sm text-blue-100/70">{data.school} {data.grade}학년</p>
-              <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{data.studentName} 학생 누적 리포트</h1>
+              <h1 className="mt-1 break-keep text-2xl font-black tracking-tight sm:text-4xl">{data.studentName} 학생 {data.subject} 누적 리포트</h1>
               <p className="mt-3 text-sm leading-6 text-blue-50/70">{maxRound === 1 ? '1차 성적과 유형별 학습 결과를 확인할 수 있습니다.' : `1~${maxRound}차 점수 변화와 누적 성취를 한 번에 확인할 수 있습니다.`}</p>
             </div>
             <div className="m3-hero-meta grid w-full grid-cols-[1fr_auto_1fr] gap-4 rounded-2xl border border-white/10 bg-white/10 px-4 py-4 backdrop-blur-sm sm:w-auto sm:gap-6 sm:px-5">
@@ -217,16 +230,28 @@ export default function StudentCumulativeDashboard({
         </section>
 
         <section className="m3-card mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <label htmlFor="student-term" className="text-xs font-bold text-slate-500">시험 대분류</label>
-          <select id="student-term" value={selectedTermId} onChange={event => { setSelectedTermId(event.target.value); setAnalysisRound('all') }} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50">
-            {data.terms.map(item => <option key={item.termId} value={item.termId}>{item.label}</option>)}
-          </select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="student-subject" className="text-xs font-bold text-slate-500">과목</label>
+              <select id="student-subject" value={data.subject} onChange={event => onSubjectChange(event.target.value)} disabled={subjectLoading} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50 disabled:opacity-60">
+                {data.availableSubjects.map(subject => <option key={subject} value={subject}>{subject}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="student-term" className="text-xs font-bold text-slate-500">시험 대분류</label>
+              <select id="student-term" value={selectedTermId} onChange={event => { setSelectedTermId(event.target.value); setAnalysisRound('all') }} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50">
+                {data.terms.map(item => <option key={item.termId} value={item.termId}>{item.label}</option>)}
+              </select>
+            </div>
+          </div>
+          {subjectLoading && <p className="mt-3 text-xs font-semibold text-blue-700" role="status">과목 성적을 불러오는 중...</p>}
+          {subjectError && <p className="mt-3 text-xs font-semibold text-rose-700" role="alert">{subjectError}</p>}
         </section>
 
         <section className={`mt-5 grid gap-4 ${hasWritten && actualScore ? 'sm:grid-cols-2 lg:grid-cols-4' : hasWritten ? 'sm:grid-cols-3' : actualScore ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
-          <SummaryCard label="누적 전체 평균" value={studentAverages.total} total={100} average={cohortAverages.total} tone="navy" />
-          {hasWritten && <SummaryCard label="객관식 평균" value={studentAverages.objective} total={80} average={cohortAverages.objective} tone="blue" />}
-          {hasWritten && <SummaryCard label="서술형 평균" value={studentAverages.written} total={20} average={cohortAverages.written} tone="mint" />}
+          <SummaryCard label="누적 전체 평균" value={studentAverages.total} total={maxScores.total} average={cohortAverages.total} tone="navy" />
+          {hasWritten && <SummaryCard label="객관식 평균" value={studentAverages.objective} total={maxScores.objective} average={cohortAverages.objective} tone="blue" />}
+          {hasWritten && <SummaryCard label="서술형 평균" value={studentAverages.written} total={maxScores.written} average={cohortAverages.written} tone="mint" />}
           {actualScore && <SummaryCard label="실제 내신 점수" value={actualScore.score} total={100} caption="분석파일과 함께 저장된 실제 점수" tone="actual" />}
         </section>
 
@@ -242,7 +267,7 @@ export default function StudentCumulativeDashboard({
                   <div className="flex h-52 w-full flex-col items-center justify-end gap-1 border-b border-slate-200">
                     {exam.result && <ScoreMascot totalScore={exam.result.totalScore} compact />}
                     <span className={`whitespace-nowrap text-xs font-black sm:text-sm ${exam.result ? 'text-blue-900' : 'text-slate-400'}`}>{exam.result ? score(exam.result.totalScore) : '미응시'}</span>
-                    {exam.result ? <div className="m3-chart-bar w-full max-w-16 rounded-t-xl bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-100 sm:rounded-t-2xl" style={{ height: `${Math.max(8, exam.result.totalScore * 1.4)}px` }} aria-label={`${exam.round}차 총점 ${score(exam.result.totalScore)}점`} /> : <div className="m3-chart-absent flex h-16 w-full max-w-16 items-center justify-center rounded-t-xl border-2 border-dashed border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-400" aria-label={`${exam.round}차 미응시`}>—</div>}
+                    {exam.result ? <div className="m3-chart-bar w-full max-w-16 rounded-t-xl bg-gradient-to-t from-blue-700 to-cyan-400 shadow-lg shadow-blue-100 sm:rounded-t-2xl" style={{ height: `${Math.max(8, exam.result.totalScore / Math.max(exam.totalMaxScore, 1) * 140)}px` }} aria-label={`${exam.round}차 총점 ${score(exam.result.totalScore)}점`} /> : <div className="m3-chart-absent flex h-16 w-full max-w-16 items-center justify-center rounded-t-xl border-2 border-dashed border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-400" aria-label={`${exam.round}차 미응시`}>—</div>}
                   </div>
                   <span className="mt-2 text-xs font-bold text-slate-500">{exam.round}차</span>
                   {exam.result ? <div className="m3-score-formula mt-2 text-[11px] leading-5 text-slate-600">
