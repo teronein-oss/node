@@ -15,11 +15,11 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import type { StudentCumulativeExam, StudentCumulativeReportData, StudentReportData, StudentTypeAnalysis } from '../types/studentReport'
-import pencilFrames from './assets/score-chick-pencil-frames.png'
-import notebookFrames from './assets/score-chick-notebook-frames.png'
-import flashcardFrames from './assets/score-chick-flashcards-frames.png'
-import wingFrames from './assets/score-chick-wings-frames.png'
-import medalFrames from './assets/score-chick-medal-frames.png'
+import eggFrames from './assets/score-egg-frames.png'
+import shellChickFrames from './assets/score-chick-shell-frames.png'
+import flappingChickFrames from './assets/score-chick-flapping-frames.png'
+import youngChickenFrames from './assets/score-young-chicken-frames.png'
+import crownedChickenFrames from './assets/score-chicken-crown-frames.png'
 import { BatteryCatMascot } from './BatteryCatMascot'
 import { displayDistribution, scoreBandFor, SCORE_BANDS_DESC, type ScoreBand } from './scorePresentation'
 
@@ -34,11 +34,11 @@ function isAttendedExam(exam: StudentCumulativeExam): exam is StudentCumulativeE
 }
 
 const SCORE_MASCOTS: Record<ScoreBand, { name: string; message: string; frames: string; duration: number }> = {
-  '59–0': { name: '연필 병아리', message: '한 걸음씩 시작해요!', frames: pencilFrames, duration: 2.4 },
-  '69–60': { name: '공책 병아리', message: '차근차근 쌓이고 있어요!', frames: notebookFrames, duration: 2.4 },
-  '79–70': { name: '단어 카드 병아리', message: '좋은 리듬을 찾았어요!', frames: flashcardFrames, duration: 2.2 },
-  '89–80': { name: '날개 병아리', message: '실력이 빛나고 있어요!', frames: wingFrames, duration: 2 },
-  '100–90': { name: '메달 병아리', message: '멋지게 해냈어요!', frames: medalFrames, duration: 2.2 },
+  '59–0': { name: '알', message: '이제 시작이에요!', frames: eggFrames, duration: 2.4 },
+  '69–60': { name: '알껍데기를 쓴 병아리', message: '막 깨어났어요!', frames: shellChickFrames, duration: 2.4 },
+  '79–70': { name: '날갯짓하는 병아리', message: '날개를 펼쳐요!', frames: flappingChickFrames, duration: 2 },
+  '89–80': { name: '볏과 꼬리깃이 자란 어린 닭', message: '훌쩍 자랐어요!', frames: youngChickenFrames, duration: 2.2 },
+  '100–90': { name: '왕관 쓴 닭', message: '멋지게 해냈어요!', frames: crownedChickenFrames, duration: 2.2 },
 }
 
 function ScoreMascot({ totalScore, compact = false }: { totalScore: number; compact?: boolean }) {
