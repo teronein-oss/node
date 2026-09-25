@@ -370,15 +370,31 @@ def main() -> None:
             exam, issues = build_exam(cohort, exam_manifest)
             exams.append(exam)
             warnings.extend({"school": school["school"], "round": exam_manifest["round"], **item} for item in issues)
+            for note in exam_manifest.get("sourceNotes", []):
+                if not isinstance(note, str) or not clean(note):
+                    raise ValueError("시험지 원본 확인 메모가 비어 있습니다.")
+                warnings.append({"school": school["school"], "round": exam_manifest["round"],
+                                 "issue": "시험지 원본 표기 확인", "note": clean(note)})
         if len({(exam["subject"], exam["round"]) for exam in exams}) != len(exams):
             raise ValueError("같은 과목의 회차 번호가 중복됩니다.")
         exams.sort(key=lambda exam: (exam["subject"], exam["round"]))
         students: dict[str, str] = {}
+        name_aliases = school.get("studentNameAliases", {})
+        aliases_seen: set[str] = set()
         for exam in exams:
             for student in exam["students"]:
                 previous = students.setdefault(student["studentId"], student["studentName"])
                 if previous != student["studentName"]:
-                    raise ValueError("같은 학생 식별 번호의 이름이 과목별 채점표에서 다릅니다.")
+                    alias = name_aliases.get(student["studentId"])
+                    if not isinstance(alias, dict) or (
+                        alias.get("canonicalNameHash") != hashlib.sha256(previous.encode()).hexdigest()[:20]
+                        or alias.get("sourceNameHash") != hashlib.sha256(student["studentName"].encode()).hexdigest()[:20]
+                    ):
+                        raise ValueError("같은 학생 식별 번호의 이름이 과목별 채점표에서 다릅니다.")
+                    student["studentName"] = previous
+                    aliases_seen.add(student["studentId"])
+        if aliases_seen != set(name_aliases):
+            raise ValueError("학생 이름 표기 보정 대상이 원본 채점표와 다릅니다.")
         school_codes = student_codes.setdefault(school["cohortId"], {})
         access = []
         for student_id, name in sorted(students.items(), key=lambda item: item[1]):
