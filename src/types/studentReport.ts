@@ -79,6 +79,11 @@ export interface StudentCumulativeExam {
       percent: number
     }>
   }
+  gradeScoreRanges: Array<{
+    grade: 1 | 2 | 3 | 4 | 5
+    highest: number | null
+    lowest: number | null
+  }>
 }
 
 export interface StudentTypeAnalysis {

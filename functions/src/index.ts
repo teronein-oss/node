@@ -22,6 +22,7 @@ import {
   type MessageType,
 } from './messageDomain'
 import {
+  gradeScoreRangesForStudents,
   hashAccessCode,
   hashTeacherAccessCode,
   hashViewerAddress,
@@ -630,6 +631,7 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string, sub
       },
       typeAnalysis,
       scoreDistribution: examScoreDistribution(exam, result.totalScore),
+      gradeScoreRanges: gradeScoreRangesForStudents(exam.students),
     }]
   })
   if (!attendedExams.length) return null
@@ -646,6 +648,7 @@ function buildStudentCumulative(cohort: ExamPortalCohort, studentId: string, sub
     result: null,
     typeAnalysis: [],
     scoreDistribution: examScoreDistribution(exam, null),
+    gradeScoreRanges: gradeScoreRangesForStudents(exam.students),
   })
 
   const average = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
