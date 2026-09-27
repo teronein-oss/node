@@ -21,7 +21,8 @@ import flappingChickFrames from './assets/score-chick-flapping-frames.png'
 import youngChickenFrames from './assets/score-young-chicken-frames.png'
 import crownedChickenFrames from './assets/score-chicken-crown-frames.png'
 import { BatteryCatMascot } from './BatteryCatMascot'
-import { displayDistribution, scoreBandFor, SCORE_BANDS_DESC, type ScoreBand } from './scorePresentation'
+import { GRADE_CRITERIA, gradeForTopPercent, type ReportGrade } from './gradePresentation'
+import { scoreBandFor, type ScoreBand } from './scorePresentation'
 
 const IS_BATTERY_CAT_PREVIEW = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('mascot') === 'cat'
 
@@ -51,6 +52,21 @@ function ScoreMascot({ totalScore, compact = false }: { totalScore: number; comp
   return <span className={`m3-score-mascot ${compact ? 'm3-score-mascot-compact' : ''}`} role="img" aria-label={`${band}점 ${mascot.name} 응원: ${mascot.message}`}>
     <span className="m3-score-mascot-art" aria-hidden="true" style={{ backgroundImage: `url(${mascot.frames})`, animationDuration: `${mascot.duration}s` }} />
     {!compact && <span>{mascot.message}</span>}
+  </span>
+}
+
+const GRADE_MASCOT_BANDS: Record<ReportGrade, ScoreBand> = {
+  1: '100–90',
+  2: '89–80',
+  3: '79–70',
+  4: '69–60',
+  5: '59–0',
+}
+
+function GradeMascot({ grade }: { grade: ReportGrade }) {
+  const mascot = SCORE_MASCOTS[GRADE_MASCOT_BANDS[grade]]
+  return <span className="m3-score-mascot m3-score-mascot-compact" role="img" aria-label={`${grade}등급 ${mascot.name} 응원: ${mascot.message}`}>
+    <span className="m3-score-mascot-art" aria-hidden="true" style={{ backgroundImage: `url(${mascot.frames})`, animationDuration: `${mascot.duration}s` }} />
   </span>
 }
 
@@ -145,7 +161,6 @@ export default function StudentCumulativeDashboard({
     () => data.exams.filter(exam => exam.termId === term?.termId).sort((first, second) => first.round - second.round),
     [data.exams, term?.termId],
   )
-  const displayedDistributions = useMemo(() => exams.map(displayDistribution), [exams])
   const cumulativeTypeAnalysis = useMemo(() => combineTypeAnalysis(exams), [exams])
   const maxRound = exams.reduce((highest, exam) => Math.max(highest, exam.round), 0)
   const attendedExams = exams.filter(isAttendedExam)
@@ -291,27 +306,29 @@ export default function StudentCumulativeDashboard({
 
         <section className="m3-card mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
-            <div className="flex items-center gap-2"><BarChart3 className="text-blue-600" size={20} /><h2 className="text-lg font-black">전체 인원 점수 분포</h2></div>
-            <p className="mt-1 text-xs text-slate-400">회차별 최고·최저 점수와 점수 구간 비율을 비교하고, 본인의 위치를 확인할 수 있습니다.</p>
+            <div className="flex items-center gap-2"><BarChart3 className="text-blue-600" size={20} /><h2 className="text-lg font-black">전체 인원 등급 기준</h2></div>
+            <p className="mt-1 text-xs text-slate-400">등급별 해당 비율과 누적 상위 기준을 확인하고, 회차별 내 등급을 볼 수 있습니다.</p>
           </div>
 
           <div className="hidden overflow-x-auto md:block">
             <table className="m3-distribution-matrix w-full min-w-[820px] table-fixed text-center text-sm">
               <thead>
                 <tr>
-                  <th className="w-40 px-5 py-4 text-left">점수 구간</th>
-                  {exams.map(exam => <th key={exam.examId} className="px-3 py-4"><p className="text-base font-black text-slate-900">{exam.round}차</p><p className="mt-1 text-xs font-bold"><span className="text-rose-600">최고 {score(exam.scoreDistribution.highest)}</span><span className="mx-1 text-slate-300">·</span><span className="text-emerald-700">최저 {score(exam.scoreDistribution.lowest)}</span></p>{!exam.attended && <span className="mt-1 inline-flex rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">미응시</span>}</th>)}
+                  <th scope="col" className="w-28 px-5 py-4 text-left">등급</th>
+                  <th scope="col" className="w-28 px-3 py-4">해당 비율</th>
+                  <th scope="col" className="w-44 px-3 py-4">누적 상위</th>
+                  {exams.map(exam => <th scope="col" key={exam.examId} className="px-3 py-4"><p className="text-base font-black text-slate-900">{exam.round}차</p><p className="mt-1 text-xs font-bold text-blue-800">{exam.result ? `상위 ${exam.result.topPercent}%` : '미응시'}</p></th>)}
                 </tr>
               </thead>
               <tbody>
-                {SCORE_BANDS_DESC.map(label => (
-                  <tr key={label}>
-                    <th className="px-5 py-4 text-left font-black text-slate-700">{label}점</th>
-                    {exams.map((exam, index) => {
-                      const distribution = displayedDistributions[index]
-                      const bin = distribution.bins.find(item => item.label === label)
-                      const isStudentBand = distribution.studentBand === label && exam.result !== null
-                      return <td key={exam.examId} data-student={isStudentBand} className="m3-distribution-cell px-3 py-4"><p className="text-base font-black text-slate-700">{(bin?.percent ?? 0).toFixed(1)}%</p>{isStudentBand && <div className="mt-1 flex flex-col items-center gap-1"><ScoreMascot totalScore={exam.result!.totalScore} compact /><span className="inline-flex rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">내 위치 · {score(exam.result!.totalScore)}점</span></div>}</td>
+                {GRADE_CRITERIA.map(criterion => (
+                  <tr key={criterion.grade}>
+                    <th scope="row" className="px-5 py-4 text-left font-black text-slate-700">{criterion.grade}등급</th>
+                    <td className="px-3 py-4 font-black text-slate-700">{criterion.share}%</td>
+                    <td className="px-3 py-4 font-bold text-slate-700">상위 {criterion.cumulativeTopPercent}% {criterion.grade === 5 ? '(전원)' : '이내'}</td>
+                    {exams.map(exam => {
+                      const isStudentGrade = exam.result !== null && gradeForTopPercent(exam.result.topPercent) === criterion.grade
+                      return <td key={exam.examId} data-student={isStudentGrade} className="m3-distribution-cell px-3 py-4">{isStudentGrade ? <div className="flex flex-col items-center gap-1"><GradeMascot grade={criterion.grade} /><span className="inline-flex rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-black text-white">내 위치 · {criterion.grade}등급</span></div> : <span className="text-slate-300">—</span>}</td>
                     })}
                   </tr>
                 ))}
@@ -320,17 +337,20 @@ export default function StudentCumulativeDashboard({
           </div>
 
           <div className="grid gap-4 p-4 md:hidden">
-            {exams.map((exam, index) => <article key={exam.examId} className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-3"><div><p className="font-black text-slate-900">{exam.round}차</p><p className="mt-1 text-[11px] font-bold"><span className="text-rose-600">최고 {score(exam.scoreDistribution.highest)}</span><span className="mx-1 text-slate-300">·</span><span className="text-emerald-700">최저 {score(exam.scoreDistribution.lowest)}</span></p></div><span className={`rounded-md px-2 py-1 text-[10px] font-black ${exam.attended ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'}`}>{exam.result ? `내 점수 ${score(exam.result.totalScore)}` : '미응시'}</span></div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <h3 className="bg-slate-50 px-4 py-3 text-sm font-black text-slate-800">등급 기준</h3>
               <div className="divide-y divide-slate-100">
-                {displayedDistributions[index].bins.map(bin => {
-                  const isStudentBand = displayedDistributions[index].studentBand === bin.label && exam.result !== null
-                  return <div key={bin.label} data-student={isStudentBand} className="m3-distribution-cell flex items-center justify-between gap-3 px-4 py-3"><p className="text-xs font-bold text-slate-600">{bin.label}점</p><div className="flex items-center gap-2">{isStudentBand && <ScoreMascot totalScore={exam.result!.totalScore} compact />}<p className="text-sm font-black text-slate-800">{bin.percent.toFixed(1)}%</p>{isStudentBand && <span className="rounded-md bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white">내 위치</span>}</div></div>
-                })}
+                {GRADE_CRITERIA.map(criterion => <div key={criterion.grade} className="flex items-center justify-between gap-3 px-4 py-3"><p className="text-sm font-black text-slate-800">{criterion.grade}등급</p><div className="text-right text-xs"><p className="font-black text-slate-700">해당 비율 {criterion.share}%</p><p className="mt-0.5 text-slate-500">누적 상위 {criterion.cumulativeTopPercent}% {criterion.grade === 5 ? '(전원)' : '이내'}</p></div></div>)}
               </div>
-            </article>)}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {exams.map(exam => {
+                const grade = exam.result ? gradeForTopPercent(exam.result.topPercent) : null
+                return <article key={exam.examId} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3"><div><p className="font-black text-slate-900">{exam.round}차</p><p className="mt-1 text-xs font-bold text-slate-500">{exam.result ? `상위 ${exam.result.topPercent}%` : '미응시'}</p></div>{grade ? <div className="flex items-center gap-1.5"><GradeMascot grade={grade} /><span className="rounded-md bg-blue-600 px-2 py-1 text-xs font-black text-white">내 등급 {grade}등급</span></div> : <span className="text-xs font-bold text-slate-400">등급 없음</span>}</article>
+              })}
+            </div>
           </div>
-          <p className="border-t border-slate-100 px-5 py-4 text-xs leading-5 text-slate-400 sm:px-6">전체 인원 수와 학생별 순위는 공개하지 않으며, 구간별 비율만 표시합니다.</p>
+          <p className="border-t border-slate-100 px-5 py-4 text-xs leading-5 text-slate-400 sm:px-6">표의 비율은 등급 기준입니다. 실제 회차별 인원 비율은 응시 인원과 동점자에 따라 달라질 수 있습니다.</p>
         </section>
 
         <section className="m3-card mt-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
