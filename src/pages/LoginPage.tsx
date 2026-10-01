@@ -1,15 +1,31 @@
 import { useState, type FormEvent } from 'react'
-import { GraduationCap, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { GraduationCap, ShieldCheck } from 'lucide-react'
+import { useAuth, type SignupForm } from '../context/AuthContext'
 
 type Screen = 'login' | 'signup' | 'reset'
-type AccountType = 'personal' | 'academy' | 'invited'
+type AccountType = SignupForm['accountType']
 
 const accountTypes: Array<{ id: AccountType; title: string; description: string }> = [
-  { id: 'personal', title: '개인 강사', description: '내 이름으로 학습관리 공간을 만듭니다.' },
-  { id: 'academy', title: '학원 원장', description: '학원 공간을 만들고 강사를 초대합니다.' },
-  { id: 'invited', title: '초대받은 구성원', description: '강사 또는 조교로 기존 공간에 참여합니다.' },
+  { id: 'personal', title: '새 학원 강사', description: '내 학원 이름으로 새 공간을 만듭니다.' },
+  { id: 'academy', title: '새 학원 원장', description: '학원 공간을 만들고 강사를 초대합니다.' },
+  { id: 'join', title: '기존 학원 합류', description: '학원 코드로 강사·조교로 가입합니다.' },
 ]
+
+const inputClass = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500'
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.length < 4) return digits
+  if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, digits.length - 4)}-${digits.slice(-4)}`
+}
+
+function signupError(error: unknown) {
+  const code = (error as { code?: string })?.code ?? ''
+  const message = (error as Error)?.message
+  if (code.startsWith('functions/') && code !== 'functions/internal' && code !== 'functions/unavailable' && message) return message
+  return authError(error)
+}
 
 function authError(error: unknown) {
   const code = (error as { code?: string })?.code
@@ -22,11 +38,20 @@ function authError(error: unknown) {
 }
 
 export default function LoginPage() {
-  const { firebaseUser, registrationStatus, signInWithEmail, signInWithGoogle, resetPassword, resendVerificationEmail, activateEmailAccount, signOut } = useAuth()
+  const { firebaseUser, registrationStatus, signInWithEmail, signUpWithEmail, signInWithGoogle, resetPassword, resendVerificationEmail, activateEmailAccount, signOut } = useAuth()
   const [screen, setScreen] = useState<Screen>('login')
   const [accountType, setAccountType] = useState<AccountType>('personal')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [name, setName] = useState('')
+  const [birthDate, setBirthDate] = useState('')
+  const [phone, setPhone] = useState('')
+  const [academyName, setAcademyName] = useState('')
+  const [academyCode, setAcademyCode] = useState('')
+  const [joinRole, setJoinRole] = useState<SignupForm['joinRole']>('선생님')
+  const [acceptTerms, setAcceptTerms] = useState(false)
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -36,6 +61,22 @@ export default function LoginPage() {
     setError('')
     setNotice('')
     setPassword('')
+    setPasswordConfirm('')
+  }
+
+  const handleSignup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError('')
+    if (password.length < 8) return setError('비밀번호는 8자 이상으로 입력해 주세요.')
+    if (password !== passwordConfirm) return setError('비밀번호가 일치하지 않습니다.')
+    if (!acceptTerms || !acceptPrivacy) return setError('필수 약관에 동의해 주세요.')
+    setBusy(true)
+    try {
+      await signUpWithEmail({ name, birthDate, phone, email, password, accountType, academyName, academyCode, joinRole, acceptTerms, acceptPrivacy })
+    } catch (signupFailure) {
+      setError(signupError(signupFailure))
+      setBusy(false)
+    }
   }
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
@@ -110,7 +151,7 @@ export default function LoginPage() {
   const blockedMessage = registrationStatus === 'pending_email'
     ? '이메일 인증이 완료될 때까지 대시보드를 사용할 수 없습니다.'
     : registrationStatus === 'pending'
-      ? '가입 승인 대기 중입니다.'
+      ? '가입 승인 대기 중입니다. 원장님 승인 후 사용할 수 있습니다.'
       : registrationStatus === 'rejected'
         ? '이 계정의 가입이 승인되지 않았습니다.'
         : '이 계정은 NODE 가입이 완료되지 않았습니다.'
@@ -176,24 +217,70 @@ export default function LoginPage() {
         ) : (
           <>
             <h2 className="text-base font-semibold text-slate-800">NODE 회원가입</h2>
-            <p className="mb-5 mt-1 text-xs text-slate-500">가입 유형을 선택한 뒤 약관 동의와 휴대폰 본인확인을 진행합니다.</p>
-            <div className="space-y-2" role="radiogroup" aria-label="가입 유형">
-              {accountTypes.map(type => (
-                <button key={type.id} type="button" role="radio" aria-checked={accountType === type.id} onClick={() => setAccountType(type.id)} className={`w-full rounded-lg border px-4 py-3 text-left ${accountType === type.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
-                  <span className="block text-sm font-semibold text-slate-800">{type.title}</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">{type.description}</span>
-                </button>
-              ))}
-            </div>
-            <div className="mt-5 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-              <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Mail size={15} />서비스 약관 및 개인정보 안내</p>
-              <p className="text-xs leading-5 text-slate-500">약관 문안과 휴대폰 본인확인 서비스가 준비되는 동안 신규 가입은 열리지 않습니다.</p>
-              <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><ShieldCheck size={15} />휴대폰 실명·본인확인</p>
-              <p className="text-xs leading-5 text-slate-500">통신사 인증이 완료된 이름으로 계정을 만들 예정입니다.</p>
-              <p className="flex items-center gap-2 text-xs font-semibold text-slate-700"><LockKeyhole size={15} />이메일·비밀번호 설정</p>
-              <p className="text-xs leading-5 text-slate-500">본인확인 후 이메일 인증을 거쳐 가입이 완료됩니다.</p>
-            </div>
-            <button disabled className="mt-5 w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white opacity-50">본인확인 준비 중</button>
+            <p className="mb-5 mt-1 text-xs text-slate-500">정보를 입력하면 이메일 인증 후 가입이 완료됩니다.</p>
+            <form className="space-y-3" onSubmit={handleSignup}>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="가입 유형">
+                {accountTypes.map(type => (
+                  <button key={type.id} type="button" role="radio" aria-checked={accountType === type.id} onClick={() => setAccountType(type.id)} className={`rounded-lg border px-3 py-2.5 text-left ${accountType === type.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <span className="block text-sm font-semibold text-slate-800">{type.title}</span>
+                    <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{type.description}</span>
+                  </button>
+                ))}
+              </div>
+              {accountType === 'join' ? (
+                <>
+                  <label className="block text-xs font-medium text-slate-600">학원 코드
+                    <input required placeholder="원장님께 받은 학원 코드" value={academyCode} onChange={event => setAcademyCode(event.target.value)} className={inputClass} />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="합류 역할">
+                    {(['선생님', '조교'] as const).map(role => (
+                      <button key={role} type="button" role="radio" aria-checked={joinRole === role} onClick={() => setJoinRole(role)} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${joinRole === role ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                        {role === '선생님' ? '강사' : '조교'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400">{joinRole === '선생님' ? '이메일 인증 후 바로 사용할 수 있습니다.' : '이메일 인증 후 원장님이 승인하면 사용할 수 있습니다.'}</p>
+                </>
+              ) : (
+                <label className="block text-xs font-medium text-slate-600">학원 이름
+                  <input required minLength={2} maxLength={60} value={academyName} onChange={event => setAcademyName(event.target.value)} className={inputClass} />
+                </label>
+              )}
+              <label className="block text-xs font-medium text-slate-600">이름
+                <input required autoComplete="name" minLength={2} maxLength={40} value={name} onChange={event => setName(event.target.value)} className={inputClass} />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-medium text-slate-600">생년월일
+                  <input type="date" required autoComplete="bday" min="1900-01-01" max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={event => setBirthDate(event.target.value)} className={inputClass} />
+                </label>
+                <label className="block text-xs font-medium text-slate-600">휴대폰 번호
+                  <input type="tel" required autoComplete="tel" inputMode="numeric" placeholder="010-0000-0000" pattern="01[016789]-?\d{3,4}-?\d{4}" value={phone} onChange={event => setPhone(formatPhone(event.target.value))} className={inputClass} />
+                </label>
+              </div>
+              <label className="block text-xs font-medium text-slate-600">이메일
+                <input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} className={inputClass} />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-medium text-slate-600">비밀번호
+                  <input type="password" required autoComplete="new-password" minLength={8} placeholder="8자 이상" value={password} onChange={event => setPassword(event.target.value)} className={inputClass} />
+                </label>
+                <label className="block text-xs font-medium text-slate-600">비밀번호 확인
+                  <input type="password" required autoComplete="new-password" minLength={8} value={passwordConfirm} onChange={event => setPasswordConfirm(event.target.value)} className={inputClass} />
+                </label>
+              </div>
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={acceptTerms} onChange={event => setAcceptTerms(event.target.checked)} className="mt-0.5" />
+                  <span>[필수] 서비스 이용약관에 동의합니다.</span>
+                </label>
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={acceptPrivacy} onChange={event => setAcceptPrivacy(event.target.checked)} className="mt-0.5" />
+                  <span>[필수] 개인정보(이름, 생년월일, 휴대폰 번호, 이메일) 수집·이용에 동의합니다.</span>
+                </label>
+              </div>
+              {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+              <button disabled={busy} className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{busy ? '가입 중...' : '회원가입'}</button>
+            </form>
             <button onClick={() => switchScreen('login')} className="mt-4 w-full text-xs text-slate-500 hover:text-slate-800">로그인으로 돌아가기</button>
           </>
         )}

@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { CheckCircle, XCircle, Trash2, Eye, Clock, RotateCcw, GraduationCap, Users, Settings } from 'lucide-react'
 import { useAuth, fetchAllRegistrations, type RegistrationInfo } from '../context/AuthContext'
 import { appDataDoc, sharedStudentRosterDoc } from '../utils/firestorePaths'
-import { DEFAULT_ACADEMY_ID, DEFAULT_ACADEMY_NAME, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
+import { DEFAULT_ACADEMY_ID, academyJoinCode, DEFAULT_ACADEMY_NAME, normalizeAcademyId, normalizeAcademyName } from '../utils/academy'
 
 function AdminTabs({ isAdmin }: { isAdmin: boolean }) {
   const { pathname } = useLocation()
@@ -182,7 +182,7 @@ export default function AdminPage() {
         <p className="text-xs font-semibold text-slate-500">현재 관리 중인 학원</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span className="text-lg font-bold text-slate-800">{currentAcademy.name}</span>
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{currentAcademy.id}</span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">학원 코드 {academyJoinCode(currentAcademy.id)}</span>
         </div>
       </div>
 

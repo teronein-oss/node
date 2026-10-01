@@ -45,6 +45,20 @@ export interface UserProfile {
   academyName: string
 }
 
+export interface SignupForm {
+  name: string
+  birthDate: string
+  phone: string
+  email: string
+  password: string
+  accountType: 'personal' | 'academy' | 'join'
+  academyName: string
+  academyCode: string
+  joinRole: '선생님' | '조교'
+  acceptTerms: boolean
+  acceptPrivacy: boolean
+}
+
 export type RegistrationStatus = 'loading' | 'none' | 'pending' | 'pending_email' | 'approved' | 'rejected'
 
 interface AuthContextValue {
@@ -63,6 +77,7 @@ interface AuthContextValue {
   setViewingUid: (uid: string | null, name?: string, role?: string, jogyoTeachers?: Array<{ uid: string; displayName: string }>, academyId?: string, academyName?: string) => void
   signInWithGoogle: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<void>
+  signUpWithEmail: (form: SignupForm) => Promise<void>
   resetPassword: (email: string) => Promise<void>
   resendVerificationEmail: () => Promise<void>
   activateEmailAccount: () => Promise<void>
@@ -290,6 +305,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email.trim(), password)
   }
 
+  const signUpWithEmail = async (form: SignupForm) => {
+    await httpsCallable(functions, 'registerNodeAccount')(form)
+    await setPersistence(auth, browserSessionPersistence)
+    const credential = await signInWithEmailAndPassword(auth, form.email.trim(), form.password)
+    await sendEmailVerification(credential.user)
+  }
+
   const resetPassword = async (email: string) => {
     await sendPasswordResetEmail(auth, email.trim())
   }
@@ -398,7 +420,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       firebaseUser, user, registrationStatus, isAdmin, isAcademyAdmin, adminUid, viewingUid, viewingUserName, viewingUserRole, viewingAcademyId, viewingAcademyName, viewingJogyoTeachers, setViewingUid,
       approvedTeachers, jogyoTeacherUids, jogyoTeachers, switchTeacher,
-      signInWithGoogle, signInWithEmail, resetPassword, resendVerificationEmail, activateEmailAccount, signOut,
+      signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, resendVerificationEmail, activateEmailAccount, signOut,
       approveUser, rejectUser, deleteRegistration, updateUserRole, assignTeacher, addTeacherToJogyo, removeTeacherFromJogyo,
     }}>
       {children}
